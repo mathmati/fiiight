@@ -808,6 +808,28 @@ func (c *StateCompiler) helper(is IniSection, sc *StateControllerBase) (StateCon
 			helper_ownprojectile, VT_Bool, 1, false); err != nil {
 			return err
 		}
+
+		// Handle the "map." parameters
+		// Must be placed after extendsmap or that operation may write over these maps
+		for k, data := range is {
+			lowK := strings.ToLower(k)
+			if strings.HasPrefix(lowK, "map.") {
+				mapKey := k[4:]
+				if mapKey == "" {
+					return Error("Empty map key in helper parameters")
+				}
+				// Compile value expression
+				mapValBes, err := c.exprs(data, VT_Float, 1)
+				if err != nil {
+					return err
+				}
+				// String hack like with most name parameters
+				mapKeyBes := sc.beToExp(BytecodeExp(mapKey))
+				sc.add(helper_map, append(mapKeyBes, mapValBes...))
+				delete(is, k)
+			}
+		}
+
 		return nil
 	})
 	return *ret, err
@@ -4818,6 +4840,23 @@ func (c *StateCompiler) mapSetSub(is IniSection, sc *StateControllerBase) error 
 			}
 		}
 
+		// If map or value are still empty
+		if len(mapName) == 0 {
+			msg := fmt.Sprintf("Map name cannot be empty")
+			if c.zssMode || !sys.ignoreMostErrors {
+				return Error(msg)
+			}
+			sys.appendToConsole(c.charWarn() + msg)
+		}
+		if len(value) == 0 {
+			msg := fmt.Sprintf("Value not specified for map")
+			if c.zssMode || !sys.ignoreMostErrors {
+				return Error(msg)
+			}
+			sys.appendToConsole(c.charWarn() + msg)
+		}
+
+		// Only add the bytecode if both are OK
 		if len(mapName) > 0 && len(value) > 0 {
 			sc.add(mapSet_mapArray, sc.beToExp(BytecodeExp(mapName)))
 			if err := c.scAdd(sc, mapSet_value, value, VT_Float, 1); err != nil {

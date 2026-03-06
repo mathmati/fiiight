@@ -6720,8 +6720,8 @@ func (c *Char) newHelper() (h *Char) {
 }
 
 // Init helper after reading the bytecode parameters
-func (c *Char) helperInit(h *Char, st int32, pt PosType, x, y, z float32, facing int32, rp [2]int32, extmap bool) {
-	p := c.helperPos(pt, [3]float32{x, y, z}, facing, &h.facing, h.localscl, false)
+func (c *Char) helperInit(h *Char, st int32, pt PosType, pos [3]float32, facing int32, rp [2]int32) {
+	p := c.helperPos(pt, pos, facing, &h.facing, h.localscl, false)
 	h.setPosX(p[0], true)
 	h.setPosY(p[1], true)
 	h.setPosZ(p[2], true)
@@ -6738,13 +6738,6 @@ func (c *Char) helperInit(h *Char, st int32, pt PosType, x, y, z float32, facing
 		c.forceRemapPal(h.palfx, rp)
 	} else {
 		h.palfx = c.getPalfx()
-	}
-
-	// Copy parent maps
-	if extmap {
-		for key, value := range c.mapArray {
-			h.mapArray[key] = value
-		}
 	}
 
 	// Mugen 1.1 behavior if invertblend param is omitted(Only if char mugenversion = 1.1)
