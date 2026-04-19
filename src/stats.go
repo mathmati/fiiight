@@ -15,7 +15,6 @@ type StatsFighterState struct {
 	SelectNo   int     `json:"selectNo"`   // select screen index
 	AILevel    float32 `json:"aiLevel"`    // CPU level (0 = human)
 	PalNo      int32   `json:"palNo"`      // pallete number
-	RatioLevel int32   `json:"ratioLevel"` // ratio level
 
 	// Health / quotes
 	Life     int32 `json:"life"`     // life remaining at round end
@@ -192,7 +191,6 @@ func (s *StatsLog) nextRound() {
 				SelectNo:   int(p[0].selectNo),
 				AILevel:    p[0].getAILevel(),
 				PalNo:      p[0].gi().palno,
-				RatioLevel: p[0].ocd().ratioLevel,
 				Life:       p[0].life,
 				LifeMax:    p[0].lifeMax,
 				WinQuote:   p[0].winquote,
