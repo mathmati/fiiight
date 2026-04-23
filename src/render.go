@@ -289,6 +289,62 @@ func applyProjection(modelview mgl.Mat4, rp RenderParams, n int, botdist, dy flo
 	return modelview
 }
 
+// Applies the same non-tiling transform order used by sprites onto truetype fonts:
+// projection -> shear -> rotation -> pivot translation
+func transformTextQuad(x1, y1, x2, y2, x3, y3, x4, y4, rxadd float32,
+	rot Rotation, projectionMode int32, fLength, rcx, rcy float32) (float32, float32, float32, float32, float32, float32, float32, float32) {
+
+	if rot.IsZero() {
+		return x1, y1, x2, y2, x3, y3, x4, y4
+	}
+
+	rp := RenderParams{
+		rxadd: rxadd,
+		// Font vertices go through an additional Y flip in the font shader...
+		// compensate via angle inversion here so text rotation direction matches the way sprites do it
+		rot:            Rotation{angle: -rot.angle, xangle: -rot.xangle, yangle: -rot.yangle},
+		vs:             1,
+		rcx:            rcx,
+		rcy:            rcy,
+		projectionMode: projectionMode,
+		fLength:        fLength,
+	}
+
+	modelview := applyProjection(mgl.Ident4(), rp, 0, 1, 0)
+
+	// Shear matrix is only part of the rotated path
+	shearMatrix := mgl.Mat4{
+		1, 0, 0, 0,
+		rp.rxadd, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
+	}
+	modelview = modelview.Mul4(shearMatrix)
+
+	// Pretty much the equivalent to rp.rxadd*rp.ys*sizeY in sprites with rp.ys=1 for text quads
+	glyphHeight := y3 - y2
+	modelview = modelview.Mul4(mgl.Translate3D(rp.rxadd*glyphHeight, 0, 0))
+
+	modelview = applyRotation(modelview, rp)
+	modelview = modelview.Mul4(mgl.Translate3D(-rp.rcx, -rp.rcy, 0))
+
+	transformPoint := func(x, y float32) (float32, float32) {
+		v := modelview.Mul4x1(mgl.Vec4{x, y, 0, 1})
+		if v.W() != 0 {
+			invW := 1 / v.W()
+			return v.X() * invW, v.Y() * invW
+		}
+		return v.X(), v.Y()
+	}
+
+	x1, y1 = transformPoint(x1, y1)
+	x2, y2 = transformPoint(x2, y2)
+	x3, y3 = transformPoint(x3, y3)
+	x4, y4 = transformPoint(x4, y4)
+
+	return x1, y1, x2, y2, x3, y3, x4, y4
+}
+
 // Render a quad with optional horizontal tiling
 func renderSpriteHTile(modelview mgl.Mat4, x1, y1, x2, y2, x3, y3, x4, y4, dy, width float32, rp RenderParams) {
 	//            p3

@@ -116,7 +116,9 @@ func (r *FontRenderer_GL33) SetFontPipeline() {
 
 // Printf draws a string to the screen, takes a list of arguments like printf
 func (f *Font_GL33) Printf(x, y float32, scale float32, spacingXAdd float32,
-	align int32, blend bool, window [4]int32, fs string, argv ...interface{}) error {
+	align int32, blend bool, window [4]int32,
+	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
+	fs string, argv ...interface{}) error {
 
 	indices := []rune(fmt.Sprintf(fs, argv...))
 	r := gfx.(*Renderer_GL33)
@@ -203,14 +205,24 @@ func (f *Font_GL33) Printf(x, y float32, scale float32, spacingXAdd float32,
 		ypos := y - float32(ch.height-ch.bearingV)*scale
 		w := float32(ch.width) * scale
 		h := float32(ch.height) * scale
-		vertices := []float32{
-			xpos + w, ypos, ch.uv[2], ch.uv[1],
-			xpos, ypos, ch.uv[0], ch.uv[1],
-			xpos, ypos + h, ch.uv[0], ch.uv[3],
 
-			xpos, ypos + h, ch.uv[0], ch.uv[3],
-			xpos + w, ypos + h, ch.uv[2], ch.uv[3],
-			xpos + w, ypos, ch.uv[2], ch.uv[1],
+		x1, y1 := xpos+w, ypos
+		x2, y2 := xpos, ypos
+		x3, y3 := xpos, ypos+h
+		x4, y4 := xpos+w, ypos+h
+		x1, y1, x2, y2, x3, y3, x4, y4 = transformTextQuad(
+			x1, y1, x2, y2, x3, y3, x4, y4,
+			rxadd, rot, projectionMode, fLength, rcx, rcy,
+		)
+
+		vertices := []float32{
+			x1, y1, ch.uv[2], ch.uv[1],
+			x2, y2, ch.uv[0], ch.uv[1],
+			x3, y3, ch.uv[0], ch.uv[3],
+
+			x3, y3, ch.uv[0], ch.uv[3],
+			x4, y4, ch.uv[2], ch.uv[3],
+			x1, y1, ch.uv[2], ch.uv[1],
 		}
 		// Append glyph vertices to the batch buffer
 		batchVertices = append(batchVertices, vertices...)

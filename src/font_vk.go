@@ -550,7 +550,9 @@ func (f *Font_VK) UpdateResolution(windowWidth int, windowHeight int) {
 	f.resolution[1] = float32(windowHeight)
 	return
 }
-func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align int32, blend bool, window [4]int32, fs string, argv ...interface{}) error {
+func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
+	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
+	fs string, argv ...interface{}) error {
 	r := gfx.(*Renderer_VK)
 	switchedProgram := r.VKState.currentProgram != gfxFont.(*FontRenderer_VK).program
 	r.VKState.currentProgram = gfxFont.(*FontRenderer_VK).program
@@ -662,14 +664,23 @@ func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align
 		w := float32(ch.width) * scale
 		h := float32(ch.height) * scale
 
-		vertexData = append(vertexData,
-			xpos+w, f.resolution[1]-(ypos), ch.uv[2], ch.uv[1],
-			xpos, f.resolution[1]-(ypos), ch.uv[0], ch.uv[1],
-			xpos, f.resolution[1]-(ypos+h), ch.uv[0], ch.uv[3],
+		x1, y1 := xpos+w, ypos
+		x2, y2 := xpos, ypos
+		x3, y3 := xpos, ypos+h
+		x4, y4 := xpos+w, ypos+h
+		x1, y1, x2, y2, x3, y3, x4, y4 = transformTextQuad(
+			x1, y1, x2, y2, x3, y3, x4, y4,
+			rxadd, rot, projectionMode, fLength, rcx, rcy,
+		)
 
-			xpos, f.resolution[1]-(ypos+h), ch.uv[0], ch.uv[3],
-			xpos+w, f.resolution[1]-(ypos+h), ch.uv[2], ch.uv[3],
-			xpos+w, f.resolution[1]-(ypos), ch.uv[2], ch.uv[1],
+		vertexData = append(vertexData,
+			x1, f.resolution[1]-y1, ch.uv[2], ch.uv[1],
+			x2, f.resolution[1]-y2, ch.uv[0], ch.uv[1],
+			x3, f.resolution[1]-y3, ch.uv[0], ch.uv[3],
+
+			x3, f.resolution[1]-y3, ch.uv[0], ch.uv[3],
+			x4, f.resolution[1]-y4, ch.uv[2], ch.uv[3],
+			x1, f.resolution[1]-y1, ch.uv[2], ch.uv[1],
 		)
 
 		numVerticesToDraw += 6
