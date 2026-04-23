@@ -550,7 +550,7 @@ func (f *Font_VK) UpdateResolution(windowWidth int, windowHeight int) {
 	f.resolution[1] = float32(windowHeight)
 	return
 }
-func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
+func (f *Font_VK) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
 	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
 	fs string, argv ...interface{}) error {
 	r := gfx.(*Renderer_VK)
@@ -608,12 +608,16 @@ func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align
 	resolution := f.resolution
 	vk.CmdPushConstants(r.commandBuffers[0], gfxFont.(*FontRenderer_VK).program.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 0, 4*4, unsafe.Pointer(&color))
 	vk.CmdPushConstants(r.commandBuffers[0], gfxFont.(*FontRenderer_VK).program.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageVertexBit), 4*4, 4*2, unsafe.Pointer(&resolution[0]))
-	if align == 0 {
-		x -= f.Width(scale, spacingXAdd, fs, argv...) * 0.5
-	} else if align < 0 {
-		x -= f.Width(scale, spacingXAdd, fs, argv...)
+	alignScale := xscl
+	if alignScale == 0 {
+		alignScale = yscl
 	}
-	spacing := spacingXAdd * scale
+	if align == 0 {
+		x -= f.Width(alignScale, spacingXAdd, fs, argv...) * 0.5
+	} else if align < 0 {
+		x -= f.Width(alignScale, spacingXAdd, fs, argv...)
+	}
+	spacing := spacingXAdd * xscl
 	renderedAny := false
 	firstVertex := uint32(r.vertexBufferOffset%r.vertexBuffers[0].size) / 16
 	numVerticesToDraw := uint32(0)
@@ -659,10 +663,10 @@ func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align
 		}
 
 		//calculate position and size for current rune
-		xpos := x + float32(ch.bearingH)*scale
-		ypos := y - float32(ch.height-ch.bearingV)*scale
-		w := float32(ch.width) * scale
-		h := float32(ch.height) * scale
+		xpos := x + float32(ch.bearingH)*xscl
+		ypos := y - float32(ch.height-ch.bearingV)*yscl
+		w := float32(ch.width) * xscl
+		h := float32(ch.height) * yscl
 
 		x1, y1 := xpos+w, ypos
 		x2, y2 := xpos, ypos
@@ -686,7 +690,7 @@ func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align
 		numVerticesToDraw += 6
 
 		// Now advance cursors for next glyph (note that advance is number of 1/64 pixels)
-		x += float32((ch.advance >> 6)) * scale // Bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
+		x += float32((ch.advance >> 6)) * xscl // Bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
 		renderedAny = true
 
 		if len(vertexData) >= batchSize {
