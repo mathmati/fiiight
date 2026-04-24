@@ -300,20 +300,20 @@ func (b *StreamLooper) Seek(p int) error {
 // Bgm
 
 type Bgm struct {
-	filename   string
-	bgmVolume  int
-	volRestore int
+	filename           string
+	bgmVolume          int
+	volRestore         int
 	pauseVolumeApplied bool
-	loop       int
-	streamer   beep.StreamSeeker
-	ctrl       *beep.Ctrl
-	volctrl    *effects.Volume
-	format     string
-	freqmul    float32
-	sampleRate beep.SampleRate
-	startPos   int
-	mu         sync.Mutex
-	cancel     context.CancelFunc
+	loop               int
+	streamer           beep.StreamSeeker
+	ctrl               *beep.Ctrl
+	volctrl            *effects.Volume
+	format             string
+	freqmul            float32
+	sampleRate         beep.SampleRate
+	startPos           int
+	mu                 sync.Mutex
+	cancel             context.CancelFunc
 }
 
 func newBgm() *Bgm {
