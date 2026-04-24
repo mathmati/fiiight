@@ -9,12 +9,12 @@ type GameStatsSnapshot struct {
 // StatsFighterState captures an end-of-round snapshot for a fighter on one side.
 type StatsFighterState struct {
 	// Identity / selection
-	Name       string  `json:"name"`       // character name
-	ID         int32   `json:"id"`         // character ID
-	MemberNo   int     `json:"memberNo"`   // team member index (0-based)
-	SelectNo   int     `json:"selectNo"`   // select screen index
-	AILevel    float32 `json:"aiLevel"`    // CPU level (0 = human)
-	PalNo      int32   `json:"palNo"`      // pallete number
+	Name     string  `json:"name"`     // character name
+	ID       int32   `json:"id"`       // character ID
+	MemberNo int     `json:"memberNo"` // team member index (0-based)
+	SelectNo int     `json:"selectNo"` // select screen index
+	AILevel  float32 `json:"aiLevel"`  // CPU level (0 = human)
+	PalNo    int32   `json:"palNo"`    // pallete number
 
 	// Health / quotes
 	Life     int32 `json:"life"`     // life remaining at round end

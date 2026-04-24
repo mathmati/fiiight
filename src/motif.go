@@ -491,7 +491,7 @@ type PlayerSelectProperties struct {
 		Subtract struct {
 			Key []string `ini:"key"`
 		} `ini:"subtract"`
-		Item   ItemProperties `ini:"item"`
+		Item ItemProperties `ini:"item"`
 	} `ini:"teammenu"`
 	PalMenu struct {
 		Pos  [2]float32 `ini:"pos"`

@@ -454,7 +454,9 @@ func (p *GameParams) AppendParams(entries []string) {
 			case fieldLower == "existed":
 				ocd.existed, _ = parseBoolLoose(val)
 			case strings.HasPrefix(fieldLower, "map."):
-				if name, ok := parseMapKey(field); ok { ocd.maps[name] = float32(Atof(val)) }
+				if name, ok := parseMapKey(field); ok {
+					ocd.maps[name] = float32(Atof(val))
+				}
 			}
 			continue
 		}
