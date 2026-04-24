@@ -2884,6 +2884,7 @@ func systemScriptInit(l *lua.LState) {
 					sys.statsLog.finalizeMatch()
 				}
 				// Cleanup
+				sys.restorePauseVolume()
 				sys.timerStart = 0
 				sys.timerRounds = []int32{}
 				sys.scoreStart = [2]float32{}

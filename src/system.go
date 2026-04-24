@@ -926,22 +926,30 @@ func (s *System) tickSound() {
 
 	if s.paused {
 		// Apply BGM pause volume once per pause, even when the original BGM volume is 0.
-		// volRestore cannot be used as the latch because 0 is a valid volume and also
-		// the default value when no BGM is playing.
-		if !s.pauseVolumeApplied {
+		// volRestore cannot be used as the latch because 0 is a valid volume.
+		if !s.bgm.pauseVolumeApplied {
 			s.bgm.volRestore = s.bgm.bgmVolume
 			s.bgm.bgmVolume = int(s.cfg.Sound.PauseMasterVolume * s.bgm.bgmVolume / 100.0)
 			s.bgm.UpdateVolume()
-			s.pauseVolumeApplied = true
+			s.bgm.pauseVolumeApplied = true
 		}
 
 		// Run every paused tick so sounds started while paused are also softened.
+		s.pauseVolumeApplied = true
 		s.softenAllSound()
-	} else if s.pauseVolumeApplied {
-		// Restore all volume
+	} else if s.pauseVolumeApplied || s.bgm.pauseVolumeApplied {
+		s.restorePauseVolume()
+	}
+}
+
+func (s *System) restorePauseVolume() {
+	if s.bgm.pauseVolumeApplied {
 		s.bgm.bgmVolume = s.bgm.volRestore
 		s.bgm.volRestore = 0
+		s.bgm.pauseVolumeApplied = false
 		s.bgm.UpdateVolume()
+	}
+	if s.pauseVolumeApplied {
 		s.restoreAllVolume()
 		s.pauseVolumeApplied = false
 	}
@@ -2148,6 +2156,7 @@ func (s *System) resetRoundState() {
 
 	s.resetFrameTime()
 
+	s.restorePauseVolume()
 	s.paused = false
 	s.introSkipCall = false
 	s.roundResetFlg = false
