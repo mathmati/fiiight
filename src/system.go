@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+
 	//"log"
 	"math"
 	"os"
@@ -309,6 +310,7 @@ type System struct {
 	listLFunc          []*lua.LFunction
 	reloadPreserveVars [MaxPlayerNo]bool
 	charVarsBackup     map[int]CharVarBackup
+	shaderRefCount     map[string]int
 
 	statePool       GameStatePool
 	commandLists    []*CommandList
@@ -487,6 +489,7 @@ func (s *System) init(w, h int32) *lua.LState {
 
 	systemScriptInit(l)
 	s.shortcutScripts = make(map[ShortcutKey]*ShortcutScript)
+	s.shaderRefCount = make(map[string]int)
 	if runtime.GOOS != "android" {
 		// So now that we have a window we add an icon.
 		if len(s.cfg.Config.WindowIcon) > 0 {
@@ -5077,6 +5080,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	// Load character
 	if !sameChar {
+		sys.cgi[pn].customShaders = nil
 		if l.err = p.load(cdef); l.err != nil {
 			sys.chars[pn] = nil
 			if attached {
@@ -5383,6 +5387,7 @@ func (l *Loader) load() {
 			return
 		}
 	}
+	sys.cleanCustomShaders()
 
 	// Flag loading state as complete
 	l.state = LS_Complete
@@ -5512,4 +5517,32 @@ func (s *System) restoreCharVars(c *Char) {
 	}
 
 	delete(s.charVarsBackup, c.playerNo)
+}
+
+func (s *System) cleanCustomShaders() {
+	activeShaders := make(map[string]bool)
+	for i := 0; i < len(s.cgi); i++ {
+		for _, sName := range s.cgi[i].customShaders {
+			activeShaders[sName] = true
+		}
+	}
+
+	for sName, count := range s.shaderRefCount {
+		if activeShaders[sName] {
+			s.shaderRefCount[sName] = 3
+		} else {
+			count--
+			if count <= 0 {
+				s.mainThreadTask <- func(name string) func() {
+					return func() {
+						gfx.UnloadCustomSpriteShader(name)
+					}
+				}(sName)
+
+				delete(s.shaderRefCount, sName)
+			} else {
+				s.shaderRefCount[sName] = count
+			}
+		}
+	}
 }

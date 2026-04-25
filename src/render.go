@@ -30,7 +30,14 @@ type Renderer interface {
 	IsModelEnabled() bool
 	IsShadowEnabled() bool
 
-	SetPipeline()
+	//SetPipeline()
+	LoadCustomSpriteShader(shaderName string, shaderData []byte) uint32
+	UnloadCustomSpriteShader(shaderName string)
+	SetSpritePipeline(shaderName string)
+	SetCustomUniforms(params [16]float32)
+	NeedsGrabPass() bool
+	ResolveBackBuffer() Texture
+
 	EnableBlending(eq BlendEquation, src, dst BlendFunc)
 	DisableBlending()
 
@@ -208,6 +215,8 @@ type RenderParams struct {
 	fLength        float32 // Focal length
 	xOffset        float32
 	yOffset        float32
+	shader         string
+	shaderParams   [16]float32
 }
 
 func (rp *RenderParams) IsValid() bool {
@@ -516,7 +525,8 @@ func RenderSprite(rp RenderParams) {
 
 	// Heavy state change
 	// Because renderWithBlending() sometimes needs 2 passes, we'll do most of the setup outside of render()
-	gfx.SetPipeline()
+	gfx.SetSpritePipeline(rp.shader)
+
 	gfx.EnableScissor(rp.window[0], rp.window[1], rp.window[2], rp.window[3])
 
 	// Static uniforms
@@ -535,6 +545,26 @@ func RenderSprite(rp RenderParams) {
 		gfx.SetUniformI("isRgba", 0)
 	}
 
+	if rp.shader != "" {
+		var timeSec float32
+		if sys.middleOfMatch() {
+			timeSec = float32(sys.gameTime())
+		} else {
+			timeSec = float32(sys.frameCounter)
+		}
+		gfx.SetUniformF("iTime", timeSec/60.0)
+		gfx.SetUniformF("iResolution", float32(sys.scrrect[2]), float32(sys.scrrect[3]))
+		aspectRatio := sys.getCurrentAspect() / sys.getFightAspect()
+		gfx.SetUniformF("aspectRatio", aspectRatio)
+
+		if gfx.NeedsGrabPass() {
+			grabTex := gfx.ResolveBackBuffer()
+			if grabTex != nil {
+				gfx.SetTexture("bgl_RenderedTexture", grabTex)
+			}
+		}
+		gfx.SetCustomUniforms(rp.shaderParams)
+	}
 	// Texture binding
 	gfx.SetTexture("tex", rp.tex)
 	if rp.paltex != nil {
@@ -689,7 +719,7 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 	x2, y2 := float32(rect[0]+rect[2]), -float32(rect[1]+rect[3])
 
 	// Prepare the heavy state
-	gfx.SetPipeline()
+	gfx.SetSpritePipeline("")
 
 	// Set geometry
 	gfx.SetVertexData(

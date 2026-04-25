@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"fmt"
 	"image"
+
 	//"image/draw"
 	"io"
 	"io/ioutil"
@@ -552,7 +553,8 @@ func (f *Font_VK) UpdateResolution(windowWidth int, windowHeight int) {
 }
 func (f *Font_VK) Printf(x, y float32, scale float32, spacingXAdd float32, align int32, blend bool, window [4]int32, fs string, argv ...interface{}) error {
 	r := gfx.(*Renderer_VK)
-	switchedProgram := r.VKState.currentProgram != gfxFont.(*FontRenderer_VK).program
+	switchedProgram := r.VKState.boundProgram != gfxFont.(*FontRenderer_VK).program
+	r.VKState.boundProgram = gfxFont.(*FontRenderer_VK).program
 	r.VKState.currentProgram = gfxFont.(*FontRenderer_VK).program
 
 	indices := []rune(fmt.Sprintf(fs, argv...))

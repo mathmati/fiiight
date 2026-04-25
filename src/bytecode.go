@@ -967,6 +967,7 @@ const (
 	OC_ex2_defencemul
 	OC_ex2_guardcount
 	OC_ex2_airjumpcount
+	OC_ex2_shader
 )
 const (
 	OC_ex3_analog_leftx OpCode = iota
@@ -4154,6 +4155,9 @@ func (be BytecodeExp) run_ex2(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.guardCount)
 	case OC_ex2_airjumpcount:
 		sys.bcStack.PushI(c.airJumpCount)
+	case OC_ex2_shader:
+		shaderName := strings.ToLower(be.ReadPoolStringAt(i))
+		sys.bcStack.PushB(c.shader == shaderName)
 	default:
 		LogMessage("%v", be[*i-1])
 		c.panic("Invalid bytecode OpCode encountered")
@@ -6051,6 +6055,8 @@ const (
 	explod_syncparams
 	explod_synclayer
 	explod_syncid
+	explod_shader
+	explod_shaderparam
 	explod_last = iota + palFX_last + afterImage_last + 1 - 1
 	explod_redirectid
 )
@@ -6282,6 +6288,15 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 			e.projection = Projection(exp[0].evalI(c))
 		case explod_window:
 			e.window = [4]float32{exp[0].evalF(c) * redirscale, exp[1].evalF(c) * redirscale, exp[2].evalF(c) * redirscale, exp[3].evalF(c) * redirscale}
+		case explod_shader:
+			e.shader = exp[0].evalS()
+		case explod_shaderparam:
+			numParams := int(exp[0].evalI(c))
+			for j := 0; j < numParams; j++ {
+				idx := int(exp[1+j*2].evalI(c))
+				val := exp[2+j*2].evalF(c)
+				e.shaderParams[idx] = val
+			}
 		case explod_redirectid:
 			return true // Already handled. Avoid default
 		default:
@@ -6881,6 +6896,21 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 				eachExpl(func(e *Explod) {
 					e.syncParams = sp
 				})
+			case explod_shader:
+				s := exp[0].evalS()
+				eachExpl(func(e *Explod) {
+					e.shader = s
+				})
+			case explod_shaderparam:
+				numParams := int(exp[0].evalI(c))
+				for j := 0; j < numParams; j++ {
+					idx := int(exp[1+j*2].evalI(c))
+					val := exp[2+j*2].evalF(c)
+
+					eachExpl(func(e *Explod) {
+						e.shaderParams[idx] = val
+					})
+				}
 			case explod_interpolation:
 				if c.stWgi().ikemenver[0] != 0 || c.stWgi().ikemenver[1] != 0 {
 					interpolation := exp[0].evalB(c)
@@ -12235,6 +12265,36 @@ func (sc scoreAdd) Run(c *Char, _ []int32) bool {
 		switch paramID {
 		case scoreAdd_value:
 			crun.scoreAdd(exp[0].evalF(c))
+		}
+		return true
+	})
+	return false
+}
+
+type shaderSet StateControllerBase
+
+const (
+	shaderSet_shader byte = iota
+	shaderSet_shaderparam
+	shaderSet_redirectid
+)
+
+func (sc shaderSet) Run(c *Char, _ []int32) bool {
+	crun := getRedirectedChar(c, StateControllerBase(sc), shaderSet_redirectid, "ShaderSet")
+	if crun == nil {
+		return false
+	}
+	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
+		switch paramID {
+		case shaderSet_shader:
+			crun.shader = exp[0].evalS()
+		case shaderSet_shaderparam:
+			numParams := int(exp[0].evalI(c))
+			for j := 0; j < numParams; j++ {
+				idx := int(exp[1+j*2].evalI(c))
+				val := exp[2+j*2].evalF(c)
+				crun.shaderParams[idx] = val
+			}
 		}
 		return true
 	})
