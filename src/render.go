@@ -307,6 +307,10 @@ func applyShear(modelview mgl.Mat4, rxadd, width float32) mgl.Mat4 {
 // Applies the sprite rotation path to a truetype glyph quad
 func transformTextQuad(x1, y1, x2, y2, x3, y3, x4, y4, rxadd float32,
 	rot Rotation, projectionMode int32, fLength, rcx, rcy float32) (float32, float32, float32, float32, float32, float32, float32, float32) {
+	if rot.IsZero() && rxadd == 0 {
+		return x1, y1, x2, y2, x3, y3, x4, y4
+	}
+
 	sx, sy := sys.widthScale, sys.heightScale
 	if sx == 0 {
 		sx = 1
