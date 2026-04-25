@@ -3028,6 +3028,7 @@ func systemScriptInit(l *lua.LState) {
 							// removeSFFCache(sys.cgi[i].sff.filename)
 							sys.cgi[i].sff = nil
 						}
+						sys.cgi[i].customShaders = nil
 						if sys.reloadPreserveVars[i] {
 							sys.saveCharVars(i)
 						}
@@ -10107,6 +10108,15 @@ func triggerFunctions(l *lua.LState) {
 	luaRegister(l, "selfStateNoExist", func(*lua.LState) int {
 		l.Push(lua.LBool(sys.debugWC.selfStatenoExist(
 			BytecodeInt(int32(numArg(l, 1)))).ToB()))
+		return 1
+	})
+	luaRegister(l, "shader", func(l *lua.LState) int {
+		if !nilArg(l, 1) {
+			shaderName := strings.ToLower(strArg(l, 1))
+			l.Push(lua.LBool(sys.debugWC.shader == shaderName))
+		} else {
+			l.Push(lua.LBool(sys.debugWC.shader != ""))
+		}
 		return 1
 	})
 	luaRegister(l, "sign", func(*lua.LState) int {

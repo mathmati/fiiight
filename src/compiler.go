@@ -181,6 +181,7 @@ func newCompiler() *Compiler {
 		"savefile":             c.saveFile,
 		"savestate":            c.saveState,
 		"scoreadd":             c.scoreAdd,
+		"shaderset":            c.shaderSet,
 		"shiftinput":           c.shiftInput,
 		"storyboard":           c.storyboard,
 		"tagin":                c.tagIn,
@@ -459,6 +460,7 @@ var triggerMap = map[string]int{
 	"scoretotal":         1,
 	"selfcommand":        1,
 	"selfstatenoexist":   1,
+	"shader":             1,
 	"sign":               1,
 	"soundvar":           1,
 	"spritevar":          1,
@@ -5049,6 +5051,10 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			return bvNone(), err
 		}
 		out.append(OC_ex_, OC_ex_selfstatenoexist)
+	case "shader":
+		if err := nameSub(OC_ex2_, OC_ex2_shader); err != nil {
+			return bvNone(), err
+		}
 	case "spritevar":
 		if err := c.checkOpeningParenthesis(in); err != nil {
 			return bvNone(), err

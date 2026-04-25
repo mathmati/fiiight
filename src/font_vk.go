@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"fmt"
 	"image"
+
 	//"image/draw"
 	"io"
 	"io/ioutil"
@@ -554,7 +555,8 @@ func (f *Font_VK) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, 
 	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
 	fs string, argv ...interface{}) error {
 	r := gfx.(*Renderer_VK)
-	switchedProgram := r.VKState.currentProgram != gfxFont.(*FontRenderer_VK).program
+	switchedProgram := r.VKState.boundProgram != gfxFont.(*FontRenderer_VK).program
+	r.VKState.boundProgram = gfxFont.(*FontRenderer_VK).program
 	r.VKState.currentProgram = gfxFont.(*FontRenderer_VK).program
 
 	indices := []rune(fmt.Sprintf(fs, argv...))

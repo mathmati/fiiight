@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"path/filepath"
 	"sort"
@@ -1669,6 +1670,9 @@ type Explod struct {
 	interpolate_xshear   [2]float32
 	timestamp            int32 // Determines run order
 	sortindex            int   // For faster run order sorting
+
+	shader       string
+	shaderParams [16]float32
 }
 
 func newExplod() *Explod {
@@ -1983,6 +1987,8 @@ func (e *Explod) update() {
 				e.alpha = syncChar.alpha
 				e.palfx = syncChar.getPalfx()
 				e.facing = syncChar.facing
+				e.shader = syncChar.shader
+				e.shaderParams = syncChar.shaderParams
 
 				if syncChar.aimg != nil && syncChar.aimg.time != 0 {
 					if e.aimg == nil {
@@ -2125,6 +2131,8 @@ func (e *Explod) update() {
 	sd.fLength = fLength
 	sd.window = ewin
 	sd.xshear = xshear
+	sd.shader = e.shader
+	sd.shaderParams = e.shaderParams
 
 	if e.syncId > 0 {
 		sd.syncId = e.syncId
@@ -2948,6 +2956,7 @@ type CharGlobalInfo struct {
 	attackBase              int32
 	defenceBase             int32
 	canMutateStage          bool // Determines if the stage should be included in save states
+	customShaders           []string
 }
 
 func (cgi *CharGlobalInfo) clearPCTime() {
@@ -3227,6 +3236,8 @@ type Char struct {
 	currentSctrlIndex    int32
 	analogAxes           [6]float32
 	enableSyncId         bool
+	shader               string
+	shaderParams         [16]float32
 	//soundChannels        SoundChannels // Moved to system
 }
 
@@ -3331,6 +3342,8 @@ func (c *Char) clearState() {
 	c.makeDustSpacing = 0
 	c.hitStateChangeIdx = -1
 	c.pushAffectTeam = 1
+	c.shader = ""
+	c.shaderParams = [16]float32{}
 }
 
 func (c *Char) clsnOverlapTrigger(box1, pid, box2 int32) bool {
@@ -3405,6 +3418,8 @@ func (c *Char) prepareNextRound() {
 	c.enemyNearP2Clear()
 	c.targets = c.targets[:0]
 	c.cpucmd = -1
+	c.shader = ""
+	c.shaderParams = [16]float32{}
 }
 
 // Return Char Global Info normally
@@ -3542,6 +3557,8 @@ func (c *Char) load(def string) error {
 	cns, sprite, anim, sound := "", "", "", ""
 	info, files, keymap, mapArray := true, true, true, true
 	lanInfo, lanFiles, lanKeymap, lanMapArray := true, true, true, true
+	shaders := true
+	lanShaders := true
 
 	// Collect arbitrary number of fonts
 	type fontSpec struct {
@@ -3672,6 +3689,47 @@ func (c *Char) load(def string) error {
 
 				for key, value := range is {
 					c.mapDefault[key] = float32(Atof(value))
+				}
+			}
+		case "shaders":
+			if (isLan && lanShaders) || (!isLan && shaders) {
+				if isLan {
+					lanShaders = false
+				}
+				shaders = false
+				isVulkan := strings.HasPrefix(gfx.GetName(), "Vulkan")
+
+				for key, val := range is {
+					shaderPath := val
+					shaderAlias := key
+
+					if isVulkan {
+						if !strings.HasSuffix(strings.ToLower(shaderPath), ".spv") {
+							shaderPath += ".spv"
+						}
+					}
+
+					gi.customShaders = append(gi.customShaders, shaderAlias)
+
+					LoadFile(&shaderPath, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+						f, err := OpenFile(filename)
+						if err != nil {
+							LogMessage("Failed to open shader file '%s': %v", filename, err)
+							return err
+						}
+						defer f.Close()
+						shaderData, err := io.ReadAll(f)
+						if err != nil {
+							LogMessage("Failed to read shader file '%s': %v", filename, err)
+							return err
+						}
+
+						sys.mainThreadTask <- func() {
+							sys.shaderRefCount[shaderAlias] = 3
+							gfx.LoadCustomSpriteShader(shaderAlias, shaderData)
+						}
+						return nil
+					})
 				}
 			}
 		}
@@ -12455,6 +12513,8 @@ func (c *Char) cueDraw() {
 		charSD.fLength = fLength
 		charSD.xshear = c.xshear
 		charSD.window = cwin
+		charSD.shader = c.shader
+		charSD.shaderParams = c.shaderParams
 
 		if c.enableSyncId {
 			charSD.syncId = c.id

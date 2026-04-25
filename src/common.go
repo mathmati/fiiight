@@ -1209,7 +1209,7 @@ func (l *Layout) DrawAnim(r *[4]int32, x, y, scl, xscl, yscl float32, ln int16, 
 		a.Draw(drawwindow, x+l.offset[0]-xsoffset, y+l.offset[1]+float32(sys.gameHeight-240),
 			scl, scl, (l.scale[0]*xscl)*float32(l.facing), (l.scale[0]*xscl)*float32(l.facing),
 			(l.scale[1]*yscl)*float32(l.vfacing), xshear, l.rot,
-			float32(sys.gameWidth-320)/2, palfx, 1, [2]float32{1, 1}, int32(l.projection), l.fLength, 0, false)
+			float32(sys.gameWidth-320)/2, palfx, 1, [2]float32{1, 1}, int32(l.projection), l.fLength, 0, false, "", [16]float32{})
 	}
 }
 
