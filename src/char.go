@@ -3477,9 +3477,8 @@ func (c *Char) applyMapOverrides() {
 	}
 }
 
-// Restore defaults for values that ModifyPlayer can mutate and that would
-// otherwise leak when a cached root is reused as a fresh entrant.
-func (c *Char) resetCachedPlayerState() {
+// Some of these are overridden later anyway, but we'll reset them just in case
+func (c *Char) resetModifyPlayer() {
 	gi := c.gi()
 	gi.displayname = gi.defaultDisplayname
 	gi.lifebarname = gi.defaultLifebarname
@@ -3489,6 +3488,7 @@ func (c *Char) resetCachedPlayerState() {
 	c.powerMax = gi.data.power
 	c.dizzyPointsMax = gi.data.dizzypoints
 	c.guardPointsMax = gi.data.guardpoints
+	// c.teamside already assigned by loadCharacter()
 }
 
 func (c *Char) load(def string) error {
@@ -3502,6 +3502,7 @@ func (c *Char) load(def string) error {
 	gi.animTable = NewAnimationTable()
 	gi.fnt = make(map[int]*Fnt)
 	gi.portraitscale = 1
+	gi.customShaders = nil
 
 	for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
 		pal := gi.palInfo[i]
