@@ -96,7 +96,7 @@ func (c *Compiler) hitBySub(is IniSection, sc *StateControllerBase, sctrlName st
 		if c.zssMode {
 			return Error("Cannot mix old and new " + sctrlName + " syntaxes")
 		} else {
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].nameLow + fmt.Sprintf(": Cannot mix old and new: "+sctrlName+" in state %v ", c.stateNo))
+			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Cannot mix old and new: "+sctrlName+" in state %v ", c.stateNo))
 		}
 	}
 
@@ -662,7 +662,7 @@ func (c *Compiler) helper(is IniSection, sc *StateControllerBase, _ int8) (State
 				if c.zssMode {
 					return Error("Helper name not enclosed in \"")
 				}
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].nameLow + fmt.Sprintf(": Helper name not enclosed in \" : in state %v ", c.stateNo))
+				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Helper name not enclosed in \" : in state %v ", c.stateNo))
 				return nil
 			}
 			sc.add(helper_name, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
@@ -2645,7 +2645,7 @@ func (c *Compiler) varSetOlderSub(is IniSection, sc *StateControllerBase, alread
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error(msg)
 			}
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].nameLow + ": " + msg)
+			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
 		}
 		hasIndex = true
 		index = data
@@ -2672,7 +2672,7 @@ func (c *Compiler) varSetOlderSub(is IniSection, sc *StateControllerBase, alread
 		if c.zssMode || !sys.ignoreMostErrors {
 			return false, Error(msg)
 		}
-		sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].nameLow + ": " + msg)
+		sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
 		return true, nil
 	}
 
@@ -2790,7 +2790,7 @@ func (c *Compiler) varSetSub(is IniSection, sc *StateControllerBase, scType int3
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error(msg)
 			}
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].nameLow + ": " + msg)
+			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
 			break
 		}
 
