@@ -3543,6 +3543,10 @@ func (co *MotifContinue) isEnabled() bool {
 	return co.enabled
 }
 
+func (co *MotifContinue) canContinue() bool {
+	return sys.credits == -1 || sys.credits > 0
+}
+
 func (co *MotifContinue) init(m *Motif) {
 	if !m.ContinueScreen.Enabled || !co.isEnabled() ||
 		(sys.winnerTeam() != 0 && sys.winnerTeam() != int32(sys.home)+1) {
@@ -3606,13 +3610,16 @@ func (co *MotifContinue) init(m *Motif) {
 
 func (co *MotifContinue) processSelection(m *Motif, continueSelected bool) {
 	cs := m.ContinueScreen
+	if continueSelected && !co.canContinue() {
+		return
+	}
 	if continueSelected {
 		m.processStateTransitions(
 			[4][]int32{cs.P2.Yes.State, cs.P4.Yes.State, cs.P6.Yes.State, cs.P8.Yes.State},
 			[4][]int32{cs.P1.Yes.State, cs.P3.Yes.State, cs.P5.Yes.State, cs.P7.Yes.State},
 		)
 		sys.continueFlg = true
-		if sys.credits != -1 {
+		if sys.credits > 0 {
 			sys.credits--
 		}
 	} else {
@@ -3703,12 +3710,14 @@ func (co *MotifContinue) step(m *Motif) {
 				m.Snd.play(m.ContinueScreen.Move.Snd, 100, 0, 0, 0, 0)
 				co.yesSide = !co.yesSide
 			} else if sys.uiRawInput(m.ContinueScreen.Skip.Key, co.pn-1) || sys.uiRawInput(m.ContinueScreen.Done.Key, co.pn-1) {
-				m.Snd.play(m.ContinueScreen.Done.Snd, 100, 0, 0, 0, 0)
-				co.processSelection(m, co.yesSide)
+				if !co.yesSide || co.canContinue() {
+					m.Snd.play(m.ContinueScreen.Done.Snd, 100, 0, 0, 0, 0)
+					co.processSelection(m, co.yesSide)
+				}
 			}
 		} else {
 			if co.counter < m.ContinueScreen.Counter.End.SkipTime {
-				if (sys.credits == -1 || sys.credits > 0) && sys.uiRawInput(m.ContinueScreen.Done.Key, co.pn-1) {
+				if co.canContinue() && sys.uiRawInput(m.ContinueScreen.Done.Key, co.pn-1) {
 					m.Snd.play(m.ContinueScreen.Done.Snd, 100, 0, 0, 0, 0)
 					co.processSelection(m, true)
 				} else if sys.uiRawInput(m.ContinueScreen.Skip.Key, co.pn-1) &&
