@@ -6377,7 +6377,12 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 		case explod_window:
 			e.window = [4]float32{exp[0].evalF(c) * redirscale, exp[1].evalF(c) * redirscale, exp[2].evalF(c) * redirscale, exp[3].evalF(c) * redirscale}
 		case explod_shader:
-			e.shader = exp[0].evalS()
+			shader := exp[0].evalS()
+			if shader == "" || sys.isValidCustomShader(shader) {
+				e.shader = shader
+			} else {
+				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid explod shader name: %s", shader))
+			}
 		case explod_shaderparam:
 			numParams := int(exp[0].evalI(c))
 			for j := 0; j < numParams; j++ {
@@ -12652,7 +12657,12 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 		case shaderSet_time:
 			st = exp[0].evalI(c)
 		case shaderSet_shader:
-			crun.shader = exp[0].evalS()
+			shader := exp[0].evalS()
+			if shader == "" || sys.isValidCustomShader(shader) {
+				crun.shader = shader
+			} else {
+				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid shader name: %s", shader))
+			}
 		case shaderSet_shaderparam:
 			numParams := int(exp[0].evalI(c))
 			for j := 0; j < numParams; j++ {

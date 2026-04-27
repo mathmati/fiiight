@@ -6563,6 +6563,13 @@ func (s *System) restoreCharVars(c *Char) {
 	delete(s.charVarsBackup, c.playerNo)
 }
 
+func (s *System) isValidCustomShader(name string) bool {
+	if _, ok := sys.shaderRefCount[name]; ok {
+		return true
+	}
+	return false
+}
+
 func (s *System) cleanCustomShaders() {
 	activeShaders := make(map[string]bool)
 	for i := 0; i < len(s.cgi); i++ {
