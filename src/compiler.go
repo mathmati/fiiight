@@ -5937,12 +5937,8 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 			_, ok := is[name]
 			if ok && !isTrigger {
 				if sys.ignoreMostErrors {
-					// ZSS syntax also reaches here for some reason. So we'll check if we're truly in a ZSS file
-					// TODO: Check how ZSS syntax ends up in parseSection()
-					if !c.zssMode {
-						// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
-						LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate '%s' parameter in state %v", name, c.stateNo))
-					}
+					// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
+					LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate '%s' parameter in state %v", name, c.stateNo))
 					continue
 				}
 				return nil, false, Error(name + " is duplicated")
@@ -6650,49 +6646,56 @@ func cnsStringArray(arg string) ([]string, error) {
 // Compile a state file
 func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 	filename string, dirs []string, negoverride bool, constants map[string]float32) error {
-	var str string
-	c.zssMode = HasExtension(filename, ".zss")
-	fnz := filename
 
-	// Load state file
-	if err := LoadFile(&filename, dirs, "", func(filename string) error {
+	// Reset ZSS mode
+	c.zssMode = false
+
+	var filetext string
+	isZss := HasExtension(filename, ".zss")
+
+	// Load the contents of the state file
+	err := LoadFile(&filename, dirs, "", func(fname string) error {
 		var err error
-		// If this is a zss file
-		if c.zssMode {
-			b, err := LoadText(filename)
-			if err != nil {
-				return err
-			}
-			str = string(b)
-			return c.stateCompileZ(states, fnz, str, constants)
-		}
+		filetext, err = LoadText(fname)
+		return err
+	})
 
-		// Try reading as an st file
-		str, err = LoadText(filename)
-		return err
-	}); err != nil {
-		// If filename doesn't exist, see if a zss file exists
-		fnz += ".zss"
-		if err := LoadFile(&fnz, dirs, "", func(filename string) error {
-			b, err := LoadText(filename)
-			if err != nil {
+	if err != nil {
+		// If filename doesn't exist, see if a ZSS file exists (e.g. common1.cns.zss)
+		if !isZss {
+			zssAlt := filename + ".zss"
+			err2 := LoadFile(&zssAlt, dirs, "", func(fname string) error {
+				var err2 error
+				filetext, err2 = LoadText(fname)
+				return err2
+			})
+			if err2 == nil {
+				// Successfully loaded the alternative ZSS file
+				isZss = true
+				filename = zssAlt
+			} else {
 				return err
 			}
-			str = string(b)
-			return nil
-		}); err == nil {
-			return c.stateCompileZ(states, fnz, str, constants)
+		} else {
+			return err
 		}
-		return err
 	}
 
-	c.lines, c.i = SplitAndTrim(str, "\n"), 0
+	// For ZSS files switch to stateCompileZ()
+	if isZss {
+		return c.stateCompileZ(states, filename, filetext, constants)
+	}
+
+	// Otherwise continue and parse as CNS code
+	c.lines, c.i = SplitAndTrim(filetext, "\n"), 0
 	errmes := func(err error) error {
 		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.i+1, err.Error()))
 	}
+
 	// Keep a map of states that have already been found in this file
 	existInThisFile := make(map[int32]bool)
 	c.vars = make(map[string]uint8)
+
 	// Loop through state file lines
 	for ; c.i < len(c.lines); c.i++ {
 		// Find a statedef, skipping over other lines until finding one
@@ -7901,6 +7904,10 @@ func (c *Compiler) stateBlock(line *string, bl *StateBlock, root bool,
 
 // Compile a ZSS state
 func (c *Compiler) stateCompileZ(states map[int32]StateBytecode, filename, src string, constants map[string]float32) error {
+	// Enable ZSS mode
+	// TODO: There's some overlap between this flag and sys.ignoreMostErrors
+	c.zssMode = true
+
 	// ZSS states are compiled with a lower tolerance for mistakes
 	// TODO: Either merge this with our current c.zssMode checks or drop it
 	defer func(oime bool) {
