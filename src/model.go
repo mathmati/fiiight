@@ -1907,7 +1907,7 @@ func drawNode(mdl *Model, scene *Scene, layerNumber int, defaultLayerNumber int,
 		mat := mdl.materials[*p.materialIndex]
 		if ((mat.alphaMode != AlphaModeBlend && n.trans == TransNone) && drawBlended) ||
 			((mat.alphaMode == AlphaModeBlend || n.trans != TransNone) && !drawBlended) {
-			return
+			continue
 		}
 		color := mdl.materials[*p.materialIndex].baseColorFactor.getValue().([4]float32)
 		meshOutline := n.meshOutline.getValue().(float32)
@@ -2018,11 +2018,11 @@ func drawNodeShadow(mdl *Model, scene *Scene, n *Node, camOffset [3]float32, dra
 		mat := mdl.materials[*p.materialIndex]
 		if ((mat.alphaMode != AlphaModeBlend && n.trans == TransNone) && drawBlended) ||
 			((mat.alphaMode == AlphaModeBlend || n.trans != TransNone) && !drawBlended) {
-			return
+			continue
 		}
 		color := mdl.materials[*p.materialIndex].baseColorFactor.getValue().([4]float32)
 		if color[3] == 0 && mat.alphaMode == AlphaModeBlend {
-			return
+			continue
 		}
 		gfx.setShadowMapPipeline(mdl.materials[*p.materialIndex].doubleSided, reverseCull, p.useUV, p.useNormal, p.useTangent, p.useVertexColor, p.useJoint0, p.useJoint1, p.numVertices, p.vertexBufferOffset)
 
