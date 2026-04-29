@@ -2887,7 +2887,7 @@ func systemScriptInit(l *lua.LState) {
 		if !nilArg(l, 2) {
 			height = int32(numArg(l, 2))
 		}
-		filename := SearchFile(strArg(l, 1), []string{"font/", sys.motif.Def, "", "data/"})
+		filename := SearchFile(strArg(l, 1), []string{sys.motif.Def, "", "data/"}, "font/")
 		fnt, err := loadFnt(filename, height)
 		if err != nil {
 			LogMessage("Failed to load %v (screenpack font): %v", filename, err)
@@ -5107,7 +5107,7 @@ func systemScriptInit(l *lua.LState) {
 				if s, ok := value.(lua.LString); ok {
 					bgm = string(s)
 					if bgm != "" {
-						bgm = SearchFile(bgm, []string{sys.motif.Def, "", "sound/"})
+						bgm = SearchFile(bgm, []string{sys.motif.Def, "", "data/", "sound/"})
 						hasNewBGM = true
 					}
 				} else {

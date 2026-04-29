@@ -1545,7 +1545,7 @@ func loadMotif(def string) (*Motif, error) {
 	var userIniFile *ini.File
 	var defaultOnlyIni *ini.File
 
-	if err := LoadFile(&def, []string{def, "", "data/"}, func(filename string) error {
+	if err := LoadFile(&def, []string{def, "", "data/"}, "", func(filename string) error {
 		def = filename
 
 		// Inline-append any external/mods/**/+system.def files before parsing.
@@ -2324,7 +2324,7 @@ func (m *Motif) loadBgDefProperties(bgDef *BgDefProperties, bgname, spr string) 
 	if bgDef.Spr == "" || bgDef.Spr == spr || bgDef.Spr == m.Files.Spr {
 		bgDef.Sff = m.Sff
 	} else {
-		LoadFile(&bgDef.Spr, []string{bgDef.Spr, m.Def, "", "data/"}, func(filename string) error {
+		LoadFile(&bgDef.Spr, []string{bgDef.Spr, m.Def, "", "data/"}, "", func(filename string) error {
 			if filename != "" {
 				var err error
 				bgDef.Sff, err = loadSff(filename, false, true, false)
@@ -2352,7 +2352,7 @@ func (m *Motif) loadBgDefProperties(bgDef *BgDefProperties, bgname, spr string) 
 }
 
 func (m *Motif) loadFiles() {
-	LoadFile(&m.Files.Spr, []string{m.Files.Spr}, func(filename string) error {
+	LoadFile(&m.Files.Spr, []string{m.Files.Spr}, "", func(filename string) error {
 		if filename != "" {
 			var err error
 			m.Sff, err = loadSff(filename, false, true, false)
@@ -2367,7 +2367,7 @@ func (m *Motif) loadFiles() {
 	})
 	sys.keepAlive()
 
-	LoadFile(&m.Files.Glyphs, []string{m.Files.Glyphs}, func(filename string) error {
+	LoadFile(&m.Files.Glyphs, []string{m.Files.Glyphs}, "", func(filename string) error {
 		if filename != "" {
 			var err error
 			m.GlyphsSff, err = loadSff(filename, false, true, false)
@@ -2382,7 +2382,7 @@ func (m *Motif) loadFiles() {
 	})
 	sys.keepAlive()
 
-	LoadFile(&m.Files.Model, []string{m.Files.Model}, func(filename string) error {
+	LoadFile(&m.Files.Model, []string{m.Files.Model}, "", func(filename string) error {
 		if filename != "" {
 			var err error
 			m.Model, err = loadglTFModel(filename)
@@ -2455,7 +2455,7 @@ func (m *Motif) loadFiles() {
 		m.HiscoreBgDef = m.TitleBgDef
 	}
 
-	LoadFile(&m.Files.Snd, []string{m.Files.Snd}, func(filename string) error {
+	LoadFile(&m.Files.Snd, []string{m.Files.Snd}, "", func(filename string) error {
 		if filename != "" {
 			var err error
 			m.Snd, err = LoadSnd(filename)
@@ -2471,7 +2471,7 @@ func (m *Motif) loadFiles() {
 	sys.keepAlive()
 
 	for key, fnt := range m.Files.Font {
-		LoadFile(&fnt.Font, []string{fnt.Font}, func(filename string) error {
+		LoadFile(&fnt.Font, []string{fnt.Font}, "", func(filename string) error {
 			re := regexp.MustCompile(`\d+`)
 			i := int(Atoi(re.FindString(key)))
 
