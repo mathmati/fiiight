@@ -11991,6 +11991,7 @@ const (
 func (sc matchRestart) Run(c *Char, _ []int32) bool {
 	var s string
 	reloadFlag := false
+	dirs := []string{c.gi().def, "", "data/"}
 	for i := range sys.reloadPreserveVars {
 		sys.reloadPreserveVars[i] = false
 	}
@@ -12005,33 +12006,33 @@ func (sc matchRestart) Run(c *Char, _ []int32) bool {
 			}
 		case matchRestart_stagedef:
 			s = exp[0].evalS()
-			sys.sel.sdefOverwrite = SearchFile(s, []string{c.gi().def})
+			sys.sel.sdefOverwrite = SearchFile(s, dirs, "stages/")
 			//sys.reloadStageFlg = true
 			reloadFlag = true
 		case matchRestart_p1def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[0] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[0] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p2def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[1] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[1] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p3def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[2] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[2] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p4def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[3] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[3] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p5def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[4] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[4] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p6def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[5] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[5] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p7def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[6] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[6] = SearchFile(s, dirs, "chars/")
 		case matchRestart_p8def:
 			s = exp[0].evalS()
-			sys.sel.cdefOverwrite[7] = SearchFile(s, []string{c.gi().def})
+			sys.sel.cdefOverwrite[7] = SearchFile(s, dirs, "chars/")
 		case matchRestart_preserveVars:
 			for i, p := range exp {
 				if i < len(sys.reloadPreserveVars) {
@@ -12833,7 +12834,7 @@ func (sc playBgm) Run(c *Char, _ []int32) bool {
 				stop = true
 				play = false
 			} else {
-				bgm = SearchFile(bgm, []string{crun.gi().def, sys.stage.def, "", "sound/"})
+				bgm = SearchFile(bgm, []string{crun.gi().def, sys.stage.def, "", "data/"}, "sound/")
 				play = bgm != ""
 			}
 		case playBgm_volume:

@@ -4403,7 +4403,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 			}
 		}
 
-		foundDiskPath := SearchFile(charDefPathGuess, []string{"chars/", "data/", ""})
+		foundDiskPath := SearchFile(charDefPathGuess, []string{"", "data/"}, "chars/")
 		if foundDiskPath == "" || !strings.HasSuffix(strings.ToLower(foundDiskPath), ".def") {
 			return useDummy("DEF not found")
 		}
@@ -4423,37 +4423,6 @@ func (s *Select) AddChar(def string) *SelectChar {
 		}
 		// Print full message if it's an actual read error
 		return useDummy("DEF read error: " + err.Error())
-	}
-
-	resolvePathRelativeToDef := func(pathInDefFile string) string {
-		isZipDef, zipArchiveOfDef, defSubPathInZip := IsZipPath(sc.def)
-		pathInDefFile = filepath.ToSlash(pathInDefFile)
-
-		if filepath.IsAbs(pathInDefFile) {
-			return pathInDefFile
-		}
-
-		// Check if pathInDefFile itself looks like a zip-internal path.
-		if isZipRel, _, _ := IsZipPath(pathInDefFile); isZipRel {
-			return pathInDefFile // Assume it's a correct logical path
-		}
-
-		isEngineRootRelative := strings.HasPrefix(pathInDefFile, "data/") ||
-			strings.HasPrefix(pathInDefFile, "font/") ||
-			strings.HasPrefix(pathInDefFile, "stages/")
-
-		if isZipDef {
-			if isEngineRootRelative {
-				return pathInDefFile
-			}
-			baseDirWithinZip := filepath.ToSlash(filepath.Dir(defSubPathInZip))
-			if baseDirWithinZip == "." || baseDirWithinZip == "" { // .def is at zip root
-				return filepath.ToSlash(filepath.Join(zipArchiveOfDef, pathInDefFile))
-			}
-			return filepath.ToSlash(filepath.Join(zipArchiveOfDef, baseDirWithinZip, pathInDefFile))
-		}
-
-		return pathInDefFile
 	}
 
 	var cns_orig, sprite_orig, anim_orig, movelist_orig string
@@ -4563,7 +4532,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 	}
 
 	tempSff := newSff()
-	LoadFile(&cns_orig, []string{sc.def, "", "data/"}, func(filename string) error {
+	LoadFile(&cns_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 		str, err := LoadText(filename)
 		if err != nil {
 			return err
@@ -4586,8 +4555,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 	})
 	// preload animations
 	if len(anim_orig) > 0 {
-		resolvedAnimPath := resolvePathRelativeToDef(anim_orig)
-		LoadFile(&resolvedAnimPath, []string{sc.def}, func(filename string) error {
+		LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 			str, err := LoadText(filename) // LoadText is zip-aware
 			if err != nil {
 				return err
@@ -4615,8 +4583,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 		fp = sprite_orig
 	}
 	if len(fp) > 0 {
-		resolvedSpritePath := resolvePathRelativeToDef(fp)
-		LoadFile(&resolvedSpritePath, []string{sc.def, "", "data/"}, func(file string) error {
+		LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
 			var selPal []int32
 			var err_sff error
 			sc.sff, selPal, err_sff = preloadSff(file, true, listSpr)
@@ -4672,9 +4639,8 @@ func (s *Select) AddChar(def string) *SelectChar {
 	}
 	// read movelist
 	if len(movelist_orig) > 0 {
-		resolvedMovelistPath := resolvePathRelativeToDef(movelist_orig)
 		// Movelist is text, can be loaded now
-		LoadFile(&resolvedMovelistPath, []string{sc.def, "", "data/"}, func(filename string) error {
+		LoadFile(&movelist_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 			sc.movelist, _ = LoadText(filename)
 			return nil
 		})
@@ -4741,7 +4707,7 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 		if !strings.HasSuffix(strings.ToLower(def), ".def") {
 			def += ".def"
 		}
-		if err := LoadFile(&def, []string{"stages/", "data/", ""}, func(file string) error {
+		if err := LoadFile(&def, []string{"", "data/"}, "stages/", func(file string) error {
 			finalDefPath = file
 			return nil
 		}); err != nil {
@@ -4752,7 +4718,7 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 
 	var lines []string
 	var err error
-	if err = LoadFile(&finalDefPath, nil, func(file string) error {
+	if err = LoadFile(&finalDefPath, nil, "", func(file string) error {
 		var str string
 		str, err = LoadText(file)
 		if err != nil {
@@ -4806,7 +4772,7 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 						key += fmt.Sprint(idx + 1) // attachedchar2, attachedchar3, attachedchar4
 					}
 
-					if err := isec.LoadFile(key, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+					if err := isec.LoadFile(key, []string{finalDefPath, "", "data/"}, "chars/", func(filename string) error {
 						// Ensure slice has correct length
 						for len(ss.attachedchardef) <= idx {
 							ss.attachedchardef = append(ss.attachedchardef, "")
@@ -4866,7 +4832,7 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 			}
 		}
 		// preload portion of sff file
-		LoadFile(&spr, []string{def, "", "data/"}, func(file string) error {
+		LoadFile(&spr, []string{finalDefPath, "", "data/"}, "", func(file string) error {
 			var err error
 			ss.sff, _, err = preloadSff(file, false, listSpr)
 			if err != nil {

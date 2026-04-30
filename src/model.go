@@ -472,7 +472,7 @@ func loadglTFModel(filepath string) (*Model, error) {
 					buffer = bytes.NewBuffer(decodedData)
 				}
 			} else {
-				if err := LoadFile(&img.URI, []string{filepath, "", sys.motif.Def, "data/"}, func(filename string) error {
+				if err := LoadFile(&img.URI, []string{filepath, sys.motif.Def, "", "data/"}, "", func(filename string) error {
 					// Use OpenFile which respects the virtual file system (zip)
 					f, err := OpenFile(filename)
 					if err != nil {

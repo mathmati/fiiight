@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -3519,31 +3518,6 @@ func (c *Char) load(def string) error {
 	// Reset DEF file maps
 	c.mapDefault = make(map[string]float32)
 
-	// Helper to resolve paths relative to the .def file's logical location
-	resolvePathRelativeToDef := func(pathInDefFile string) string {
-		isZipDef, zipArchiveOfDef, defSubPathInZip := IsZipPath(gi.def)
-		pathInDefFile = filepath.ToSlash(pathInDefFile)
-
-		if filepath.IsAbs(pathInDefFile) {
-			return pathInDefFile
-		}
-		isEngineRootRelative := strings.HasPrefix(pathInDefFile, "data/") ||
-			strings.HasPrefix(pathInDefFile, "font/") ||
-			strings.HasPrefix(pathInDefFile, "stages/")
-
-		if isZipDef {
-			if isEngineRootRelative {
-				return pathInDefFile
-			}
-			baseDirWithinZip := filepath.ToSlash(filepath.Dir(defSubPathInZip))
-			if baseDirWithinZip == "." || baseDirWithinZip == "" {
-				return filepath.ToSlash(filepath.Join(zipArchiveOfDef, pathInDefFile))
-			}
-			return filepath.ToSlash(filepath.Join(zipArchiveOfDef, baseDirWithinZip, pathInDefFile))
-		}
-		return pathInDefFile
-	}
-
 	if err := c.loadFx(def); err != nil {
 		LogMessage("Error loading FX for %s: %v", def, err)
 	}
@@ -3711,7 +3685,7 @@ func (c *Char) load(def string) error {
 
 					gi.customShaders = append(gi.customShaders, shaderAlias)
 
-					LoadFile(&shaderPath, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+					LoadFile(&shaderPath, []string{def, "", "data/"}, "", func(filename string) error {
 						f, err := OpenFile(filename)
 						if err != nil {
 							LogMessage("Failed to open shader file '%s': %v", filename, err)
@@ -3744,7 +3718,7 @@ func (c *Char) load(def string) error {
 	// Load common constants
 	for _, key := range SortedKeys(sys.cfg.Common.Const) {
 		for _, v := range sys.cfg.Common.Const[key] {
-			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, func(filename string) error {
+			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, "", func(filename string) error {
 				str, err = LoadText(filename)
 				if err != nil {
 					return err
@@ -3767,8 +3741,7 @@ func (c *Char) load(def string) error {
 
 	// Load constants
 	if len(cns) > 0 {
-		cns_resolved := resolvePathRelativeToDef(cns)
-		if err := LoadFile(&cns_resolved, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err := LoadFile(&cns, []string{def, "", "data/"}, "", func(filename string) error {
 			str, err := LoadText(filename)
 			if err != nil {
 				return err
@@ -4036,8 +4009,7 @@ func (c *Char) load(def string) error {
 
 	// Load SFF
 	if len(sprite) > 0 {
-		sprite_resolved := resolvePathRelativeToDef(sprite)
-		if err := LoadFile(&sprite_resolved, []string{gi.def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err := LoadFile(&sprite, []string{gi.def, "", "data/"}, "", func(filename string) error {
 			var err_sff error
 			gi.sff, err_sff = loadSff(filename, true, false, false) // loadSff uses OpenFile
 			return err_sff
@@ -4069,8 +4041,7 @@ func (c *Char) load(def string) error {
 	gi.animTable = NewAnimationTable()
 
 	if len(anim) > 0 {
-		anim_resolved := resolvePathRelativeToDef(anim)
-		if err := LoadFile(&anim_resolved, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err := LoadFile(&anim, []string{def, "", "data/"}, "", func(filename string) error {
 			str, err := LoadText(filename)
 			if err != nil {
 				return err
@@ -4091,7 +4062,7 @@ func (c *Char) load(def string) error {
 	// Read and merge common animations
 	for _, key := range SortedKeys(sys.cfg.Common.Air) {
 		for _, v := range sys.cfg.Common.Air[key] {
-			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, func(filename string) error {
+			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, "", func(filename string) error {
 				txt, err := LoadText(filename)
 				if err != nil {
 					return err
@@ -4126,8 +4097,7 @@ func (c *Char) load(def string) error {
 
 	// Load sounds
 	if len(sound) > 0 {
-		sound_resolved := resolvePathRelativeToDef(sound)
-		if LoadFile(&sound_resolved, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if LoadFile(&sound, []string{def, "", "data/"}, "", func(filename string) error {
 			var err error
 			gi.snd, err = LoadSnd(filename)
 			return err
@@ -4143,9 +4113,9 @@ func (c *Char) load(def string) error {
 		if len(spec.path) == 0 {
 			continue
 		}
-		resolvedFntPath := resolvePathRelativeToDef(spec.path)
+		fntPath := spec.path
 		i := idx
-		LoadFile(&resolvedFntPath, []string{def, sys.motif.Def, "", "data/", "font/"}, func(filename string) error {
+		LoadFile(&fntPath, []string{def, "", "data/"}, "font/", func(filename string) error {
 			sys.mainThreadTask <- func() {
 				h := int32(-1)
 				if spec.height != 0 {
@@ -4172,7 +4142,7 @@ func (c *Char) loadPalettes() {
 	readAct := func(palPtr *PalInfo) ([]uint32, bool) {
 		var pl []uint32
 		var success bool
-		LoadFile(&palPtr.filename, []string{gi.def, "", sys.motif.Def, "data/"}, func(file string) error {
+		LoadFile(&palPtr.filename, []string{gi.def, "", "data/"}, "", func(file string) error {
 			var err error
 			pl, err = readActPalette(file)
 			if err == nil {
@@ -4332,30 +4302,6 @@ func (c *Char) loadFx(def string) error {
 		return err
 	}
 
-	// Helper function to resolve paths referenced inside the .def file.
-	resolvePathRelativeToDef := func(pathInDefFile string) string {
-		isZipDef, zipArchiveOfDef, defSubPathInZip := IsZipPath(def)
-		pathInDefFile = filepath.ToSlash(pathInDefFile)
-		if filepath.IsAbs(pathInDefFile) {
-			return pathInDefFile
-		}
-		if isZipRel, _, _ := IsZipPath(pathInDefFile); isZipRel {
-			return pathInDefFile
-		}
-		isEngineRootRelative := strings.HasPrefix(pathInDefFile, "data/") || strings.HasPrefix(pathInDefFile, "font/") || strings.HasPrefix(pathInDefFile, "stages/")
-		if isZipDef {
-			if isEngineRootRelative {
-				return pathInDefFile
-			}
-			baseDirWithinZip := filepath.ToSlash(filepath.Dir(defSubPathInZip))
-			if baseDirWithinZip == "." || baseDirWithinZip == "" {
-				return filepath.ToSlash(filepath.Join(zipArchiveOfDef, pathInDefFile))
-			}
-			return filepath.ToSlash(filepath.Join(zipArchiveOfDef, baseDirWithinZip, pathInDefFile))
-		}
-		return pathInDefFile
-	}
-
 	lines, lnidx := SplitAndTrim(charDefContent, "\n"), 0
 	info, files, lanInfo, lanFiles := true, true, true, true
 	langPrefix := sys.cfg.Config.Language + "."
@@ -4394,17 +4340,8 @@ func (c *Char) loadFx(def string) error {
 							continue
 						}
 
-						resolved_path := resolvePathRelativeToDef(fx_path)
-						found_path := ""
-
-						// Check direct existence, then search engine paths
-						if exists := FileExist(resolved_path); exists != "" {
-							found_path = exists
-						} else {
-							found_path = SearchFile(fx_path, []string{def, "", sys.motif.Def, "data/"})
-						}
-
-						if found_path != "" {
+						found_path := SearchFile(fx_path, []string{def, "", "data/"})
+						if FileExist(found_path) != "" {
 							alreadyCachedNonChar := false
 							for _, ffx := range sys.ffx {
 								if ffx != nil && !ffx.isCharFX && ffx.fileName == found_path {
@@ -4418,7 +4355,7 @@ func (c *Char) loadFx(def string) error {
 								gi.fxPath = append(gi.fxPath, found_path)
 							}
 						} else {
-							LogMessage("CommonFX file not found for char %s: %s (resolved to %s)", def, fx_path, resolved_path)
+							LogMessage("CommonFX file not found for char %s: %s", def, fx_path)
 						}
 					}
 				}

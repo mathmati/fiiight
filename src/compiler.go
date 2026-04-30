@@ -6589,7 +6589,7 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 	fnz := filename
 
 	// Load state file
-	if err := LoadFile(&filename, dirs, func(filename string) error {
+	if err := LoadFile(&filename, dirs, "", func(filename string) error {
 		var err error
 		// If this is a zss file
 		if c.zssMode {
@@ -6607,7 +6607,7 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 	}); err != nil {
 		// If filename doesn't exist, see if a zss file exists
 		fnz += ".zss"
-		if err := LoadFile(&fnz, dirs, func(filename string) error {
+		if err := LoadFile(&fnz, dirs, "", func(filename string) error {
 			b, err := LoadText(filename)
 			if err != nil {
 				return err
@@ -8078,7 +8078,7 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	// Load the command file
 	str = ""
 	if len(cmd) > 0 {
-		if err := LoadFile(&cmd, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err := LoadFile(&cmd, []string{def, "", "data/"}, "", func(filename string) error {
 			var err error
 			str, err = LoadText(filename)
 			if err != nil {
@@ -8091,7 +8091,7 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	}
 	for _, key := range SortedKeys(sys.cfg.Common.Cmd) {
 		for _, v := range sys.cfg.Common.Cmd[key] {
-			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, func(filename string) error {
+			if err := LoadFile(&v, []string{def, sys.motif.Def, sys.fightScreen.def, "", "data/"}, "", func(filename string) error {
 				txt, err := LoadText(filename)
 				if err != nil {
 					return err
@@ -8242,7 +8242,7 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	// Compile state files
 	for _, s := range st {
 		if len(s) > 0 {
-			if err := c.stateCompile(states, s, []string{def, "", sys.motif.Def, "data/"},
+			if err := c.stateCompile(states, s, []string{def, "", "data/"},
 				sys.cgi[pn].ikemenver[0] == 0 &&
 					sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
 				return nil, err
@@ -8251,7 +8251,7 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	}
 	// Compile states in command file
 	if len(cmd) > 0 {
-		if err := c.stateCompile(states, cmd, []string{def, "", sys.motif.Def, "data/"},
+		if err := c.stateCompile(states, cmd, []string{def, "", "data/"},
 			sys.cgi[pn].ikemenver[0] == 0 &&
 				sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
 			return nil, err
@@ -8259,7 +8259,7 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	}
 	// Compile states in stcommon state file
 	if len(stcommon) > 0 {
-		if err := c.stateCompile(states, stcommon, []string{def, "", sys.motif.Def, "data/"},
+		if err := c.stateCompile(states, stcommon, []string{def, "", "data/"},
 			sys.cgi[pn].ikemenver[0] == 0 &&
 				sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
 			return nil, err

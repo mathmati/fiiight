@@ -205,7 +205,7 @@ func readBackGround(is IniSection, link *backGround,
 			bg.video = &bgVideo{}
 		}
 		path := is["path"]
-		LoadFile(&path, []string{def, "", sys.motif.Def, "data/", "video/"}, func(filename string) error {
+		LoadFile(&path, []string{def, "", "data/"}, "video/", func(filename string) error {
 			path = filename
 			return nil
 		})
@@ -1056,7 +1056,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 				sys.appendToConsole(s.warn() + fmt.Sprintf("Can only define up to %d attachedchar(s). '%s' ignored.", MaxAttachedChar, i))
 				continue
 			}
-			if err := sec.LoadFile(i, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+			if err := sec.LoadFile(i, []string{def, "", "data/"}, "stages/", func(filename string) error {
 				// Ensure slice has correct length
 				for len(s.attachedchardef) <= ac {
 					s.attachedchardef = append(s.attachedchardef, "")
@@ -1075,7 +1075,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 					re := regexp.MustCompile("[0-9]+")
 					submatchall := re.FindAllString(k, -1)
 					if len(submatchall) == 1 {
-						if err := LoadFile(&v, []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+						if err := LoadFile(&v, []string{def, "", "data/"}, "stages/", func(filename string) error {
 							if sys.stageList[Atoi(submatchall[0])], err = loadStage(filename, false); err != nil {
 								return fmt.Errorf("failed to load %v:\n%v", filename, err)
 							}
@@ -1271,7 +1271,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 
 	// BGDef group
 	if sec, _ := getSection("bgdef"); sec != nil {
-		if sec.LoadFile("spr", []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if sec.LoadFile("spr", []string{def, "", "data/"}, "", func(filename string) error {
 			sff, err := loadSff(filename, false, false, false)
 			if err != nil {
 				return err
@@ -1286,7 +1286,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 		}); err != nil {
 			return nil, err
 		}
-		if err = sec.LoadFile("model", []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err = sec.LoadFile("model", []string{def, "", "data/"}, "", func(filename string) error {
 			model, err := loadglTFModel(filename)
 			if err != nil {
 				return err
@@ -1338,7 +1338,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 				}
 			}
 		}
-		if err = sec.LoadFile("environment", []string{def, "", sys.motif.Def, "data/"}, func(filename string) error {
+		if err = sec.LoadFile("environment", []string{def, "", "data/"}, "", func(filename string) error {
 			env, err := loadEnvironment(filename)
 			if err != nil {
 				return err
