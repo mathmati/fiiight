@@ -639,11 +639,11 @@ func (bg backGround) draw(pos [2]float32, drawscl, bgscl, stglscl float32,
 	rect := bg.startrect
 
 	startrect0 := float32(rect[0]) - (pos[0])/stgscl[0]*bg.windowdelta[0] +
-		(float32(sys.gameWidth)/2/sclx - float32(bg.notmaskwindow)*(float32(sys.gameWidth)/2)*(1/lscl[0]))
+		(sys.gameWidthFloat/2/sclx - float32(bg.notmaskwindow)*(sys.gameWidthFloat/2)*(1/lscl[0]))
 	startrect0 *= sys.widthScale * wscl[0]
 	if !isStage && wscl[0] == 1 {
 		// Screenpacks X coordinates start from left edge of screen
-		startrect0 += float32(sys.gameWidth-320) / 2 * sys.widthScale
+		startrect0 += float32(sys.gameWidthFloat-320) / 2 * sys.widthScale
 	}
 
 	startrect1 := float32(rect[1]) - pos[1]/drawscl/stgscl[1]*bg.windowdelta[1]
@@ -1112,7 +1112,7 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 	} else if s.hires {
 		s.scale[1] *= 2
 	}
-	s.localscl = float32(sys.gameWidth) / float32(s.stageCamera.localcoord[0])
+	s.localscl = sys.gameWidthFloat / float32(s.stageCamera.localcoord[0])
 	s.stageCamera.localscl = s.localscl
 	if s.stageCamera.localcoord[0] != 320 {
 		// Update default values to new localcoord. Like characters do
