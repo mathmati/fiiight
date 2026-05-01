@@ -2530,6 +2530,9 @@ func (c *Compiler) projectileSub(is IniSection, sc *StateControllerBase, ihp int
 	if err := c.afterImageSub(is, sc, ihp, "afterimage."); err != nil {
 		return err
 	}
+	if err := c.shaderSub(is, sc, projectile_shader, projectile_shaderparam); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -5544,6 +5547,9 @@ func (c *Compiler) scoreAdd(is IniSection, sc *StateControllerBase, _ int8) (Sta
 func (c *Compiler) shaderSet(is IniSection, sc *StateControllerBase, _ int8) (StateController, error) {
 	ret, err := (*shaderSet)(sc), c.stateSec(is, func() error {
 		if err := c.paramValue(is, sc, "redirectid", shaderSet_redirectid, VT_Int, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "time", shaderSet_time, VT_Int, 1, false); err != nil {
 			return err
 		}
 		if err := c.shaderSub(is, sc, shaderSet_shader, shaderSet_shaderparam); err != nil {

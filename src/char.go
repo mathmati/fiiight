@@ -2381,6 +2381,8 @@ type Projectile struct {
 	contactflag     bool
 	time            int32
 	removeDone      bool
+	shader          string
+	shaderParams    [16]float32
 }
 
 func newProjectile() *Projectile {
@@ -2846,6 +2848,8 @@ func (p *Projectile) cueDraw() {
 	sd.fLength = fLength
 	sd.window = pwin
 	sd.xshear = p.xshear
+	sd.shader = p.shader
+	sd.shaderParams = p.shaderParams
 
 	// Add sprite to the appropriate layer's drawlist
 	sys.spriteList.add(sd)
@@ -3237,6 +3241,7 @@ type Char struct {
 	enableSyncId         bool
 	shader               string
 	shaderParams         [16]float32
+	shaderTime           int32
 	//soundChannels        SoundChannels // Moved to system
 }
 
@@ -3343,6 +3348,7 @@ func (c *Char) clearState() {
 	c.pushAffectTeam = 1
 	c.shader = ""
 	c.shaderParams = [16]float32{}
+	c.shaderTime = 0
 }
 
 func (c *Char) clsnOverlapTrigger(box1, pid, box2 int32) bool {
@@ -3419,6 +3425,7 @@ func (c *Char) prepareNextRound() {
 	c.cpucmd = -1
 	c.shader = ""
 	c.shaderParams = [16]float32{}
+	c.shaderTime = 0
 }
 
 // Return Char Global Info normally
@@ -11363,6 +11370,13 @@ func (c *Char) actionPrepare() {
 					if c.hover[i].time == 0 {
 						c.hover[i].clear()
 					}
+				}
+			}
+			if c.shaderTime > 0 {
+				c.shaderTime--
+				if c.shaderTime == 0 {
+					c.shader = ""
+					c.shaderParams = [16]float32{}
 				}
 			}
 			if sys.supertime > 0 {
