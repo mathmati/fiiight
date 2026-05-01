@@ -5784,21 +5784,21 @@ func (c *Compiler) fullExpression(in *string, vt ValueType) (BytecodeExp, error)
 }
 
 func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
-    if !strings.HasPrefix(name, "trigger") {
-        return 0, false, false
-    }
+	if !strings.HasPrefix(name, "trigger") {
+		return 0, false, false
+	}
 
-    suffix := name[7:]
-    if suffix == "all" {
-        return 0, true, true
-    }
+	suffix := name[7:]
+	if suffix == "all" {
+		return 0, true, true
+	}
 
-    tn, ok = readDigit(suffix)
-    if !ok || tn < 1 || tn > 65536 {
-        return 0, false, false
-    }
+	tn, ok = readDigit(suffix)
+	if !ok || tn < 1 || tn > 65536 {
+		return 0, false, false
+	}
 
-    return tn, false, true
+	return tn, false, true
 }
 
 func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection, bool, error) {

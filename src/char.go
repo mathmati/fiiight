@@ -3612,7 +3612,7 @@ func (c *Char) load(def string) error {
 				// Save default values to be restored later
 				gi.defaultDisplayname = gi.displayname
 				gi.defaultLifebarname = gi.lifebarname
-				// Save lower case variants. These are just to avoid needing strings.ToLower() all over the code 
+				// Save lower case variants. These are just to avoid needing strings.ToLower() all over the code
 				gi.nameLow = strings.ToLower(gi.name)
 				gi.displaynameLow = strings.ToLower(gi.displayname)
 				gi.authorLow = strings.ToLower(gi.author)
