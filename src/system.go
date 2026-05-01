@@ -5042,9 +5042,9 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	if sameChar {
 		p = sys.chars[pn][0]
 
-		// The cached instance is being reused as a fresh entrant.
 		// Restore values that ModifyPlayer may have mutated.
-		p.resetCachedPlayerState()
+		// TODO: Should ModifyPlayer persist or not across matches?
+		p.resetModifyPlayer()
 
 		// Prepare success message
 		if attached {
@@ -5097,7 +5097,6 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	// Load character
 	if !sameChar {
-		sys.cgi[pn].customShaders = nil
 		if l.err = p.load(cdef); l.err != nil {
 			sys.chars[pn] = nil
 			if attached {
@@ -5145,7 +5144,8 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	}
 
 	// Flag "existed" just in case
-	sys.chars[pn][0].ocd().existed = true
+	// Update: This is Lua's responsibility. Enabling this flag made duplicate Turns characters misbehave
+	//sys.chars[pn][0].ocd().existed = true
 
 	return 1
 }

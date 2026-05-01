@@ -2920,6 +2920,7 @@ type PalInfo struct {
 
 type CharGlobalInfo struct {
 	def                     string
+	name                    string
 	nameLow                 string
 	displayname             string
 	defaultDisplayname      string
@@ -3484,9 +3485,8 @@ func (c *Char) applyMapOverrides() {
 	}
 }
 
-// Restore defaults for values that ModifyPlayer can mutate and that would
-// otherwise leak when a cached root is reused as a fresh entrant.
-func (c *Char) resetCachedPlayerState() {
+// Some of these are overridden later anyway, but we'll reset them just in case
+func (c *Char) resetModifyPlayer() {
 	gi := c.gi()
 	gi.displayname = gi.defaultDisplayname
 	gi.lifebarname = gi.defaultLifebarname
@@ -3496,6 +3496,7 @@ func (c *Char) resetCachedPlayerState() {
 	c.powerMax = gi.data.power
 	c.dizzyPointsMax = gi.data.dizzypoints
 	c.guardPointsMax = gi.data.guardpoints
+	// c.teamside already assigned by loadCharacter()
 }
 
 func (c *Char) load(def string) error {
@@ -3509,6 +3510,7 @@ func (c *Char) load(def string) error {
 	gi.animTable = NewAnimationTable()
 	gi.fnt = make(map[int]*Fnt)
 	gi.portraitscale = 1
+	gi.customShaders = nil
 
 	for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
 		pal := gi.palInfo[i]
@@ -3597,18 +3599,21 @@ func (c *Char) load(def string) error {
 				}
 				info = false
 
-				c.name, _, _ = is.getText("name")
+				gi.name, _, _ = is.getText("name")
+				c.name = gi.name
 				var ok bool
 				if gi.displayname, ok, _ = is.getText("displayname"); !ok {
-					gi.displayname = c.name
+					gi.displayname = gi.name
 				}
 				if gi.lifebarname, ok, _ = is.getText("lifebarname"); !ok {
 					gi.lifebarname = gi.displayname
 				}
+				gi.author, _, _ = is.getText("author")
+				// Save default values to be restored later
 				gi.defaultDisplayname = gi.displayname
 				gi.defaultLifebarname = gi.lifebarname
-				gi.author, _, _ = is.getText("author")
-				gi.nameLow = strings.ToLower(c.name)
+				// Save lower case variants. These are just to avoid needing strings.ToLower() all over the code 
+				gi.nameLow = strings.ToLower(gi.name)
 				gi.displaynameLow = strings.ToLower(gi.displayname)
 				gi.authorLow = strings.ToLower(gi.author)
 				// In Mugen localcoord is clamped to 1. But that's already unplayable anyway so such a safeguard is useless
