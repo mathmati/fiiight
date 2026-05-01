@@ -12378,10 +12378,11 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 	if crun == nil {
 		return false
 	}
+	st := int32(1)
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case shaderSet_time:
-			crun.shaderTime = exp[0].evalI(c)
+			st = exp[0].evalI(c)
 		case shaderSet_shader:
 			crun.shader = exp[0].evalS()
 		case shaderSet_shaderparam:
@@ -12394,6 +12395,7 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 		}
 		return true
 	})
+	crun.shaderTime = st
 	if crun.shaderTime == 0 {
 		crun.shader = ""
 		crun.shaderParams = [16]float32{}
