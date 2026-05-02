@@ -2963,6 +2963,27 @@ type CharGlobalInfo struct {
 	customShaders           []string
 }
 
+func newCharGlobalInfo() CharGlobalInfo {
+	gi := CharGlobalInfo{
+		localcoord:    [2]int32{320, 240},
+		constants:     make(map[string]float32),
+		states:        make(map[int32]StateBytecode),
+		callFuncs:     make(map[string]bytecodeFunction),
+		animTable:     NewAnimationTable(),
+		palInfo:       make(map[int]PalInfo, sys.cfg.Config.PaletteMax),
+		fnt:           make(map[int]*Fnt),
+		quotes:        [MaxQuotes]string{},
+		remapPreset:   make(map[string]RemapPreset),
+		portraitscale: 1,
+	}
+
+	for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
+		gi.palInfo[i] = PalInfo{keyMap: int32(i)}
+	}
+
+	return gi
+}
+
 func (cgi *CharGlobalInfo) clearPCTime() {
 	cgi.pctype = PC_Hit
 	cgi.pctime = -1
@@ -3502,27 +3523,17 @@ func (c *Char) resetModifyPlayer() {
 func (c *Char) load(def string) error {
 	gi := &sys.cgi[c.playerNo]
 
+	// We keep the SFF so that loadSff() can reuse it if the same character is selected/reloaded
+	oldSff := gi.sff
+
 	// Reset global info
+	*gi = newCharGlobalInfo()
+
+	// Restore SFF
+	gi.sff = oldSff
+
+	// Register DEF file
 	gi.def = def
-	gi.displayname, gi.lifebarname, gi.author = "", "", ""
-	gi.defaultDisplayname, gi.defaultLifebarname = "", ""
-	gi.palettedata, gi.snd, gi.quotes = nil, nil, [MaxQuotes]string{}
-	gi.animTable = NewAnimationTable()
-	gi.fnt = make(map[int]*Fnt)
-	gi.portraitscale = 1
-	gi.customShaders = nil
-
-	for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
-		pal := gi.palInfo[i]
-		pal.keyMap = int32(i)
-		gi.palInfo[i] = pal
-	}
-
-	// We don't nil the SFF so that loadSff() can reuse it if the same character is selected/reloaded
-	//gi.sff = nil
-
-	// Default localcoord
-	gi.localcoord = [2]int32{320, 240}
 
 	// Reset DEF file maps
 	c.mapDefault = make(map[string]float32)
@@ -7688,10 +7699,7 @@ func (c *Char) initConstants() {
 		gi.movement.down.friction_threshold *= coordRatio
 	}
 
-	// Init custom constants
-	gi.constants = make(map[string]float32)
-
-	// Init default values to ensure we have these maps
+	// Init the required custom constants with default values
 	gi.constants["default.attack.lifetopowermul"] = 0.7
 	gi.constants["super.attack.lifetopowermul"] = 0
 	gi.constants["default.gethit.lifetopowermul"] = 0.6
