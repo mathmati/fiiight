@@ -721,8 +721,7 @@ function start.f_animGet(ref, side, member, params, velParams, loop, srcAnim)
 					animApplyVel(a, srcAnim)
 				end
 				-- Apply palette if needed
-				local sel = start.p[side].t_selected[member]
-				if usePal and not gameMode('netplayteamcoop') then
+				if usePal then
 					local sel = start.p[side].t_selected[member]
 					if sel and sel.ref then
 						a = start.loadPalettes(a, ref, sel.pal)
