@@ -1358,13 +1358,13 @@ end
 --shuffles a table in-place (using synced RNG)
 function start.f_shuffleTable(t, last)
 	for i = #t, 2, -1 do
-		local j = (getRandom() % i) + 1
+		local j = math.random(i)
 		t[i], t[j] = t[j], t[i]
 	end
 	-- prevent first element from repeating the last of previous cycle
 	if last and #t > 1 and t[#t] == last then
 		-- swap the first element with a random other position
-		local swap = (getRandom() % (#t - 1)) + 1
+		local swap = math.random(#t - 1)
 		t[#t], t[swap] = t[swap], t[#t]
 	end
 end
@@ -1450,7 +1450,7 @@ function start.f_slotSelected(cell, side, cmd, player, x, y)
 								sndPlay(motif.Snd, motif.select_info['p' .. side].swap.snd[1], motif.select_info['p' .. side].swap.snd[2])
 							end
 						else --select
-							main.t_selGrid[cell].slot = v[(getRandom() % #v) + 1]
+							main.t_selGrid[cell].slot = v[math.random(#v)]
 							start.c[player].selRef = start.f_selGrid(cell).char_ref
 						end
 						start.t_grid[y + 1][x + 1].char = start.f_selGrid(cell).char
