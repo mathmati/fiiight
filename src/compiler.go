@@ -788,7 +788,7 @@ func (c *Compiler) attr(text string, hitdef bool) (int32, error) {
 				//if hitdef {
 				//	flg = hitdefflg
 				//}
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Invalid attr value: "+a+" in state %v ", c.stateNo))
+				sys.appendToConsole(c.charWarn() + "Invalid attr value: " + a)
 				return flg, nil
 			}
 			return 0, Error("Invalid attr value: " + a)
@@ -1214,7 +1214,7 @@ func (c *Compiler) readOldProjectileID(in *string, trname string, baseLen int, o
 	invalid := func(msg string) (string, error) {
 		// Print error but proceed with ID 0
 		if sys.ignoreMostErrors {
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": %v in state %v ", msg, c.stateNo))
+			sys.appendToConsole(c.charWarn() + msg)
 			out.appendValue(BytecodeInt(0))
 			return base, nil
 		}
@@ -2832,7 +2832,7 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			if c.zssMode || !sys.ignoreMostErrors {
 				return bvNone(), err
 			}
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": HitDefAttr Missing '=' or '!=' "+" in state %v ", c.stateNo))
+			sys.appendToConsole(c.charWarn() + "HitDefAttr Missing '=' or '!='")
 			out.appendValue(BytecodeBool(false))
 		}
 	case "hitdefvar":
@@ -5938,7 +5938,7 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 			if ok && !isTrigger {
 				if sys.ignoreMostErrors {
 					// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
-					LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate '%s' parameter in state %v", name, c.stateNo))
+					LogMessage(c.charWarn() + fmt.Sprintf("Duplicate '%s' parameter", name))
 					continue
 				}
 				return nil, false, Error(name + " is duplicated")
@@ -5950,7 +5950,7 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 					// Ignore and log if already found
 					if _type {
 						if sys.ignoreMostErrors {
-							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'type' parameter in state %v", c.stateNo))
+							LogMessage(c.charWarn() + "Duplicate 'type' parameter")
 							continue
 						}
 						return nil, false, Error("type is duplicated")
@@ -5960,7 +5960,7 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 				case "persistent":
 					if persistent {
 						if sys.ignoreMostErrors {
-							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'persistent' parameter in state %v", c.stateNo))
+							LogMessage(c.charWarn() + "Duplicate 'persistent' parameter")
 							continue
 						}
 						return nil, false, Error("persistent is duplicated")
@@ -5969,7 +5969,7 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 				case "ignorehitpause":
 					if ignorehitpause {
 						if sys.ignoreMostErrors {
-							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'ignorehitpause' parameter in state %v", c.stateNo))
+							LogMessage(c.charWarn() + "Duplicate 'ignorehitpause' parameter")
 							continue
 						}
 						return nil, false, Error("ignorehitpause is duplicated")
@@ -6296,7 +6296,7 @@ func (c *Compiler) paramSpace(is IniSection, sc *StateControllerBase, id byte) e
 			if c.zssMode && !sys.ignoreMostErrors {
 				return Error("Invalid space type: " + data)
 			} else {
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Invalid space type: "+data+" in state %v ", c.stateNo))
+				sys.appendToConsole(c.charWarn() + "Invalid space type: " + data)
 			}
 		}
 		sc.add(id, sc.iToExp(int32(spc)))
@@ -6357,7 +6357,7 @@ func (c *Compiler) paramTrans(is IniSection, sc *StateControllerBase, prefix str
 		if c.zssMode || !sys.ignoreMostErrors {
 			return Error("alpha defined without trans type")
 		} else {
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Alpha defined without trans type in state %v ", c.stateNo))
+			sys.appendToConsole(c.charWarn() + "Alpha defined without trans type")
 			return nil
 		}
 	}
@@ -6371,7 +6371,7 @@ func (c *Compiler) paramTrans(is IniSection, sc *StateControllerBase, prefix str
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error("trans type not specified")
 			} else {
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Blank trans type in state %v ", c.stateNo))
+				sys.appendToConsole(c.charWarn() + "Blank trans type")
 				return nil
 			}
 		}
@@ -6408,7 +6408,7 @@ func (c *Compiler) paramTrans(is IniSection, sc *StateControllerBase, prefix str
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error("Invalid trans type: " + data)
 			} else {
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Invalid trans type: "+data+" in state %v ", c.stateNo))
+				sys.appendToConsole(c.charWarn() + "Invalid trans type: " + data)
 				return nil
 			}
 		}
@@ -6424,7 +6424,7 @@ func (c *Compiler) paramTrans(is IniSection, sc *StateControllerBase, prefix str
 				if c.zssMode || !sys.ignoreMostErrors {
 					return Error("alpha not specified")
 				} else {
-					sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Blank trans alpha in state %v ", c.stateNo))
+					sys.appendToConsole(c.charWarn() + "Blank trans alpha")
 					return nil
 				}
 			}
@@ -8372,4 +8372,8 @@ func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (ma
 	// Store functions in Global Info (static data), accessible to all instances
 	sys.cgi[pn].callFuncs = c.funcs
 	return states, nil
+}
+
+func (c *Compiler) charWarn() string {
+	return fmt.Sprintf("WARNING: %v state %v: ", sys.cgi[c.playerNo].name, c.stateNo)
 }

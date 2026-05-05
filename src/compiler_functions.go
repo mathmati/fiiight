@@ -93,10 +93,11 @@ func (c *Compiler) hitBySub(is IniSection, sc *StateControllerBase, sctrlName st
 
 	// Cannot mix old and new syntax
 	if old && new {
+		msg := "Cannot mix old and new syntaxes in " + sctrlName
 		if c.zssMode {
-			return Error("Cannot mix old and new " + sctrlName + " syntaxes")
+			return Error(msg)
 		} else {
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Cannot mix old and new: "+sctrlName+" in state %v ", c.stateNo))
+			sys.appendToConsole(c.charWarn() + msg)
 		}
 	}
 
@@ -662,7 +663,7 @@ func (c *Compiler) helper(is IniSection, sc *StateControllerBase, _ int8) (State
 				if c.zssMode {
 					return Error("Helper name not enclosed in \"")
 				}
-				sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Helper name not enclosed in \" : in state %v ", c.stateNo))
+				sys.appendToConsole(c.charWarn() + "Helper name not enclosed in \"")
 				return nil
 			}
 			sc.add(helper_name, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
@@ -2646,11 +2647,11 @@ func (c *Compiler) varSetOlderSub(is IniSection, sc *StateControllerBase, alread
 	// Helper to select target variable and handle duplicate errors
 	setTargetVar := func(data string, t int32) error {
 		if hasIndex || alreadyAssigned() {
-			msg := fmt.Sprintf("VarSet in state %v can only set one variable at a time", c.stateNo)
+			msg := fmt.Sprintf("VarSet can only set one variable at a time")
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error(msg)
 			}
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
+			sys.appendToConsole(c.charWarn() + msg)
 		}
 		hasIndex = true
 		index = data
@@ -2673,11 +2674,11 @@ func (c *Compiler) varSetOlderSub(is IniSection, sc *StateControllerBase, alread
 	}
 
 	if !hasIndex {
-		msg := fmt.Sprintf("VarSet in state %v does not specify variable number", c.stateNo)
+		msg := fmt.Sprintf("VarSet does not specify variable number")
 		if c.zssMode || !sys.ignoreMostErrors {
 			return false, Error(msg)
 		}
-		sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
+		sys.appendToConsole(c.charWarn() + msg)
 		return true, nil
 	}
 
@@ -2791,11 +2792,11 @@ func (c *Compiler) varSetSub(is IniSection, sc *StateControllerBase, scType int3
 
 	for _, name := range targetVars {
 		if handled || alreadyAssigned() {
-			msg := fmt.Sprintf("VarSet in state %v can only set one variable at a time", c.stateNo)
+			msg := fmt.Sprintf("VarSet can only set one variable at a time")
 			if c.zssMode || !sys.ignoreMostErrors {
 				return Error(msg)
 			}
-			sys.appendToConsole("WARNING: " + sys.cgi[c.playerNo].name + ": " + msg)
+			sys.appendToConsole(c.charWarn() + msg)
 			break
 		}
 
