@@ -8382,5 +8382,7 @@ func (c *StateCompiler) Compile(pn int, def string, constants map[string]float32
 }
 
 func (c *StateCompiler) charWarn() string {
-	return fmt.Sprintf("WARNING: %v's state %v in %v: ", sys.cgi[c.playerNo].name, c.stateNo, c.currentFile)
+	// Trim path to keep message shorter
+    _, file := SplitPath(c.currentFile)
+	return fmt.Sprintf("WARNING: %v's state %v in %v: ", sys.cgi[c.playerNo].name, c.stateNo, file)
 }
