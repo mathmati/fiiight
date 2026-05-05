@@ -32,6 +32,7 @@ type StateCompiler struct {
 	stateNo          int32
 	zssMode          bool
     currentFile      string
+    currentLine      int
 }
 
 func newStateCompiler() *StateCompiler {
@@ -5878,6 +5879,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 	}
 
 	for ; c.i < len(c.lines); c.i++ {
+		c.currentLine = c.i + 1
 		line := strings.TrimSpace(strings.SplitN(c.lines[c.i], ";", 2)[0])
 		if len(line) > 0 && line[0] == '[' {
 			c.i--
@@ -6714,7 +6716,7 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 
 	c.lines, c.i = SplitAndTrim(filetext, "\n"), 0
 	errmes := func(err error) error {
-		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.i+1, err.Error()))
+		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.currentLine, err.Error()))
 	}
 
 	// Keep a map of states that have already been found in this file
@@ -6723,6 +6725,7 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 
 	// Loop through state file lines
 	for ; c.i < len(c.lines); c.i++ {
+		c.currentLine = c.i + 1
 		// Find a statedef, skipping over other lines until finding one
 		// Get the current line, without comments
 		line := strings.ToLower(strings.TrimSpace(
@@ -7941,7 +7944,8 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 	c.linechan = make(chan *string)
 	endchan := make(chan bool, 1)
 
-	stop := func() int {
+	// TODO: This is usually a little off because it's retroactively trying to guess the line
+	calculateLine := func() int {
 		if c.linechan == nil {
 			return 0
 		}
@@ -7957,7 +7961,7 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 			lineOffset--
 		}
 	}
-	defer stop()
+	//defer stop()
 
 	SafeGo(func() {
 		i := c.i
@@ -7981,8 +7985,10 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 	})
 
 	errmes := func(err error) error {
-		return Error(fmt.Sprintf("%v:%v:\n%v", filename, stop(), err.Error()))
+		c.currentLine = calculateLine()
+		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.currentLine, err.Error()))
 	}
+
 	existInThisFile := make(map[int32]bool)
 	funcExistInThisFile := make(map[string]bool)
 	var line string
@@ -8384,5 +8390,5 @@ func (c *StateCompiler) Compile(pn int, def string, constants map[string]float32
 func (c *StateCompiler) charWarn() string {
 	// Trim path to keep message shorter
     _, file := SplitPath(c.currentFile)
-	return fmt.Sprintf("WARNING: %v's state %v in %v: ", sys.cgi[c.playerNo].name, c.stateNo, file)
+	return fmt.Sprintf("WARNING: %v's state %v in %v, line %v: ", sys.cgi[c.playerNo].name, c.stateNo, file, c.currentLine)
 }
