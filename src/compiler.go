@@ -24,15 +24,13 @@ type StateCompiler struct {
 	scmap            map[string]scFunc
 	block            *StateBlock
 	lines            []string
-	i                int
-	linechan         chan *string
+	i                int // Line index
 	vars             map[string]uint8
 	funcs            map[string]bytecodeFunction
 	funcUsed         map[string]bool
 	stateNo          int32
 	zssMode          bool
-    currentFile      string
-    currentLine      int
+	currentFile      string
 }
 
 func newStateCompiler() *StateCompiler {
@@ -5879,7 +5877,6 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 	}
 
 	for ; c.i < len(c.lines); c.i++ {
-		c.currentLine = c.i + 1
 		line := strings.TrimSpace(strings.SplitN(c.lines[c.i], ";", 2)[0])
 		if len(line) > 0 && line[0] == '[' {
 			c.i--
@@ -6712,11 +6709,11 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 	c.zssMode = false
 
 	// Save filename for logging
-    c.currentFile = filename
+	c.currentFile = filename
 
 	c.lines, c.i = SplitAndTrim(filetext, "\n"), 0
 	errmes := func(err error) error {
-		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.currentLine, err.Error()))
+		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.i+1, err.Error()))
 	}
 
 	// Keep a map of states that have already been found in this file
@@ -6725,7 +6722,6 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 
 	// Loop through state file lines
 	for ; c.i < len(c.lines); c.i++ {
-		c.currentLine = c.i + 1
 		// Find a statedef, skipping over other lines until finding one
 		// Get the current line, without comments
 		line := strings.ToLower(strings.TrimSpace(
@@ -7031,11 +7027,12 @@ func (c *StateCompiler) wrongClosureToken() error {
 }
 
 func (c *StateCompiler) nextLine() (string, bool) {
-	s := <-c.linechan
-	if s == nil {
+	if c.i >= len(c.lines) {
 		return "", false
 	}
-	return *s, true
+	line := strings.TrimSpace(c.lines[c.i])
+	c.i++
+	return line, true
 }
 
 func (c *StateCompiler) scan(line *string) string {
@@ -7930,7 +7927,7 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 	c.zssMode = true
 
 	// Save filename for logging
-    c.currentFile = filename
+	c.currentFile = filename
 
 	// ZSS states are compiled with a lower tolerance for mistakes
 	// TODO: Either merge this with our current c.zssMode checks or drop it
@@ -7941,52 +7938,9 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 
 	c.block = nil
 	c.lines, c.i = SplitAndTrim(filetext, "\n"), 0
-	c.linechan = make(chan *string)
-	endchan := make(chan bool, 1)
-
-	// TODO: This is usually a little off because it's retroactively trying to guess the line
-	calculateLine := func() int {
-		if c.linechan == nil {
-			return 0
-		}
-		endchan <- true
-		lineOffset := 1
-		for {
-			if sp := <-c.linechan; sp != nil && *sp == "\n" {
-				close(endchan)
-				close(c.linechan)
-				c.linechan = nil
-				return c.i + lineOffset
-			}
-			lineOffset--
-		}
-	}
-	//defer stop()
-
-	SafeGo(func() {
-		i := c.i
-		for {
-			select {
-			case <-endchan:
-				str := "\n"
-				c.linechan <- &str
-				return
-			default:
-			}
-			var sp *string
-			if i < len(c.lines) {
-				str := strings.TrimSpace(c.lines[i])
-				sp = &str
-				c.i = i
-				i++
-			}
-			c.linechan <- sp
-		}
-	})
 
 	errmes := func(err error) error {
-		c.currentLine = calculateLine()
-		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.currentLine, err.Error()))
+		return Error(fmt.Sprintf("%v:%v:\n%v", filename, c.i, err.Error())) // No c.i+1 offset here
 	}
 
 	existInThisFile := make(map[int32]bool)
@@ -8389,6 +8343,11 @@ func (c *StateCompiler) Compile(pn int, def string, constants map[string]float32
 
 func (c *StateCompiler) charWarn() string {
 	// Trim path to keep message shorter
-    _, file := SplitPath(c.currentFile)
-	return fmt.Sprintf("WARNING: %v's state %v in %v, line %v: ", sys.cgi[c.playerNo].name, c.stateNo, file, c.currentLine)
+	_, file := SplitPath(c.currentFile)
+	// c.i acts a bit different between CNS and ZSS
+	offset := 1
+	if c.zssMode {
+		offset = 0
+	}
+	return fmt.Sprintf("WARNING: %v's state %v in %v, line %v: ", sys.cgi[c.playerNo].name, c.stateNo, file, c.i+offset)
 }
