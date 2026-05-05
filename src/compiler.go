@@ -5803,7 +5803,7 @@ func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
 
 func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection, bool, error) {
 	is := NewIniSection()
-	_type, persistent, ignorehitpause := true, true, true
+	var _type, persistent, ignorehitpause bool
 
 	// Placeholder var to toggle all the nonsense Mugen's compiler allowed
 	// Maybe this could be sys.ignoreMostErrors. Or something configurable
@@ -5947,20 +5947,34 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 			if sctrl != nil {
 				switch name {
 				case "type":
-					if !_type {
-						continue
+					// Ignore and log if already found
+					if _type {
+						if sys.ignoreMostErrors {
+							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'type' parameter in state %v", c.stateNo))
+							continue
+						}
+						return nil, false, Error("type is duplicated")
 					}
-					_type = false
+					// Flag as found
+					_type = true
 				case "persistent":
-					if !persistent {
-						continue
+					if persistent {
+						if sys.ignoreMostErrors {
+							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'persistent' parameter in state %v", c.stateNo))
+							continue
+						}
+						return nil, false, Error("persistent is duplicated")
 					}
-					persistent = false
+					persistent = true
 				case "ignorehitpause":
-					if !ignorehitpause {
-						continue
+					if ignorehitpause {
+						if sys.ignoreMostErrors {
+							LogMessage("WARNING: " + sys.cgi[c.playerNo].name + fmt.Sprintf(": Duplicate 'ignorehitpause' parameter in state %v", c.stateNo))
+							continue
+						}
+						return nil, false, Error("ignorehitpause is duplicated")
 					}
-					ignorehitpause = false
+					ignorehitpause = true
 				default:
 					if !isTrigger {
 						is[name] = data
@@ -5975,7 +5989,7 @@ func (c *Compiler) parseSection(sctrl func(name, data string) error) (IniSection
 			}
 		}
 	}
-	return is, !ignorehitpause, nil
+	return is, ignorehitpause, nil
 }
 
 func (c *Compiler) stateSec(is IniSection, f func() error) error {
@@ -6771,7 +6785,7 @@ func (c *Compiler) stateCompileCNS(states map[int32]StateBytecode, filename, fil
 			allTerminated := false
 
 			// Parse each line of the sctrl to get triggers and settings
-			is, ihp, err := c.parseSection(func(name, data string) error {
+			is, ihpFound, err := c.parseSection(func(name, data string) error {
 				switch name {
 				case "type":
 					var ok bool
@@ -6949,13 +6963,13 @@ func (c *Compiler) stateCompileCNS(states map[int32]StateBytecode, filename, fil
 			c.block.trigger = texp
 
 			// Ignorehitpause
-			_ihp := int8(-1)
-			if ihp {
-				_ihp = int8(Btoi(c.block.ignorehitpause >= -1))
+			ihp := int8(-1)
+			if ihpFound {
+				ihp = int8(Btoi(c.block.ignorehitpause >= -1))
 			}
 
 			// For this sctrl type, call the function to construct the sctrl
-			sctrl, err := scf(is, sc, _ihp)
+			sctrl, err := scf(is, sc, ihp)
 			if err != nil {
 				return errmes(err)
 			}
