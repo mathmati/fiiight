@@ -7584,10 +7584,11 @@ func triggerRedirection(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "player", func(*lua.LState) int {
-		pn := int(numArg(l, 1))
+		idx := int(numArg(l, 1)) - 1
 		ret := false
-		if pn >= 1 && pn <= len(sys.chars) && len(sys.chars[pn-1]) > 0 {
-			sys.debugWC, ret = sys.chars[pn-1][0], true
+		// Uses direct access instead of sys.getCharRoot() because debug mode shows disabled characters
+		if idx >= 0 && idx < len(sys.chars) && len(sys.chars[idx]) > 0 {
+			sys.debugWC, ret = sys.chars[idx][0], true
 		}
 		l.Push(lua.LBool(ret))
 		return 1

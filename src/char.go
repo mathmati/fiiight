@@ -4934,6 +4934,15 @@ func (c *Char) playerIndexTrigger(idx int32) *Char {
 	return ch
 }
 
+func (c *Char) playerTrigger(pn int, log bool) *Char {
+	idx := pn - 1
+	root := sys.getCharRoot(idx)
+	if root == nil && log {
+		sys.appendToConsole(c.warn() + fmt.Sprintf("found no player with number: %v", pn))
+	}
+	return root
+}
+
 // Checks if a player should be considered an enemy at all for the "Enemy" and "P2" triggers, before filtering them further
 func (c *Char) isEnemyOf(e *Char) bool {
 	// Disabled players
@@ -5223,12 +5232,14 @@ func (c *Char) gameWidth() float32 {
 	return c.screenWidth() / sys.cam.Scale
 }
 
+/*
 func (c *Char) getPlayerID(pn int) int32 {
 	if pn >= 1 && pn <= len(sys.chars) && len(sys.chars[pn-1]) > 0 {
 		return sys.chars[pn-1][0].id
 	}
 	return 0
 }
+*/
 
 func (c *Char) runOrderTrigger() int32 {
 	for i, ref := range sys.charList.runOrder {

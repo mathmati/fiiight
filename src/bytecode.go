@@ -1907,7 +1907,8 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_jmp:
 			be.JumpToNext(&i)
 		case OC_player:
-			if c = sys.playerID(c.getPlayerID(int(sys.bcStack.Pop().ToI()))); c != nil {
+			pn := int(sys.bcStack.Pop().ToI())
+			if c = c.playerTrigger(pn, true); c != nil {
 				// Valid: Move past the length header and enter the block
 				i += 4
 				continue

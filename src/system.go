@@ -1497,23 +1497,25 @@ func (s *System) playerIndexExist(idx BytecodeValue) BytecodeValue {
 	return BytecodeBool(char != nil)
 }
 
-func (s *System) playerNoExist(no BytecodeValue) BytecodeValue {
-	if no.IsUndefined() {
+// For player number triggers
+func (s *System) getCharRoot(idx int) *Char {
+	if idx < 0 || idx >= len(sys.chars) {
+		return nil
+	}
+	p := sys.chars[idx]
+	if len(p) == 0 || p[0] == nil || p[0].scf(SCF_disabled) {
+		return nil
+	}
+	return p[0]
+}
+
+func (s *System) playerNoExist(pn BytecodeValue) BytecodeValue {
+	if pn.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	number := int(no.ToI() - 1)
-	if number < 0 || number >= len(sys.chars) {
-		return BytecodeBool(false)
-	}
-	ch := sys.chars[number]
-	if len(ch) == 0 {
-		return BytecodeBool(false)
-	}
-	root := ch[0]
-	if root == nil || root.scf(SCF_disabled) {
-		return BytecodeBool(false)
-	}
-	return BytecodeBool(true)
+	idx := int(pn.ToI() - 1) 
+	c := s.getCharRoot(idx)
+	return BytecodeBool(c != nil)
 }
 
 func (s *System) palfxvar(x int32, y int32) int32 {
