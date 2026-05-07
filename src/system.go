@@ -1442,26 +1442,26 @@ func (s *System) playerID(id int32) *Char {
 	}
 
 	// Invalid ID
-	ch, ok := s.charList.idMap[id]
+	c, ok := s.charList.idMap[id]
 	if !ok {
 		return nil
 	}
 
-	// Mugen skips DestroySelf helpers here
-	// Note: This will also skip destroyed helpers in the engine's internal ID lookups
-	if ch.csf(CSF_destroy) {
+	// Mugen skips destroyed helpers and disabled players here
+	// Note: This will also make them be skipped in the engine's internal ID lookups
+	if c.csf(CSF_destroy) || c.scf(SCF_disabled) {
 		return nil
 	}
 
-	return ch
+	return c
 }
 
 func (s *System) playerIDExist(id BytecodeValue) BytecodeValue {
 	if id.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	char := s.playerID(id.ToI())
-	return BytecodeBool(char != nil)
+	c := s.playerID(id.ToI())
+	return BytecodeBool(c != nil)
 }
 
 func (s *System) playerIndex(idx int32) *Char {
@@ -1469,12 +1469,12 @@ func (s *System) playerIndex(idx int32) *Char {
 		return nil
 	}
 
-	// We will ignore destroyed helpers here, like Mugen redirections do
+	// We will also ignore destroyed/disabled players here, like Mugen redirections do
 	var searchIdx int32
-	for _, p := range sys.charList.creationOrder {
-		if p != nil && !p.csf(CSF_destroy) {
+	for _, c := range sys.charList.creationOrder {
+		if c != nil && !c.csf(CSF_destroy) && !c.scf(SCF_disabled) {
 			if searchIdx == idx {
-				return p
+				return c
 			}
 			searchIdx++
 		}
@@ -1501,12 +1501,19 @@ func (s *System) playerNoExist(no BytecodeValue) BytecodeValue {
 	if no.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	exist := false
 	number := int(no.ToI() - 1)
-	if number >= 0 && number < len(sys.chars) {
-		exist = len(sys.chars[number]) > 0
+	if number < 0 || number >= len(sys.chars) {
+		return BytecodeBool(false)
 	}
-	return BytecodeBool(exist)
+	ch := sys.chars[number]
+	if len(ch) == 0 {
+		return BytecodeBool(false)
+	}
+	root := ch[0]
+	if root == nil || root.scf(SCF_disabled) {
+		return BytecodeBool(false)
+	}
+	return BytecodeBool(true)
 }
 
 func (s *System) palfxvar(x int32, y int32) int32 {
