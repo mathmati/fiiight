@@ -7838,7 +7838,7 @@ func (c *Compiler) stateBlock(line *string, bl *StateBlock, root bool,
 				c.token = "helper"
 			}
 			if ok {
-				scname := c.token
+				//scname := c.token
 				c.scan(line)
 				if err := c.needToken("{"); err != nil {
 					return err
@@ -7859,12 +7859,6 @@ func (c *Compiler) stateBlock(line *string, bl *StateBlock, root bool,
 				}
 				if root {
 					if err := c.statementEnd(line); err != nil {
-						return err
-					}
-				}
-				if scname == "explod" || scname == "modifyexplod" {
-					if err := c.paramValue(is, sc, "ignorehitpause",
-						explod_ignorehitpause, VT_Bool, 1, false); err != nil {
 						return err
 					}
 				}

@@ -1085,8 +1085,9 @@ func (c *Compiler) explod(is IniSection, sc *StateControllerBase,
 		if err := c.explodInterpolate(is, sc); err != nil {
 			return err
 		}
-		if ihp == 0 {
-			sc.add(explod_ignorehitpause, sc.iToExp(0))
+		if err := c.paramValue(is, sc, "ignorehitpause",
+			explod_ignorehitpause, VT_Bool, 1, false); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -1158,8 +1159,9 @@ func (c *Compiler) modifyExplod(is IniSection, sc *StateControllerBase,
 			explod_interpolation, VT_Bool, 1, false); err != nil {
 			return err
 		}
-		if ihp == 0 {
-			sc.add(explod_ignorehitpause, sc.iToExp(0))
+		if err := c.paramValue(is, sc, "ignorehitpause",
+			explod_ignorehitpause, VT_Bool, 1, false); err != nil {
+			return err
 		}
 		return nil
 	})
