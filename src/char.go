@@ -11604,7 +11604,6 @@ func (c *Char) actionRun() {
 					c.changeState(52, -1, -1, "")
 				}
 			}
-			c.groundLevel = 0 // Reset only after position has been updated
 			c.setFacing(c.p1facing)
 			c.p1facing = 0
 			c.ss.time++
@@ -11612,6 +11611,13 @@ func (c *Char) actionRun() {
 				c.mctime++
 			}
 		}
+
+		// Reset groundLevel only after position has been updated
+		// Must reset even during hitpause
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3587
+		// TODO: Should it also reset during pauses? Test similar scenarios but with pause instead of hitpause
+		c.groundLevel = 0
+
 		// Commit current animation frame to memory
 		// This frame will be used for hit detection and as reference for Lua scripts (including debug info)
 		if !c.hitPause() || c.asf(ASF_animatehitpause) {
