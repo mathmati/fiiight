@@ -2970,7 +2970,7 @@ type CharGlobalInfo struct {
 	velocity                CharVelocity
 	movement                CharMovement
 	states                  map[int32]StateBytecode
-	callFuncs               map[string]bytecodeFunction
+	callFuncs               map[string]BytecodeFunction
 	hitPauseToggleFlagCount int32
 	quotes                  [MaxQuotes]string
 	portraitscale           float32
@@ -2993,7 +2993,7 @@ func newCharGlobalInfo() CharGlobalInfo {
 		localcoord:    [2]int32{320, 240},
 		constants:     make(map[string]float32),
 		states:        make(map[int32]StateBytecode),
-		callFuncs:     make(map[string]bytecodeFunction),
+		callFuncs:     make(map[string]BytecodeFunction),
 		animTable:     NewAnimationTable(),
 		palInfo:       make(map[int]PalInfo, sys.cfg.Config.PaletteMax),
 		fnt:           make(map[int]*Fnt),

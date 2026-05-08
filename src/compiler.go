@@ -26,15 +26,14 @@ type StateCompiler struct {
 	lines            []string
 	i                int // Line index
 	vars             map[string]uint8
-	funcs            map[string]bytecodeFunction
-	funcUsed         map[string]bool
+	funcs            map[string]BytecodeFunction
 	stateNo          int32
 	zssMode          bool
 	currentFile      string
 }
 
 func newStateCompiler() *StateCompiler {
-	c := &StateCompiler{funcs: make(map[string]bytecodeFunction)}
+	c := &StateCompiler{funcs: make(map[string]BytecodeFunction)}
 	c.scmap = map[string]scFunc{
 		// Mugen state controllers
 		"afterimage":         c.afterImage,
@@ -7576,10 +7575,8 @@ func (c *StateCompiler) loopBlock(line *string, root bool, bl *StateBlock,
 	return nil
 }
 
-func (c *StateCompiler) callFunc(line *string, root bool,
-	ctrls *[]StateController, ret []uint8) error {
-	var cf callFunction
-	var ok bool
+func (c *StateCompiler) callFunc(line *string, root bool, ctrls *[]StateController, ret []uint8) error {
+	var cf CallFunction
 
 	// Scan the function name
 	cf.name = c.scan(line)
@@ -7587,8 +7584,7 @@ func (c *StateCompiler) callFunc(line *string, root bool,
 		return c.wrongClosureToken()
 	}
 
-	// Lookup function definition
-	bf, ok := c.funcs[cf.name]
+	// Set the returns
 	cf.ret = ret
 
 	// Consume opening parenthesis
@@ -7604,76 +7600,28 @@ func (c *StateCompiler) callFunc(line *string, root bool,
 	}
 	otk := c.token
 
-	if !ok {
-		// Undefined function path
-		// We parse arguments blindly until we hit ')' to ensure the instruction is valid, even without a definition
-		tmp := expr
-		if c.tokenizer(&tmp) == ")" {
-			c.tokenizer(&expr) // Consume empty ')'
-		} else {
-			for {
-				// Parse arguments
-				be, err := c.typedExp(c.expBoolOr, &expr, VT_Undefined)
-				if err != nil {
-					return err
-				}
-				cf.arg.append(be...)
-
-				// Stop at ')' or expect ','
-				if c.token == ")" {
-					break
-				}
-				if c.token != "," {
-					return Error("Invalid argument list")
-				}
-			}
-		}
+	// Parse arguments blindly until we hit ')'
+	tmp := expr
+	if c.tokenizer(&tmp) == ")" {
+		c.tokenizer(&expr) // Consume empty ')'
 	} else {
-		// Defined function path
-		c.funcUsed[cf.name] = true
-
-		// Validate return values
-		if len(ret) > 0 && len(ret) != int(bf.numRets) {
-			return Error(fmt.Sprintf("Mismatch in number of assignments and return values: %v = %v",
-				len(ret), bf.numRets))
-		}
-
-		// Parse arguments based on known count
-		if bf.numArgs == 0 {
-			c.token = c.tokenizer(&expr)
-			if c.token == "" {
-				c.token = otk
-			}
-			if err := c.needToken(")"); err != nil {
+		for {
+			// Parse arguments
+			be, err := c.typedExp(c.expBoolOr, &expr, VT_Undefined)
+			if err != nil {
 				return err
 			}
-		} else {
-			for i := 0; i < int(bf.numArgs); i++ {
-				var be BytecodeExp
-				if i < int(bf.numArgs)-1 {
-					// Argument followed by ','
-					if be, err = c.argExpression(&expr, VT_Undefined); err != nil {
-						return err
-					}
-					if c.token == "" {
-						c.token = otk
-					}
-					if err := c.needToken(","); err != nil {
-						return err
-					}
-				} else {
-					// Last argument followed by ')'
-					if be, err = c.typedExp(c.expBoolOr, &expr, VT_Undefined); err != nil {
-						return err
-					}
-					if c.token == "" {
-						c.token = otk
-					}
-					if err := c.needToken(")"); err != nil {
-						return err
-					}
-				}
-				cf.arg.append(be...)
+			cf.arg.append(be...)
+
+			// Count arguments for later runtime validation
+			cf.numArgs++
+
+			// Stop at ')' or expect ','
+			if c.token == ")" {
+				break
+			}
+			if c.token != "," {
+				return Error("Invalid argument list")
 			}
 		}
 	}
@@ -7695,7 +7643,7 @@ func (c *StateCompiler) callFunc(line *string, root bool,
 	}
 
 	// Append the instruction
-	// Even if undefined, we append it so it can be resolved at runtime
+	// Even if the function is still undefined, we append the call so it can be resolved at runtime
 	*ctrls = append(*ctrls, cf)
 	c.scan(line)
 	return nil
@@ -8024,7 +7972,7 @@ func (c *StateCompiler) stateCompileZSS(states map[int32]StateBytecode, filename
 			}
 
 			// Start compiling
-			fun := bytecodeFunction{}
+			fun := BytecodeFunction{}
 			c.vars = make(map[string]uint8)
 
 			// Parse arguments
@@ -8299,7 +8247,7 @@ func (c *StateCompiler) Compile(pn int, def string, constants map[string]float32
 	// Compile states
 	sys.stringPool[pn].Clear()
 	sys.cgi[pn].hitPauseToggleFlagCount = 0
-	c.funcUsed = make(map[string]bool)
+
 	// Compile state files
 	for _, s := range st {
 		if len(s) > 0 {

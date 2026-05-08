@@ -4403,14 +4403,14 @@ func (NullStateController) Run(_ *Char, _ []int32) bool {
 
 var nullStateController NullStateController
 
-type bytecodeFunction struct {
+type BytecodeFunction struct {
 	numVars int32
-	numRets int32
 	numArgs int32
+	numRets int32
 	ctrls   []StateController
 }
 
-func (bf bytecodeFunction) run(c *Char, ret []uint8) (changeState bool) {
+func (bf BytecodeFunction) run(c *Char, ret []uint8) (changeState bool) {
 	oldv, oldvslen := sys.bcVar, len(sys.bcVarStack)
 	sys.bcVar = sys.bcVarStack.Alloc(int(bf.numVars))
 
@@ -4449,14 +4449,15 @@ func (bf bytecodeFunction) run(c *Char, ret []uint8) (changeState bool) {
 	return
 }
 
-type callFunction struct {
-	//bytecodeFunction // Moved to CharGlobalInfo
+type CallFunction struct {
+	//BytecodeFunction // Moved to CharGlobalInfo
 	name string
 	arg  BytecodeExp
 	ret  []uint8
+	numArgs int32
 }
 
-func (cf callFunction) Run(c *Char, _ []int32) (changeState bool) {
+func (cf CallFunction) Run(c *Char, _ []int32) (changeState bool) {
 	// Check if the function exists
 	// We use the functions from whatever player owns the current working state
 	bf, ok := sys.cgi[sys.workingState.playerNo].callFuncs[cf.name]
@@ -4464,6 +4465,19 @@ func (cf callFunction) Run(c *Char, _ []int32) (changeState bool) {
 	// If undefined, treat as no-op and log error
 	if !ok {
 		sys.appendToConsole(c.warn() + "called undefined function: " + cf.name)
+		return false
+	}
+
+	// Runtime argument number validation
+	// Validated on runtime because the compiler can't always know in advance what a function will look like
+	if cf.numArgs != bf.numArgs {
+		sys.appendToConsole(c.warn() + fmt.Sprintf("function %s expected %d arguments but got %d", cf.name, bf.numArgs, cf.numArgs))
+		return false
+	}
+
+	// Runtime return number validation
+	if len(cf.ret) > 0 && int32(len(cf.ret)) != bf.numRets {
+		sys.appendToConsole(c.warn() + fmt.Sprintf("function %s expected %d returns but got %d", cf.name, bf.numRets, len(cf.ret)))
 		return false
 	}
 
