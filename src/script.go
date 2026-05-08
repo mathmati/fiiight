@@ -8768,6 +8768,8 @@ func triggerFunctions(l *lua.LState) {
 				lv = lua.LBool(c.ownclsnscale)
 			case "ownpal":
 				lv = lua.LBool(c.ownpal)
+			case "ownprojectile":
+				lv = lua.LBool(c.ownProjectile)
 			case "preserve":
 				lv = lua.LBool(c.preserve)
 			default:

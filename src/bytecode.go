@@ -986,6 +986,7 @@ const (
 	OC_ex3_helpervar_keyctrl
 	OC_ex3_helpervar_ownclsnscale
 	OC_ex3_helpervar_ownpal
+	OC_ex3_helpervar_ownprojectile
 	OC_ex3_helpervar_preserve
 	OC_ex3_spritevar_group
 	OC_ex3_spritevar_height
@@ -4306,7 +4307,7 @@ func (be BytecodeExp) run_ex3(c *Char, i *int, oc *Char) {
 	// HelperVar
 	case OC_ex3_helpervar_clsnproxy, OC_ex3_helpervar_id, OC_ex3_helpervar_helpertype,
 		OC_ex3_helpervar_keyctrl, OC_ex3_helpervar_ownclsnscale, OC_ex3_helpervar_ownpal,
-		OC_ex3_helpervar_preserve:
+		OC_ex3_helpervar_ownprojectile, OC_ex3_helpervar_preserve:
 		// If not a helper, return false immediately
 		if c.helperIndex == 0 {
 			sys.bcStack.Push(BytecodeUndefined())
@@ -4327,6 +4328,8 @@ func (be BytecodeExp) run_ex3(c *Char, i *int, oc *Char) {
 			sys.bcStack.PushB(c.ownclsnscale)
 		case OC_ex3_helpervar_ownpal:
 			sys.bcStack.PushB(c.ownpal)
+		case OC_ex3_helpervar_ownprojectile:
+			sys.bcStack.PushB(c.ownProjectile)
 		case OC_ex3_helpervar_preserve:
 			sys.bcStack.PushB(c.preserve)
 		}
@@ -5529,6 +5532,7 @@ const (
 	helper_preserve
 	helper_standby
 	helper_ownclsnscale
+	helper_ownprojectile
 	helper_redirectid
 )
 
@@ -5649,6 +5653,8 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 			} else {
 				h.unsetSCF(SCF_standby)
 			}
+		case helper_ownprojectile:
+			h.ownProjectile = exp[0].evalB(c)
 		}
 		return true
 	})

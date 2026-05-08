@@ -2797,6 +2797,8 @@ func (c *StateCompiler) expValue(out *BytecodeExp, in *string,
 			out.append(OC_ex3_, OC_ex3_helpervar_ownclsnscale)
 		case "ownpal":
 			out.append(OC_ex3_, OC_ex3_helpervar_ownpal)
+		case "ownprojectile":
+			out.append(OC_ex3_, OC_ex3_helpervar_ownprojectile)
 		case "preserve":
 			out.append(OC_ex3_, OC_ex3_helpervar_preserve)
 		default:

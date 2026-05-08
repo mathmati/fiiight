@@ -2278,7 +2278,6 @@ func (s *System) resetRoundState() {
 					[...]int32{1, 1}, [...]int32{1, s.cgi[i].palno})
 			}
 		}
-		s.cgi[i].clearPCTime()
 
 		if newMatchMusic {
 			p[0].si().music.ClearSelection()
