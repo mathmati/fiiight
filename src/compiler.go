@@ -12,7 +12,7 @@ const specialSymbols = " !=<>()|&+-*/%,[]^:;{}#\"\t\r\n"
 
 type expFunc func(out *BytecodeExp, in *string) (BytecodeValue, error)
 
-type scFunc func(is IniSection, sc *StateControllerBase, ihp int8) (StateController, error)
+type scFunc func(is IniSection, sc *StateControllerBase) (StateController, error)
 
 type StateCompiler struct {
 	cmdl             *CommandList
@@ -5803,7 +5803,7 @@ func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
 	return tn, false, true
 }
 
-func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSection, bool, error) {
+func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSection, error) {
 	is := NewIniSection()
 	var _type, persistent, ignorehitpause bool
 
@@ -5903,7 +5903,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 					if sys.ignoreMostErrors {
 						continue
 					}
-					return nil, false, Error("Invalid parameter syntax: " + line)
+					return nil, Error("Invalid parameter syntax: " + line)
 				}
 			}
 
@@ -5915,7 +5915,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 						if sys.ignoreMostErrors {
 							continue
 						}
-						return nil, false, Error("Invalid parameter syntax: " + line)
+						return nil, Error("Invalid parameter syntax: " + line)
 					}
 					name = strings.ToLower(lhs)
 				} else {
@@ -5932,7 +5932,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 
 			// Reject empty triggers
 			if isTrigger && len(data) == 0 {
-				return nil, false, Error(name + " cannot be empty")
+				return nil, Error(name + " cannot be empty")
 			}
 
 			// Reject duplicate parameters (normally off)
@@ -5943,7 +5943,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 					LogMessage(c.charWarn() + fmt.Sprintf("Duplicate '%s' parameter", name))
 					continue
 				}
-				return nil, false, Error(name + " is duplicated")
+				return nil, Error(name + " is duplicated")
 			}
 
 			if sctrl != nil {
@@ -5955,7 +5955,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 							LogMessage(c.charWarn() + "Duplicate 'type' parameter")
 							continue
 						}
-						return nil, false, Error("type is duplicated")
+						return nil, Error("type is duplicated")
 					}
 					// Flag as found
 					_type = true
@@ -5965,7 +5965,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 							LogMessage(c.charWarn() + "Duplicate 'persistent' parameter")
 							continue
 						}
-						return nil, false, Error("persistent is duplicated")
+						return nil, Error("persistent is duplicated")
 					}
 					persistent = true
 				case "ignorehitpause":
@@ -5974,7 +5974,7 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 							LogMessage(c.charWarn() + "Duplicate 'ignorehitpause' parameter")
 							continue
 						}
-						return nil, false, Error("ignorehitpause is duplicated")
+						return nil, Error("ignorehitpause is duplicated")
 					}
 					ignorehitpause = true
 				default:
@@ -5984,14 +5984,14 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 					}
 				}
 				if err := sctrl(name, data); err != nil {
-					return nil, false, err
+					return nil, err
 				}
 			} else {
 				is[name] = data
 			}
 		}
 	}
-	return is, ignorehitpause, nil
+	return is, nil
 }
 
 func (c *StateCompiler) stateSec(is IniSection, f func() error) error {
@@ -6749,7 +6749,7 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 
 		c.i++
 		// Parse the statedef properties
-		is, _, err := c.parseSection(nil)
+		is, err := c.parseSection(nil)
 		if err != nil {
 			return errmes(err)
 		}
@@ -6790,7 +6790,7 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 			allTerminated := false
 
 			// Parse each line of the sctrl to get triggers and settings
-			is, ihpFound, err := c.parseSection(func(name, data string) error {
+			is, err := c.parseSection(func(name, data string) error {
 				switch name {
 				case "type":
 					var ok bool
@@ -6967,14 +6967,8 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 			}
 			c.block.trigger = texp
 
-			// Ignorehitpause
-			ihp := int8(-1)
-			if ihpFound {
-				ihp = int8(Btoi(c.block.ignorehitpause >= -1))
-			}
-
 			// For this sctrl type, call the function to construct the sctrl
-			sctrl, err := scf(is, sc, ihp)
+			sctrl, err := scf(is, sc)
 			if err != nil {
 				return errmes(err)
 			}
@@ -7882,7 +7876,7 @@ func (c *StateCompiler) stateBlock(line *string, bl *StateBlock, root bool,
 						return err
 					}
 				}
-				if sctrl, err := scf(is, sc, -1); err != nil {
+				if sctrl, err := scf(is, sc); err != nil {
 					return err
 				} else {
 					*ctrls = append(*ctrls, sctrl)
