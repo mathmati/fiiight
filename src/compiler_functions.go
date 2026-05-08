@@ -824,8 +824,7 @@ func (c *StateCompiler) ctrlSet(is IniSection, sc *StateControllerBase, _ int8) 
 	return *ret, err
 }
 
-func (c *StateCompiler) explodSub(is IniSection,
-	sc *StateControllerBase, ihp int8) error {
+func (c *StateCompiler) explodSub(is IniSection, sc *StateControllerBase, ihp int8) error {
 	if err := c.paramValue(is, sc, "remappal",
 		explod_remappal, VT_Int, 2, false); err != nil {
 		return err
@@ -857,14 +856,15 @@ func (c *StateCompiler) explodSub(is IniSection,
 		explod_random, VT_Float, 3, false); err != nil {
 		return err
 	}
-	found := false
+	// vel or velocity
+	velFound := false
 	if err := c.stateParam(is, "vel", false, func(data string) error {
-		found = true
+		velFound = true
 		return c.scAdd(sc, explod_velocity, data, VT_Float, 3)
 	}); err != nil {
 		return err
 	}
-	if !found {
+	if !velFound {
 		if err := c.paramValue(is, sc, "velocity",
 			explod_velocity, VT_Float, 3, false); err != nil {
 			return err
@@ -960,6 +960,10 @@ func (c *StateCompiler) explodSub(is IniSection,
 	if err := c.paramTrans(is, sc, "", explod_trans); err != nil {
 		return err
 	}
+	if err := c.paramValue(is, sc, "ownpal",
+		explod_ownpal, VT_Bool, 1, false); err != nil {
+		return err
+	}
 	if err := c.palFXSub(is, sc, "palfx."); err != nil {
 		return err
 	}
@@ -968,6 +972,57 @@ func (c *StateCompiler) explodSub(is IniSection,
 		return err
 	}
 	if err := c.afterImageSub(is, sc, ihp, "afterimage."); err != nil {
+		return err
+	}
+	// animplayerno and spriteplayerno should be placed before anim
+	if err := c.paramValue(is, sc, "animplayerno",
+		explod_animplayerno, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "spriteplayerno",
+		explod_spriteplayerno, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "anim",
+		false, func(data string) error {
+		prefix := c.getDataPrefix(&data, false)
+		return c.scAdd(sc, explod_anim, data, VT_Int, 1, sc.beToExp(BytecodeExp(prefix))...)
+	}); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "animelem",
+		explod_animelem, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "animelemtime",
+		explod_animelemtime, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "animfreeze",
+		explod_animfreeze, VT_Bool, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "angle",
+		explod_angle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "yangle",
+		explod_yangle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "xangle",
+		explod_xangle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "xshear",
+		explod_xshear, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "focallength",
+		explod_focallength, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.explodInterpolate(is, sc); err != nil {
 		return err
 	}
 	return nil
@@ -1026,72 +1081,13 @@ func (c *StateCompiler) explodInterpolate(is IniSection,
 	return nil
 }
 
-func (c *StateCompiler) explod(is IniSection, sc *StateControllerBase,
-	ihp int8) (StateController, error) {
+func (c *StateCompiler) explod(is IniSection, sc *StateControllerBase, ihp int8) (StateController, error) {
 	ret, err := (*explod)(sc), c.stateSec(is, func() error {
 		if err := c.paramValue(is, sc, "redirectid",
 			explod_redirectid, VT_Int, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "animplayerno",
-			explod_animplayerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "spriteplayerno",
-			explod_spriteplayerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "anim", false, func(data string) error {
-			prefix := c.getDataPrefix(&data, false)
-			return c.scAdd(sc, explod_anim, data, VT_Int, 1,
-				sc.beToExp(BytecodeExp(prefix))...)
-		}); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "ownpal",
-			explod_ownpal, VT_Bool, 1, false); err != nil {
-			return err
-		}
 		if err := c.explodSub(is, sc, ihp); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animelem",
-			explod_animelem, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animelemtime",
-			explod_animelemtime, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animfreeze",
-			explod_animfreeze, VT_Bool, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "angle",
-			explod_angle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "yangle",
-			explod_yangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xangle",
-			explod_xangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xshear",
-			explod_xshear, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "focallength",
-			explod_focallength, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.explodInterpolate(is, sc); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "ignorehitpause",
-			explod_ignorehitpause, VT_Bool, 1, false); err != nil {
 			return err
 		}
 		return nil
@@ -1099,8 +1095,7 @@ func (c *StateCompiler) explod(is IniSection, sc *StateControllerBase,
 	return *ret, err
 }
 
-func (c *StateCompiler) modifyExplod(is IniSection, sc *StateControllerBase,
-	ihp int8) (StateController, error) {
+func (c *StateCompiler) modifyExplod(is IniSection, sc *StateControllerBase, ihp int8) (StateController, error) {
 	ret, err := (*modifyExplod)(sc), c.stateSec(is, func() error {
 		if err := c.paramValue(is, sc, "redirectid",
 			modifyexplod_redirectid, VT_Int, 1, false); err != nil {
@@ -1113,59 +1108,9 @@ func (c *StateCompiler) modifyExplod(is IniSection, sc *StateControllerBase,
 		if err := c.explodSub(is, sc, ihp); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "animplayerno",
-			explod_animplayerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "spriteplayerno",
-			explod_spriteplayerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "anim", false, func(data string) error {
-			prefix := c.getDataPrefix(&data, false)
-			return c.scAdd(sc, explod_anim, data, VT_Int, 1,
-				sc.beToExp(BytecodeExp(prefix))...)
-		}); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animelem",
-			explod_animelem, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animelemtime",
-			explod_animelemtime, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "animfreeze",
-			explod_animfreeze, VT_Bool, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "angle",
-			explod_angle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "yangle",
-			explod_yangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xangle",
-			explod_xangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xshear",
-			explod_xshear, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "focallength",
-			explod_focallength, VT_Float, 1, false); err != nil {
-			return err
-		}
+		// TODO: Undocumented. Possibly a leftover
 		if err := c.paramValue(is, sc, "interpolation",
 			explod_interpolation, VT_Bool, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "ignorehitpause",
-			explod_ignorehitpause, VT_Bool, 1, false); err != nil {
 			return err
 		}
 		return nil
@@ -1584,8 +1529,7 @@ func (c *StateCompiler) bgPalFX(is IniSection, sc *StateControllerBase, _ int8) 
 	return *ret, err
 }
 
-func (c *StateCompiler) afterImageSub(is IniSection,
-	sc *StateControllerBase, ihp int8, prefix string) error {
+func (c *StateCompiler) afterImageSub(is IniSection, sc *StateControllerBase, ihp int8, prefix string) error {
 	if err := c.paramValue(is, sc, "redirectid",
 		afterImage_redirectid, VT_Int, 1, false); err != nil {
 		return err
@@ -1648,7 +1592,7 @@ func (c *StateCompiler) afterImageSub(is IniSection,
 	if ihp == 0 {
 		sc.add(afterImage_ignorehitpause, sc.iToExp(0))
 	}
-	return nil
+	return nil  
 }
 
 func (c *StateCompiler) afterImage(is IniSection, sc *StateControllerBase,
