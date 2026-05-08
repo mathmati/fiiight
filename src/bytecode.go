@@ -2337,7 +2337,7 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_teamside:
 			sys.bcStack.PushI(int32(c.teamside) + 1)
 		case OC_time:
-			sys.bcStack.PushI(c.time())
+			sys.bcStack.PushI(c.ss.time)
 		case OC_topedge:
 			sys.bcStack.PushF(c.topEdge() * (c.localscl / oc.localscl))
 		case OC_uniqhitcount:

@@ -6096,10 +6096,6 @@ func (c *Char) changeTagLeader(nextLeaderPN int) {
 	c.updateTeamOrder(team)
 }
 
-func (c *Char) time() int32 {
-	return c.ss.time
-}
-
 func (c *Char) topEdge() float32 {
 	return sys.cam.ScreenPos[1] / c.localscl
 }
