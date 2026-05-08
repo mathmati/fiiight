@@ -5990,13 +5990,9 @@ func (c *Char) updateTeamOrder(team []int) {
 		sys.chars[pno][0].memberNo = i
 	}
 
-	// Update lifebar order within its bounds
+	// Update lifebar order
 	side := c.playerNo & 1
-	for i := range sys.fightScreen.teamOrder[side] {
-		if i < len(team) {
-			sys.fightScreen.teamOrder[side][i] = team[i]
-		}
-	}
+	sys.fightScreen.syncTeamOrder(side)
 }
 
 // Perform a direct order swap between the player and another team member
