@@ -4339,7 +4339,12 @@ func (be BytecodeExp) run_ex3(c *Char, i *int, oc *Char) {
 		// Check for valid sprite
 		var spr *Sprite
 		if c.anim != nil {
-			spr = c.anim.spr
+			// TODO: This is a patch to fix a 1-frame delay in SpriteVar
+			// In reality our animation stepping sequence has too many hacks and may need an overhaul
+			// We make a copy to avoid the risk of the update affecting how an animation plays out, just in case
+			acopy := *c.anim
+			acopy.UpdateSprite()
+			spr = acopy.spr
 		}
 		// Handle output
 		if spr != nil {
