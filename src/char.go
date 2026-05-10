@@ -1615,7 +1615,7 @@ type Explod struct {
 	scale               [2]float32
 	removeongethit      bool
 	removeonchangestate bool
-	hideonpausemenu     bool
+	hidewithbars        bool
 	statehaschanged     bool
 	removetime          int32
 	velocity            [3]float32
@@ -1912,7 +1912,11 @@ func (e *Explod) update() {
 	parent := sys.playerID(e.ownerId)
 	root := sys.chars[e.playerno][0]
 
-	if root.scf(SCF_disabled) || (e.hideonpausemenu && sys.motif.me.active) {
+	if root.scf(SCF_disabled) {
+		return
+	}
+
+	if e.hidewithbars && (!sys.fightScreen.visible() || sys.gsf(GSF_nobardisplay) || !sys.fightScreen.bars) {
 		return
 	}
 

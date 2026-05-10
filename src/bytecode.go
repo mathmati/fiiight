@@ -6071,7 +6071,7 @@ const (
 	explod_shadow
 	explod_removeongethit
 	explod_removeonchangestate
-	explod_hideonpausemenu
+	explod_hidewithbars
 	explod_trans
 	explod_animelem
 	explod_animelemtime
@@ -6269,8 +6269,8 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 			e.removeongethit = exp[0].evalB(c)
 		case explod_removeonchangestate:
 			e.removeonchangestate = exp[0].evalB(c)
-		case explod_hideonpausemenu:
-			e.hideonpausemenu = exp[0].evalB(c)
+		case explod_hidewithbars:
+			e.hidewithbars = exp[0].evalB(c)
 		case explod_trans:
 			src := Clamp(int32(exp[0].evalI(c)), 0, 255)
 			dst := Clamp(int32(exp[1].evalI(c)), 0, 255)
@@ -6800,10 +6800,10 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 				eachExpl(func(e *Explod) {
 					e.removeonchangestate = v
 				})
-			case explod_hideonpausemenu:
+			case explod_hidewithbars:
 				v := exp[0].evalB(c)
 				eachExpl(func(e *Explod) {
-					e.hideonpausemenu = v
+					e.hidewithbars = v
 				})
 			case explod_trans:
 				src := Clamp(int32(exp[0].evalI(c)), 0, 255)
