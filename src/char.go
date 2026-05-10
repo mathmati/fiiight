@@ -9728,7 +9728,7 @@ func (c *Char) xScreenBound() {
 	x := c.pos[0]
 	before := x
 
-	if !sys.cam.roundstart && c.trackableByCamera() && c.csf(CSF_screenbound) && !c.scf(SCF_standby) {
+	if c.trackableByCamera() && c.csf(CSF_screenbound) && !c.scf(SCF_standby) {
 		min, max := c.edgeWidth[0], -c.edgeWidth[1]
 		if c.facing > 0 {
 			min, max = -max, -min

@@ -2238,13 +2238,14 @@ func (s *System) resetRoundState() {
 
 	s.cam.stageCamera = s.stage.stageCamera
 	s.cam.Init()
+
+	// TODO: These being saved to system currently makes them unmodifiable by ModifyStageVar
 	s.screenleft = float32(s.stage.screenleft) * s.stage.localscl
 	s.screenright = float32(s.stage.screenright) * s.stage.localscl
 
 	if s.stage.resetbg || swap {
 		s.stage.reset()
 	}
-	s.cam.ResetZoomdelay()
 	if newMatchMusic {
 		s.stage.music.ClearSelection()
 		s.stage.si().music.ClearSelection()
@@ -2425,6 +2426,8 @@ func (s *System) globalCollision() {
 	s.charList.collisionDetection()
 }
 
+/*
+// This is never called
 func (s *System) posReset() {
 	for _, p := range s.chars {
 		if len(p) > 0 {
@@ -2432,6 +2435,7 @@ func (s *System) posReset() {
 		}
 	}
 }
+*/
 
 // Skip character intros on button press and play the shutter effect
 func (s *System) runIntroSkip() {
