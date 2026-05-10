@@ -1014,7 +1014,7 @@ func (hd *HitDef) finalizeParams(c *Char, proj *Projectile) {
 	//if c.stWgi().ikemenver[0] == 0 && c.stWgi().ikemenver[1] == 0 {
 	//	ifierrset(&hd.p1sprpriority, 1)
 	//	ifierrset(&hd.p2sprpriority, 0)
-	//}		
+	//}
 }
 
 // When a Hitdef connects, its statetype attribute will be updated to the character's current type

@@ -1513,7 +1513,7 @@ func (s *System) playerNoExist(pn BytecodeValue) BytecodeValue {
 	if pn.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	idx := int(pn.ToI() - 1) 
+	idx := int(pn.ToI() - 1)
 	c := s.getCharRoot(idx)
 	return BytecodeBool(c != nil)
 }

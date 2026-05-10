@@ -985,9 +985,9 @@ func (c *StateCompiler) explodSub(is IniSection, sc *StateControllerBase) error 
 	}
 	if err := c.stateParam(is, "anim",
 		false, func(data string) error {
-		prefix := c.getDataPrefix(&data, false)
-		return c.scAdd(sc, explod_anim, data, VT_Int, 1, sc.beToExp(BytecodeExp(prefix))...)
-	}); err != nil {
+			prefix := c.getDataPrefix(&data, false)
+			return c.scAdd(sc, explod_anim, data, VT_Int, 1, sc.beToExp(BytecodeExp(prefix))...)
+		}); err != nil {
 		return err
 	}
 	if err := c.paramValue(is, sc, "animelem",
@@ -1599,7 +1599,7 @@ func (c *StateCompiler) afterImageSub(is IniSection, sc *StateControllerBase, pr
 		afterImage_ignorehitpause, VT_Bool, 1, false); err != nil {
 		return err
 	}
-	return nil  
+	return nil
 }
 
 func (c *StateCompiler) afterImage(is IniSection, sc *StateControllerBase) (StateController, error) {

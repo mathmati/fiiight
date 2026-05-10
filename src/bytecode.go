@@ -4451,9 +4451,9 @@ func (bf BytecodeFunction) run(c *Char, ret []uint8) (changeState bool) {
 
 type CallFunction struct {
 	//BytecodeFunction // Moved to CharGlobalInfo
-	name string
-	arg  BytecodeExp
-	ret  []uint8
+	name    string
+	arg     BytecodeExp
+	ret     []uint8
 	numArgs int32
 }
 
