@@ -1442,26 +1442,26 @@ func (s *System) playerID(id int32) *Char {
 	}
 
 	// Invalid ID
-	ch, ok := s.charList.idMap[id]
+	c, ok := s.charList.idMap[id]
 	if !ok {
 		return nil
 	}
 
-	// Mugen skips DestroySelf helpers here
-	// Note: This will also skip destroyed helpers in the engine's internal ID lookups
-	if ch.csf(CSF_destroy) {
+	// Mugen skips destroyed helpers and disabled players here
+	// Note: This will also make them be skipped in the engine's internal ID lookups
+	if c.csf(CSF_destroy) || c.scf(SCF_disabled) {
 		return nil
 	}
 
-	return ch
+	return c
 }
 
 func (s *System) playerIDExist(id BytecodeValue) BytecodeValue {
 	if id.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	char := s.playerID(id.ToI())
-	return BytecodeBool(char != nil)
+	c := s.playerID(id.ToI())
+	return BytecodeBool(c != nil)
 }
 
 func (s *System) playerIndex(idx int32) *Char {
@@ -1469,12 +1469,12 @@ func (s *System) playerIndex(idx int32) *Char {
 		return nil
 	}
 
-	// We will ignore destroyed helpers here, like Mugen redirections do
+	// We will also ignore destroyed/disabled players here, like Mugen redirections do
 	var searchIdx int32
-	for _, p := range sys.charList.creationOrder {
-		if p != nil && !p.csf(CSF_destroy) {
+	for _, c := range sys.charList.creationOrder {
+		if c != nil && !c.csf(CSF_destroy) && !c.scf(SCF_disabled) {
 			if searchIdx == idx {
-				return p
+				return c
 			}
 			searchIdx++
 		}
@@ -1497,16 +1497,25 @@ func (s *System) playerIndexExist(idx BytecodeValue) BytecodeValue {
 	return BytecodeBool(char != nil)
 }
 
-func (s *System) playerNoExist(no BytecodeValue) BytecodeValue {
-	if no.IsUndefined() {
+// For player number triggers
+func (s *System) getCharRoot(idx int) *Char {
+	if idx < 0 || idx >= len(sys.chars) {
+		return nil
+	}
+	p := sys.chars[idx]
+	if len(p) == 0 || p[0] == nil || p[0].scf(SCF_disabled) {
+		return nil
+	}
+	return p[0]
+}
+
+func (s *System) playerNoExist(pn BytecodeValue) BytecodeValue {
+	if pn.IsUndefined() {
 		return BytecodeUndefined()
 	}
-	exist := false
-	number := int(no.ToI() - 1)
-	if number >= 0 && number < len(sys.chars) {
-		exist = len(sys.chars[number]) > 0
-	}
-	return BytecodeBool(exist)
+	idx := int(pn.ToI() - 1) 
+	c := s.getCharRoot(idx)
+	return BytecodeBool(c != nil)
 }
 
 func (s *System) palfxvar(x int32, y int32) int32 {
@@ -2269,7 +2278,6 @@ func (s *System) resetRoundState() {
 					[...]int32{1, 1}, [...]int32{1, s.cgi[i].palno})
 			}
 		}
-		s.cgi[i].clearPCTime()
 
 		if newMatchMusic {
 			p[0].si().music.ClearSelection()
@@ -5108,7 +5116,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		}
 
 		// Compile character states
-		if sys.cgi[pn].states, l.err = newCompiler().Compile(p.playerNo, cdef, p.gi().constants); l.err != nil {
+		if sys.cgi[pn].states, l.err = newStateCompiler().Compile(p.playerNo, cdef, p.gi().constants); l.err != nil {
 			sys.chars[pn] = nil
 			if attached {
 				tstr = fmt.Sprintf("WARNING: Failed to compile new attached char states: %v", cdef)

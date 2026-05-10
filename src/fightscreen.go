@@ -5209,7 +5209,7 @@ func (fs *FightScreen) step() {
 
 // Resets fight screen as well as prepares team mode configuration for each player
 func (fs *FightScreen) reset() {
-	var num [2]int
+	//var num [2]int
 
 	// Update team mode layout for each player
 	for ti, tm := range sys.tmode {
@@ -5236,17 +5236,22 @@ func (fs *FightScreen) reset() {
 			fs.curLayout[ti] = 0 // Single (2)
 		}
 
-		// Set maximum number of lifebars
-		if tm == TM_Simul || tm == TM_Tag {
-			num[ti] = int(math.Min(8, float64(sys.numSimul[ti])*2))
-		} else {
-			num[ti] = len(fs.lifeBars[fs.curLayout[ti]])
-		}
+		// Determine number of players in each team
+		//if tm == TM_Simul || tm == TM_Tag {
+		//	num[ti] = int(math.Min(8, float64(sys.numSimul[ti])*2))
+		//} else {
+		//	num[ti] = len(fs.lifeBars[fs.curLayout[ti]]) // TODO: Why did it check this for single/turns but not simul/tag?
+		//}
+		// Build team order by ascending player number
+		//fs.teamOrder[ti] = []int{}
+		//for i := ti; i < num[ti]; i += 2 {
+		//	fs.teamOrder[ti] = append(fs.teamOrder[ti], i)
+		//}
+	}
 
-		fs.teamOrder[ti] = []int{}
-		for i := ti; i < num[ti]; i += 2 {
-			fs.teamOrder[ti] = append(fs.teamOrder[ti], i)
-		}
+	// Rebuild order of teams
+	for side := range fs.teamOrder {
+		fs.syncTeamOrder(side)
 	}
 
 	// Reset fight screen elements
@@ -5719,4 +5724,21 @@ func (fs *FightScreen) addComboHits(side int, n int32) {
 		return
 	}
 	fs.combos[side].trueHits += n
+}
+
+// Update team order based on the actual character member numbers
+func (fs *FightScreen) syncTeamOrder(side int) {
+	order := make([]int, 0, MaxSimul)
+	// Collect all the members of this team
+	for pn := side; pn < MaxSimul*2; pn += 2 {
+		if len(sys.chars[pn]) > 0 {
+			order = append(order, pn)
+		}
+	}
+	// Sort them by memberNo
+	sort.Slice(order, func(i, j int) bool {
+		return sys.chars[order[i]][0].memberNo < sys.chars[order[j]][0].memberNo
+	})
+	// Save result
+	fs.teamOrder[side] = order
 }
