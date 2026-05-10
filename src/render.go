@@ -227,11 +227,17 @@ func (rp *RenderParams) IsValid() bool {
 func drawQuads(modelview mgl.Mat4, x1, y1, x2, y2, x3, y3, x4, y4 float32) {
 	gfx.SetUniformMatrix("modelview", modelview[:])
 	gfx.SetUniformF("x1x2x4x3", x1, x2, x4, x3) // this uniform is optional
+
+	// This effectively side-steps a low-level rectangle rasterization edge case,
+	// that caused visible and frequent artifacts on the diagonal.
+	// See: https://github.com/ikemen-engine/Ikemen-GO/issues/3583
+	uvZero := float32(0.000002)
+
 	gfx.SetVertexData(
 		x2, y2, 1, 1,
-		x3, y3, 1, 0,
-		x1, y1, 0, 1,
-		x4, y4, 0, 0,
+		x3, y3, 1, uvZero,
+		x1, y1, uvZero, 1,
+		x4, y4, uvZero, uvZero,
 	)
 
 	gfx.RenderQuad()
