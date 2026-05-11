@@ -95,8 +95,6 @@ type SystemStateVars struct {
 	lastTick                float32
 	nextAddTime             float32
 	oldNextAddTime          float32
-	screenleft              float32
-	screenright             float32
 	xmin, xmax              float32
 	zmin, zmax              float32
 	winskipped              bool
@@ -2283,10 +2281,6 @@ func (s *System) resetRound() {
 	s.cam.stageCamera = s.stage.stageCamera
 	s.cam.Init()
 
-	// TODO: These being saved to system currently makes them unmodifiable by ModifyStageVar
-	s.screenleft = float32(s.stage.screenleft) * s.stage.localscl
-	s.screenright = float32(s.stage.screenright) * s.stage.localscl
-
 	if s.stage.resetbg || stageSwap {
 		s.stage.reset()
 	}
@@ -2517,6 +2511,14 @@ func (s *System) clearSpriteData() {
 	}
 }
 
+func (s *System) screenleft() float32 {
+	return float32(s.stage.screenleft) * s.stage.localscl
+}
+
+func (s *System) screenright() float32 {
+	return float32(s.stage.screenright) * s.stage.localscl
+}
+
 func (s *System) action() {
 	s.clearSpriteData()
 
@@ -2536,8 +2538,8 @@ func (s *System) action() {
 	// Run "tick frame"
 	if s.tickFrame() {
 		// X axis player limits
-		s.xmin = s.cam.ScreenPos[0] + s.cam.Offset[0] + s.screenleft
-		s.xmax = s.cam.ScreenPos[0] + s.cam.Offset[0] + float32(s.gameWidth)/s.cam.Scale - s.screenright
+		s.xmin = s.cam.ScreenPos[0] + s.cam.Offset[0] + s.screenleft()
+		s.xmax = s.cam.ScreenPos[0] + s.cam.Offset[0] + float32(s.gameWidth)/s.cam.Scale - s.screenright()
 		if s.xmin > s.xmax {
 			s.xmin = (s.xmin + s.xmax) / 2
 			s.xmax = s.xmin
@@ -2611,9 +2613,8 @@ func (s *System) action() {
 		x = float32(math.Ceil(float64(x)*4-0.5) / 4)
 	}
 	s.cam.Update(scl, x, y)
-	s.xmin = s.cam.ScreenPos[0] + s.cam.Offset[0] + s.screenleft
-	s.xmax = s.cam.ScreenPos[0] + s.cam.Offset[0] +
-		float32(s.gameWidth)/s.cam.Scale - s.screenright
+	s.xmin = s.cam.ScreenPos[0] + s.cam.Offset[0] + s.screenleft()
+	s.xmax = s.cam.ScreenPos[0] + s.cam.Offset[0] + float32(s.gameWidth)/s.cam.Scale - s.screenright()
 	if s.xmin > s.xmax {
 		s.xmin = (s.xmin + s.xmax) / 2
 		s.xmax = s.xmin

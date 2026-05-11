@@ -2499,8 +2499,8 @@ func (p *Projectile) update() {
 		if p.status == ProjActive {
 			if p.removetime == 0 ||
 				p.removetime <= -2 && (p.anim == nil || p.anim.loopend) ||
-				p.pos[0] < (sys.xmin-sys.screenleft)/p.localscl-float32(p.edgebound) ||
-				p.pos[0] > (sys.xmax+sys.screenright)/p.localscl+float32(p.edgebound) ||
+				p.pos[0] < (sys.xmin-sys.screenleft())/p.localscl-float32(p.edgebound) ||
+				p.pos[0] > (sys.xmax+sys.screenright())/p.localscl+float32(p.edgebound) ||
 				p.velocity[0]*p.facing < 0 && p.pos[0] < sys.cam.XMin/p.localscl-float32(p.stagebound) ||
 				p.velocity[0]*p.facing > 0 && p.pos[0] > sys.cam.XMax/p.localscl+float32(p.stagebound) ||
 				p.velocity[1] > 0 && p.pos[1] > float32(p.heightbound[1]) ||
@@ -5977,11 +5977,11 @@ func (c *Char) selfStatenoExist(stateno BytecodeValue) BytecodeValue {
 func (c *Char) stageFrontEdgeDist() float32 {
 	corner := float32(0)
 	if c.facing < 0 {
-		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft/c.localscl,
+		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft()/c.localscl,
 			sys.stage.leftbound*sys.stage.localscl/c.localscl)
 		return c.pos[0] - corner
 	} else {
-		corner = Min(sys.cam.XMax/c.localscl-sys.screenright/c.localscl,
+		corner = Min(sys.cam.XMax/c.localscl-sys.screenright()/c.localscl,
 			sys.stage.rightbound*sys.stage.localscl/c.localscl)
 		return corner - c.pos[0]
 	}
@@ -5990,11 +5990,11 @@ func (c *Char) stageFrontEdgeDist() float32 {
 func (c *Char) stageBackEdgeDist() float32 {
 	corner := float32(0)
 	if c.facing < 0 {
-		corner = Min(sys.cam.XMax/c.localscl-sys.screenright/c.localscl,
+		corner = Min(sys.cam.XMax/c.localscl-sys.screenright()/c.localscl,
 			sys.stage.rightbound*sys.stage.localscl/c.localscl)
 		return corner - c.pos[0]
 	} else {
-		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft/c.localscl,
+		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft()/c.localscl,
 			sys.stage.leftbound*sys.stage.localscl/c.localscl)
 		return c.pos[0] - corner
 	}
