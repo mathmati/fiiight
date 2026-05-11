@@ -4036,9 +4036,17 @@ func (s *System) debugModeAllowed() bool {
 	return s.cfg.Debug.AllowDebugMode
 }
 
-func (s *System) IsRollback() bool {
+// Returns true if the current frame is inside a rollback
+func (s *System) inRollback() bool {
 	if s.rollback.session != nil {
 		return s.rollback.session.inRollback
+	}
+	return false
+}
+
+func (s *System) isSpeculativeFrame() bool {
+	if s.rollback.session != nil {
+		return !s.rollback.session.inRollback
 	}
 	return false
 }
