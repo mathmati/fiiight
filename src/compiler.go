@@ -170,6 +170,7 @@ func newStateCompiler() *StateCompiler {
 		"printtoconsole":       c.printToConsole,
 		"redlifeadd":           c.redLifeAdd,
 		"redlifeset":           c.redLifeSet,
+		"remapmovelist":        c.remapMovelist,
 		"remapsprite":          c.remapSprite,
 		"rootmapadd":           c.rootMapAdd,
 		"rootmapset":           c.rootMapSet,

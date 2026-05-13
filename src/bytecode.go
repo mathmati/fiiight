@@ -12202,6 +12202,34 @@ func (sc redLifeSet) Run(c *Char, _ []int32) bool {
 	return false
 }
 
+type remapMovelist StateControllerBase
+
+const (
+	remapMovelist_value byte = iota
+	remapMovelist_redirectid
+)
+
+func (sc remapMovelist) Run(c *Char, _ []int32) bool {
+	crun := getRedirectedChar(c, StateControllerBase(sc), remapMovelist_redirectid, "RemapMovelist")
+	if crun == nil {
+		return false
+	}
+
+	var v int32
+	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
+		switch paramID {
+		case remapMovelist_value:
+			v = exp[0].evalI(c)
+		}
+		return true
+	})
+	if v < 0 {
+		v = 0
+	}
+	crun.movelist = v
+	return false
+}
+
 type remapSprite StateControllerBase
 
 const (

@@ -4189,7 +4189,6 @@ type SelectChar struct {
 	intro         string
 	ending        string
 	arcadepath    string
-	movelist      string
 	pal           []int32
 	pal_defaults  []int32
 	pal_keymap    []int32
@@ -4439,7 +4438,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 		return useDummy("DEF read error: " + err.Error())
 	}
 
-	var cns_orig, sprite_orig, anim_orig, movelist_orig string
+	var cns_orig, sprite_orig, anim_orig string
 	var fnt_orig [10][2]string
 
 	lines, lnidx := SplitAndTrim(charDefContent, "\n"), 0
@@ -4499,7 +4498,6 @@ func (s *Select) AddChar(def string) *SelectChar {
 					}
 				}
 
-				movelist_orig = decodeShiftJIS(isec["movelist"])
 				for fIdx := range fnt_orig {
 					fnt_orig[fIdx][0] = isec[fmt.Sprintf("font%v", fIdx)]
 					fnt_orig[fIdx][1] = isec[fmt.Sprintf("fnt_height%v", fIdx)]
@@ -4651,15 +4649,6 @@ func (s *Select) AddChar(def string) *SelectChar {
 			sc.anims.addSprite(sc.sff, k[0], k[1])
 		}
 	}
-	// read movelist
-	if len(movelist_orig) > 0 {
-		// Movelist is text, can be loaded now
-		LoadFile(&movelist_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
-			sc.movelist, _ = LoadText(filename)
-			return nil
-		})
-	}
-
 	return sc
 }
 

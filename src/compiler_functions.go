@@ -5397,6 +5397,21 @@ func (c *StateCompiler) redLifeSet(is IniSection, sc *StateControllerBase) (Stat
 	return *ret, err
 }
 
+func (c *StateCompiler) remapMovelist(is IniSection, sc *StateControllerBase) (StateController, error) {
+	ret, err := (*remapMovelist)(sc), c.stateSec(is, func() error {
+		if err := c.paramValue(is, sc, "redirectid",
+			remapMovelist_redirectid, VT_Int, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "value",
+			remapMovelist_value, VT_Int, 1, false); err != nil {
+			return err
+		}
+		return nil
+	})
+	return *ret, err
+}
+
 func (c *StateCompiler) remapSprite(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*remapSprite)(sc), c.stateSec(is, func() error {
 		if err := c.paramValue(is, sc, "redirectid",
