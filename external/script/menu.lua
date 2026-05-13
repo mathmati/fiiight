@@ -763,8 +763,11 @@ function menu.f_commandlistParse()
 			end
 			if player(pn) and aiLevel() == 0 then
 				local ref = getSelectNo()
-				if start.f_getCharData(ref).commandlist == nil then
-					local movelist = getCharMovelist(ref)
+				local movelist = getMovelist()
+				if sel.movelistText ~= movelist then
+					sel.movelistText = movelist
+					sel.commandlist = nil
+					sel.movelistLine = 1
 					if movelist ~= '' then
 						-- Replace glyph tokens with <token> for later lookup in motif.glyphs.
 						for k, v in main.f_sortKeys(motif.glyphs, function(t, a, b) return string.len(a) > string.len(b) end) do
@@ -801,14 +804,14 @@ function menu.f_commandlistParse()
 							table.insert(t, subt)
 						end
 						t[#t] = nil --blank line produced by regexp matching
-						start.f_getCharData(ref).commandlist = t
+						sel.commandlist = t
 					end
 				end
 				table.insert(menu.t_movelists, {
 					pn = pn,
 					name = start.f_getCharData(ref).name,
 					tbl = sel,
-					commandlist = start.f_getCharData(ref).commandlist,
+					commandlist = sel.commandlist,
 				})
 			end
 		end

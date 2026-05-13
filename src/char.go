@@ -2949,6 +2949,61 @@ type PalInfo struct {
 	selectable bool
 }
 
+func readMovelistFiles(is IniSection) map[int]string {
+	ret := make(map[int]string)
+	if v := decodeShiftJIS(is["movelist"]); v != "" {
+		ret[0] = v
+	}
+	if v := decodeShiftJIS(is["movelist0"]); v != "" {
+		if _, ok := ret[0]; !ok {
+			ret[0] = v
+		}
+	}
+	for k, v := range is {
+		kl := strings.ToLower(k)
+		if kl == "movelist" || kl == "movelist0" || !strings.HasPrefix(kl, "movelist") {
+			continue
+		}
+		idx := kl[len("movelist"):]
+		if idx == "" || !IsInt(idx) {
+			continue
+		}
+		n := int(Atoi(idx))
+		if n < 0 {
+			continue
+		}
+		if ml := decodeShiftJIS(v); ml != "" {
+			ret[n] = ml
+		}
+	}
+	if len(ret) == 0 {
+		return nil
+	}
+	return ret
+}
+
+func loadMovelistFiles(def string, files map[int]string) map[int]string {
+	if len(files) == 0 {
+		return nil
+	}
+	ret := make(map[int]string, len(files))
+	for idx, file := range files {
+		idx, file := idx, file
+		LoadFile(&file, []string{def, "", "data/"}, "", func(filename string) error {
+			txt, err := LoadText(filename)
+			if err != nil {
+				return err
+			}
+			ret[idx] = txt
+			return nil
+		})
+	}
+	if len(ret) == 0 {
+		return nil
+	}
+	return ret
+}
+
 type CharGlobalInfo struct {
 	def                     string
 	name                    string
@@ -2977,6 +3032,7 @@ type CharGlobalInfo struct {
 	callFuncs               map[string]BytecodeFunction
 	hitPauseToggleFlagCount int32
 	quotes                  [MaxQuotes]string
+	movelists               map[int]string
 	portraitscale           float32
 	constants               map[string]float32
 	remapPreset             map[string]RemapPreset
@@ -3002,6 +3058,7 @@ func newCharGlobalInfo() CharGlobalInfo {
 		palInfo:       make(map[int]PalInfo, sys.cfg.Config.PaletteMax),
 		fnt:           make(map[int]*Fnt),
 		quotes:        [MaxQuotes]string{},
+		movelists:     make(map[int]string),
 		remapPreset:   make(map[string]RemapPreset),
 		portraitscale: 1,
 	}
@@ -3232,6 +3289,7 @@ type Char struct {
 	ownpal               bool
 	ownProjectile        bool
 	winquote             int32
+	movelist             int32
 	memberNo             int
 	selectNo             int
 	inheritJuggle        int32
@@ -3329,6 +3387,7 @@ func (c *Char) init(n int, idx int) {
 		facing:        1,
 		minus:         3,
 		winquote:      -1,
+		movelist:      0,
 		clsnBaseScale: [2]float32{1, 1},
 		clsnScaleMul:  [2]float32{1, 1},
 		clsnScale:     [2]float32{1, 1},
@@ -3454,6 +3513,7 @@ func (c *Char) prepareNextRound() {
 	//c.updateSizeBox()
 	c.oldPos, c.interPos = c.pos, c.pos
 	if c.helperIndex == 0 {
+		c.movelist = 0
 		if sys.roundsExisted[c.playerNo&1] > 0 { // TODO: Why do we need this branch?
 			c.palfx.clear()
 		} else {
@@ -3546,6 +3606,7 @@ func (c *Char) resetModifyPlayer() {
 	c.powerMax = gi.data.power
 	c.dizzyPointsMax = gi.data.dizzypoints
 	c.guardPointsMax = gi.data.guardpoints
+	c.movelist = 0
 	// c.teamside already assigned by loadCharacter()
 }
 
@@ -3578,6 +3639,7 @@ func (c *Char) load(def string) error {
 
 	lines, lnidx := SplitAndTrim(str, "\n"), 0
 	cns, sprite, anim, sound := "", "", "", ""
+	var movelistFiles map[int]string
 	info, files, keymap, mapArray := true, true, true, true
 	lanInfo, lanFiles, lanKeymap, lanMapArray := true, true, true, true
 	shaders := true
@@ -3676,6 +3738,7 @@ func (c *Char) load(def string) error {
 				sprite = decodeShiftJIS(is["sprite"])
 				anim = decodeShiftJIS(is["anim"])
 				sound = decodeShiftJIS(is["sound"])
+				movelistFiles = readMovelistFiles(is)
 				for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
 					pal := gi.palInfo[i]
 					pal.filename = decodeShiftJIS(is[fmt.Sprintf("pal%v", i+1)])
@@ -3763,6 +3826,9 @@ func (c *Char) load(def string) error {
 
 	// Reset maps in order to upload the freshly loaded defaults
 	c.mapReset(nil)
+
+	// Load movelists from the loaded character DEF
+	gi.movelists = loadMovelistFiles(def, movelistFiles)
 
 	// Set constants to defaults
 	c.initConstants()
