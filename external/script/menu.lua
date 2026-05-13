@@ -762,7 +762,6 @@ function menu.f_commandlistParse()
 				pn = pn + (member - 1) * 2
 			end
 			if player(pn) and aiLevel() == 0 then
-				local ref = getSelectNo()
 				local movelist = getMovelist()
 				if sel.movelistText ~= movelist then
 					sel.movelistText = movelist
@@ -809,7 +808,7 @@ function menu.f_commandlistParse()
 				end
 				table.insert(menu.t_movelists, {
 					pn = pn,
-					name = start.f_getCharData(ref).name,
+					name = name(),
 					tbl = sel,
 					commandlist = sel.commandlist,
 				})

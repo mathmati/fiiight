@@ -11657,8 +11657,9 @@ func (sc changeMovelist) Run(c *Char, _ []int32) bool {
 		}
 		return true
 	})
-	if v < 0 {
-		v = 0
+	if _, ok := crun.gi().movelists[int(v)]; !ok {
+		sys.appendToConsole(c.warn() + fmt.Sprintf("changed to invalid movelist: %d", v))
+		return false
 	}
 	crun.movelist = v
 	return false
