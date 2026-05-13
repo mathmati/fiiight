@@ -1763,8 +1763,10 @@ function start.f_selectReset(hardReset, preserveProgress)
 	if not preserveProgress then
 		resetGameStats()
 		setMatchNo(1)
-		setWinCount(1, 0)
-		setWinCount(2, 0)
+		if main.elimination then
+			setWinCount(1, 0)
+			setWinCount(2, 0)
+		end
 		setConsecutiveWins(1, 0)
 		setConsecutiveWins(2, 0)
 	end
