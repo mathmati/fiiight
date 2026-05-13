@@ -4477,6 +4477,21 @@ func (c *StateCompiler) assertInput(is IniSection, sc *StateControllerBase) (Sta
 	return *ret, err
 }
 
+func (c *StateCompiler) changeMovelist(is IniSection, sc *StateControllerBase) (StateController, error) {
+	ret, err := (*changeMovelist)(sc), c.stateSec(is, func() error {
+		if err := c.paramValue(is, sc, "redirectid",
+			changeMovelist_redirectid, VT_Int, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "value",
+			changeMovelist_value, VT_Int, 1, false); err != nil {
+			return err
+		}
+		return nil
+	})
+	return *ret, err
+}
+
 func (c *StateCompiler) dialogue(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*dialogue)(sc), c.stateSec(is, func() error {
 		if err := c.paramValue(is, sc, "redirectid",
@@ -5393,21 +5408,6 @@ func (c *StateCompiler) redLifeSet(is IniSection, sc *StateControllerBase) (Stat
 			return err
 		}
 		return c.paramValue(is, sc, "value", redLifeSet_value, VT_Int, 1, true)
-	})
-	return *ret, err
-}
-
-func (c *StateCompiler) remapMovelist(is IniSection, sc *StateControllerBase) (StateController, error) {
-	ret, err := (*remapMovelist)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			remapMovelist_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "value",
-			remapMovelist_value, VT_Int, 1, false); err != nil {
-			return err
-		}
-		return nil
 	})
 	return *ret, err
 }

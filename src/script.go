@@ -3844,7 +3844,7 @@ func systemScriptInit(l *lua.LState) {
 		/*[redirectable] Get the character's movelist text.
 		@function getMovelist
 		@treturn string movelist Movelist text.
-		function getCharMovelist() end*/
+		function getMovelist() end*/
 		idx := int(sys.debugWC.movelist)
 		if idx < 0 {
 			idx = 0

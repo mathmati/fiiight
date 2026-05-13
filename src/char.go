@@ -2949,46 +2949,17 @@ type PalInfo struct {
 	selectable bool
 }
 
-func readMovelistFiles(is IniSection) map[int]string {
+func loadMovelists(def string, is IniSection) map[int]string {
 	ret := make(map[int]string)
-	if v := decodeShiftJIS(is["movelist"]); v != "" {
-		ret[0] = v
-	}
-	if v := decodeShiftJIS(is["movelist0"]); v != "" {
-		if _, ok := ret[0]; !ok {
-			ret[0] = v
+	load := func(idx int, file string, overwrite bool) {
+		if file == "" || idx < 0 {
+			return
 		}
-	}
-	for k, v := range is {
-		kl := strings.ToLower(k)
-		if kl == "movelist" || kl == "movelist0" || !strings.HasPrefix(kl, "movelist") {
-			continue
+		if !overwrite {
+			if _, ok := ret[idx]; ok {
+				return
+			}
 		}
-		idx := kl[len("movelist"):]
-		if idx == "" || !IsInt(idx) {
-			continue
-		}
-		n := int(Atoi(idx))
-		if n < 0 {
-			continue
-		}
-		if ml := decodeShiftJIS(v); ml != "" {
-			ret[n] = ml
-		}
-	}
-	if len(ret) == 0 {
-		return nil
-	}
-	return ret
-}
-
-func loadMovelistFiles(def string, files map[int]string) map[int]string {
-	if len(files) == 0 {
-		return nil
-	}
-	ret := make(map[int]string, len(files))
-	for idx, file := range files {
-		idx, file := idx, file
 		LoadFile(&file, []string{def, "", "data/"}, "", func(filename string) error {
 			txt, err := LoadText(filename)
 			if err != nil {
@@ -2997,6 +2968,18 @@ func loadMovelistFiles(def string, files map[int]string) map[int]string {
 			ret[idx] = txt
 			return nil
 		})
+	}
+	load(0, decodeShiftJIS(is["movelist"]), true)
+	load(0, decodeShiftJIS(is["movelist0"]), false)
+	for k, v := range is {
+		kl := strings.ToLower(k)
+		if kl == "movelist" || kl == "movelist0" || !strings.HasPrefix(kl, "movelist") {
+			continue
+		}
+		idx := kl[len("movelist"):]
+		if idx != "" && IsInt(idx) {
+			load(int(Atoi(idx)), decodeShiftJIS(v), true)
+		}
 	}
 	if len(ret) == 0 {
 		return nil
@@ -3639,7 +3622,6 @@ func (c *Char) load(def string) error {
 
 	lines, lnidx := SplitAndTrim(str, "\n"), 0
 	cns, sprite, anim, sound := "", "", "", ""
-	var movelistFiles map[int]string
 	info, files, keymap, mapArray := true, true, true, true
 	lanInfo, lanFiles, lanKeymap, lanMapArray := true, true, true, true
 	shaders := true
@@ -3738,7 +3720,7 @@ func (c *Char) load(def string) error {
 				sprite = decodeShiftJIS(is["sprite"])
 				anim = decodeShiftJIS(is["anim"])
 				sound = decodeShiftJIS(is["sound"])
-				movelistFiles = readMovelistFiles(is)
+				gi.movelists = loadMovelists(def, is)
 				for i := 0; i < sys.cfg.Config.PaletteMax; i++ {
 					pal := gi.palInfo[i]
 					pal.filename = decodeShiftJIS(is[fmt.Sprintf("pal%v", i+1)])
@@ -3826,9 +3808,6 @@ func (c *Char) load(def string) error {
 
 	// Reset maps in order to upload the freshly loaded defaults
 	c.mapReset(nil)
-
-	// Load movelists from the loaded character DEF
-	gi.movelists = loadMovelistFiles(def, movelistFiles)
 
 	// Set constants to defaults
 	c.initConstants()
