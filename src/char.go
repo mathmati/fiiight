@@ -3496,7 +3496,6 @@ func (c *Char) prepareNextRound() {
 	//c.updateSizeBox()
 	c.oldPos, c.interPos = c.pos, c.pos
 	if c.helperIndex == 0 {
-		c.movelist = 0
 		if sys.roundsExisted[c.playerNo&1] > 0 { // TODO: Why do we need this branch?
 			c.palfx.clear()
 		} else {
