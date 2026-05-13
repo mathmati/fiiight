@@ -5317,7 +5317,8 @@ func (fs *FightScreen) visible() bool {
 		!sys.postMatchFlg &&
 		!sys.lifebarHide &&
 		!sys.dialogueBarsFlg &&
-		!(sys.motif.me.active && sys.motif.PauseMenu["pause_menu"].HideBars)
+		!(sys.motif.me.active && sys.motif.PauseMenu["pause_menu"].HideBars &&
+			(!sys.motif.me.closeRequested || sys.paused))
 }
 
 func (fs *FightScreen) draw(layerno int16) {

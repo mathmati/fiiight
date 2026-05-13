@@ -3239,9 +3239,6 @@ func (me *MotifMenu) reset(m *Motif) {
 	me.initialized = false
 	me.endTimer = -1
 	me.closeRequested = false
-	if !m.di.active {
-		sys.leaveMotifAspect()
-	}
 	if err := sys.luaLState.DoString("menuReset()"); err != nil {
 		sys.luaLState.RaiseError("Error executing Lua code: %v\n", err.Error())
 	}
@@ -3284,6 +3281,9 @@ func (me *MotifMenu) requestClose(m *Motif) {
 		return
 	}
 	me.closeRequested = true
+	if !m.di.active {
+		sys.leaveMotifAspect()
+	}
 	if pm := me.pauseMenuBase(m); pm != nil {
 		startFadeOut(pm.FadeOut.FadeData, m.fadeOut, false, m.fadePolicy)
 	}
