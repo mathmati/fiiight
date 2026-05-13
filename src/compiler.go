@@ -6789,6 +6789,9 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 			// Flag if following triggers can never be true because of triggerall = 0
 			allTerminated := false
 
+			// Missing trigger number only needs to be printed once
+			warnedMissingTrigger := false
+
 			// Parse each line of the sctrl to get triggers and settings
 			is, err := c.parseSection(func(name, data string) error {
 				switch name {
@@ -6829,22 +6832,39 @@ func (c *StateCompiler) stateCompileCNS(states map[int32]StateBytecode, filename
 						// Convert to zero-based index
 						tidx := int(tn - 1)
 
-						// Parse trigger condition into a bytecode expression
-						be, err := c.fullExpression(&data, VT_Bool)
-						if err != nil {
-							// Skip this trigger if an earlier trigger number doesn't exist
-							// e.g. skip trigger3 if trigger2 was not found
-							if sys.ignoreMostErrors && !isAll {
-								broken := false
+						// Check if a previous trigger is missing
+						// e.g. found trigger3 but not trigger2
+						var missingIdx = -1
+						if !isAll && tn > 1 {
+							if tidx > len(trexist) {
+								missingIdx = len(trexist)
+							} else {
 								for i := 0; i < tidx; i++ {
 									if trexist[i] == 0 {
-										broken = true
+										missingIdx = i
 										break
 									}
 								}
-								if broken {
-									break
+							}
+							if missingIdx >= 0 {
+								msg := fmt.Sprintf("trigger%d declared without trigger%d", tn, missingIdx+1)
+								if sys.ignoreMostErrors {
+									if !warnedMissingTrigger {
+										sys.appendToConsole(c.charWarn() + msg)
+										warnedMissingTrigger = true
+									}
+								} else {
+									return Error(msg)
 								}
+							}
+						}
+
+						// Parse trigger conditions into a bytecode expression
+						be, err := c.fullExpression(&data, VT_Bool)
+						if err != nil {
+							// Ignore the error if it happened in a trigger that is being skipped anyway
+							if missingIdx >= 0 && sys.ignoreMostErrors {
+								break
 							}
 							return err
 						}
