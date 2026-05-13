@@ -953,8 +953,8 @@ func (c *StateCompiler) explodSub(is IniSection, sc *StateControllerBase) error 
 		explod_removeonchangestate, VT_Bool, 1, false); err != nil {
 		return err
 	}
-	if err := c.paramValue(is, sc, "hideonpausemenu",
-		explod_hideonpausemenu, VT_Bool, 1, false); err != nil {
+	if err := c.paramValue(is, sc, "hidewithbars",
+		explod_hidewithbars, VT_Bool, 1, false); err != nil {
 		return err
 	}
 	if err := c.paramTrans(is, sc, "", explod_trans); err != nil {
