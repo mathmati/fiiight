@@ -5880,6 +5880,24 @@ func (c *StateCompiler) parseSection(sctrl func(name, data string) error) (IniSe
 
 	for ; c.i < len(c.lines); c.i++ {
 		line := strings.TrimSpace(strings.SplitN(c.lines[c.i], ";", 2)[0])
+
+		// Check for open [State] headers
+		// They end up as an invalid parameter for the previous state controller and cause both blocks to be merged
+		if !strings.Contains(line, "=") {
+			lower := strings.ToLower(line)
+			if strings.Contains(lower, "state") {
+				// We check if at least one bracket exists to avoid false positives like "p2stateno"
+				if strings.Contains(line, "[") != strings.Contains(line, "]") {
+					msg := fmt.Sprintf("State header not closed")
+					if sys.ignoreMostErrors {
+						sys.appendToConsole(c.charWarn() + msg)
+					} else {
+						return nil, Error(msg)
+					}
+				}
+			}
+		}
+
 		if len(line) > 0 && line[0] == '[' {
 			c.i--
 			break
