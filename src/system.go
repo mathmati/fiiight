@@ -5132,7 +5132,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		}
 
 		// Compile character states
-		if sys.cgi[pn].states, l.err = newStateCompiler().Compile(p.playerNo, cdef, p.gi().constants); l.err != nil {
+		if sys.cgi[pn].states, l.err = newCharCompiler().Compile(p.playerNo, cdef, p.gi().constants); l.err != nil {
 			sys.chars[pn] = nil
 			if attached {
 				tstr = fmt.Sprintf("WARNING: Failed to compile new attached char states: %v", cdef)
