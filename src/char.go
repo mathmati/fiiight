@@ -3062,10 +3062,10 @@ type StateState struct {
 	storeMoveType                bool
 	physics                      StateType
 	ps                           []int32
-	hitPauseExecutionToggleFlags [MaxPlayerNo][]bool // Flags if an sctrl runs during a hit pause on the current tick.
 	no, prevno                   int32
 	time                         int32
 	sb                           StateBytecode
+	//hitPauseExecutionToggleFlags [MaxPlayerNo][]bool // Flags if an sctrl runs during a hit pause on the current tick.
 }
 
 func (ss *StateState) changeStateType(t StateType) {
@@ -3083,6 +3083,8 @@ func (ss *StateState) clear() {
 	ss.changeMoveType(MT_I)
 	ss.physics = ST_N
 	ss.ps = nil
+
+	/*
 	// Iterate over each player's hitPauseExecutionToggleFlags
 	for i, v := range ss.hitPauseExecutionToggleFlags {
 		// Ensure the slice has enough capacity based on hitPauseToggleFlagCount
@@ -3097,11 +3099,14 @@ func (ss *StateState) clear() {
 	}
 	// Further clear the hitPauseExecutionToggleFlags
 	ss.clearHitPauseExecutionToggleFlags()
+	*/
+
 	ss.no, ss.prevno = 0, 0
 	ss.time = 0
 	ss.sb = StateBytecode{}
 }
 
+/*
 // Resets all hitPauseExecutionToggleFlags to false.
 // This ensures that all state controllers are set to execute on the next eligible tick.
 func (ss *StateState) clearHitPauseExecutionToggleFlags() {
@@ -3111,6 +3116,7 @@ func (ss *StateState) clearHitPauseExecutionToggleFlags() {
 		}
 	}
 }
+*/
 
 type HMF int32
 
@@ -12149,9 +12155,9 @@ func (c *Char) tick() {
 		// This flag prevents prevMoveType from being changed twice
 		c.ss.storeMoveType = true
 		c.ss.changeMoveType(MT_H)
-		if c.hitPauseTime > 0 {
-			c.ss.clearHitPauseExecutionToggleFlags()
-		}
+		//if c.hitPauseTime > 0 {
+		//	c.ss.clearHitPauseExecutionToggleFlags()
+		//}
 		c.hitPauseTime = 0
 		//c.targetDrop(-1, false) // GitHub #1148
 		pn := c.playerNo
@@ -12228,7 +12234,7 @@ func (c *Char) tick() {
 		if c.hitPauseTime > 0 {
 			c.hitPauseTime--
 			if c.hitPauseTime == 0 {
-				c.ss.clearHitPauseExecutionToggleFlags()
+				//c.ss.clearHitPauseExecutionToggleFlags()
 				//Having a hitStateChangeIdx means that ChangeState was performed during the hitpause
 				if c.hitStateChangeIdx != -1 {
 					// For Mugen compatibility, the persistent is reset when the hitpause ends during ChangeState

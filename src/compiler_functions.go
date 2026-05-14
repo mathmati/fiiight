@@ -463,7 +463,7 @@ func (c *CharCompiler) changeStateSub(is IniSection,
 		// Assign a unique index to ignorehitpause for this controller
 		c.block.ignorehitpause = sys.cgi[c.playerNo].hitPauseToggleFlagCount
 		// Increment the count of hitPauseExecutionToggleFlags
-		sys.cgi[c.playerNo].hitPauseToggleFlagCount++
+		//sys.cgi[c.playerNo].hitPauseToggleFlagCount++
 	}
 	return nil
 }
