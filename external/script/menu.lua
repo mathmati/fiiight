@@ -808,7 +808,7 @@ function menu.f_commandlistParse()
 				end
 				table.insert(menu.t_movelists, {
 					pn = pn,
-					name = name(),
+					name = displayName(),
 					tbl = sel,
 					commandlist = sel.commandlist,
 				})
