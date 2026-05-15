@@ -478,7 +478,7 @@ jobs:
 
       - name: Upload release artifacts
         if: ${{ steps.artifacts.outputs.artifact != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.cfg.runner_os }}
           path: release-files/*
