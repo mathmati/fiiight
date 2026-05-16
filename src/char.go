@@ -3055,16 +3055,16 @@ func newCharGlobalInfo() CharGlobalInfo {
 
 // StateState contains the state variables like stateNo, prevStateNo, time, stateType, moveType, and physics of the current state.
 type StateState struct {
-	stateType                    StateType
-	prevStateType                StateType
-	moveType                     MoveType
-	prevMoveType                 MoveType
-	storeMoveType                bool
-	physics                      StateType
-	ps                           []int32
-	no, prevno                   int32
-	time                         int32
-	sb                           StateBytecode
+	stateType     StateType
+	prevStateType StateType
+	moveType      MoveType
+	prevMoveType  MoveType
+	storeMoveType bool
+	physics       StateType
+	ps            []int32
+	no, prevno    int32
+	time          int32
+	sb            StateBytecode
 	//hitPauseExecutionToggleFlags [MaxPlayerNo][]bool // Flags if an sctrl runs during a hit pause on the current tick.
 }
 
@@ -3085,20 +3085,20 @@ func (ss *StateState) clear() {
 	ss.ps = nil
 
 	/*
-	// Iterate over each player's hitPauseExecutionToggleFlags
-	for i, v := range ss.hitPauseExecutionToggleFlags {
-		// Ensure the slice has enough capacity based on hitPauseToggleFlagCount
-		if len(v) < int(sys.cgi[i].hitPauseToggleFlagCount) {
-			ss.hitPauseExecutionToggleFlags[i] = make([]bool, sys.cgi[i].hitPauseToggleFlagCount)
-		} else {
-			// Reset all flags to false
-			for i := range v {
-				v[i] = false
+		// Iterate over each player's hitPauseExecutionToggleFlags
+		for i, v := range ss.hitPauseExecutionToggleFlags {
+			// Ensure the slice has enough capacity based on hitPauseToggleFlagCount
+			if len(v) < int(sys.cgi[i].hitPauseToggleFlagCount) {
+				ss.hitPauseExecutionToggleFlags[i] = make([]bool, sys.cgi[i].hitPauseToggleFlagCount)
+			} else {
+				// Reset all flags to false
+				for i := range v {
+					v[i] = false
+				}
 			}
 		}
-	}
-	// Further clear the hitPauseExecutionToggleFlags
-	ss.clearHitPauseExecutionToggleFlags()
+		// Further clear the hitPauseExecutionToggleFlags
+		ss.clearHitPauseExecutionToggleFlags()
 	*/
 
 	ss.no, ss.prevno = 0, 0

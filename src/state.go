@@ -13,10 +13,10 @@ const MaxSaveStates = 8
 
 type GameState struct {
 	// Identifiers
-	bytes []byte
-	id    int
-	saved bool
-	frame int32
+	bytes              []byte
+	id                 int
+	saved              bool
+	frame              int32
 	isSpeculativeFrame bool
 
 	SystemStateVars
@@ -490,7 +490,7 @@ func (cs Char) String() string {
 		cs.life, cs.redLife, cs.dizzyPoints, cs.guardPoints, cs.power,
 		cs.localcoord, cs.localscl,
 		cs.pos, cs.vel, cs.facing,
-		cs.id, cs.helperId, cs.parentId, 
+		cs.id, cs.helperId, cs.parentId,
 		cs.ss.no, cs.ss.time, cs.animNo, // Move/Statetype would require interpreting the flags so they're not worth it
 		cs.mctime, cs.targets,
 		cs.preserve,

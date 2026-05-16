@@ -185,8 +185,8 @@ func (c *Camera) Init() {
 	c.Reset()
 	c.View = Fighting_View
 	c.Scale = c.startzoom
-	c.Pos[0] = float32(c.startx)*c.localscl
-	c.Pos[1] = float32(c.starty)*c.localscl
+	c.Pos[0] = float32(c.startx) * c.localscl
+	c.Pos[1] = float32(c.starty) * c.localscl
 	c.ywithoutbound = c.Pos[1]
 	c.zoomindelaytime = c.zoomindelay
 
@@ -195,7 +195,7 @@ func (c *Camera) Init() {
 
 	// Set screen position immediately so that char triggers and postype will be correct in the first frame of the round
 	// https://github.com/ikemen-engine/Ikemen-GO/issues/3600
-	c.setScreenPos(c.Pos[0], c.Pos[1], c.Scale / c.BaseScale())
+	c.setScreenPos(c.Pos[0], c.Pos[1], c.Scale/c.BaseScale())
 }
 
 func (c *Camera) ResetTracking() {

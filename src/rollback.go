@@ -428,7 +428,7 @@ func (g *RollbackLogger) saveStateLogs() {
 	// Header indicating the number of frames captured
 	fullLog := fmt.Sprintf("Writing save state data from the last %d frames.\n\n", len(g.logs))
 	// Collect all the logs in the buffer
-	 for i := range g.logs {
+	for i := range g.logs {
 		fullLog += g.logs[i]
 	}
 	// Save file
