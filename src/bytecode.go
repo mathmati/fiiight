@@ -4339,7 +4339,12 @@ func (be BytecodeExp) run_ex3(c *Char, i *int, oc *Char) {
 		// Check for valid sprite
 		var spr *Sprite
 		if c.anim != nil {
-			spr = c.anim.spr
+			// TODO: This is a patch to fix a 1-frame delay in SpriteVar
+			// In reality our animation stepping sequence has too many hacks and may need an overhaul
+			// We make a copy to avoid the risk of the update affecting how an animation plays out, just in case
+			acopy := *c.anim
+			acopy.UpdateSprite()
+			spr = acopy.spr
 		}
 		// Handle output
 		if spr != nil {
@@ -5547,6 +5552,7 @@ const (
 	helper_standby
 	helper_ownclsnscale
 	helper_ownprojectile
+	helper_map
 	helper_redirectid
 )
 
@@ -5560,8 +5566,8 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 	pt := PT_P1
 	var f, st int32 = 1, 0
 	var extmap bool
-	var x, y, z float32 = 0, 0, 0
-	rp := [...]int32{-1, 0}
+	var pos [3]float32
+	rp := [2]int32{-1, 0}
 
 	h := crun.newHelper()
 	if h == nil {
@@ -5629,11 +5635,11 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 		case helper_id:
 			h.helperId = exp[0].evalI(c)
 		case helper_pos:
-			x = exp[0].evalF(c) * redirscale
+			pos[0] = exp[0].evalF(c) * redirscale
 			if len(exp) > 1 {
-				y = exp[1].evalF(c) * redirscale
+				pos[1] = exp[1].evalF(c) * redirscale
 				if len(exp) > 2 {
-					z = exp[2].evalF(c) * redirscale
+					pos[2] = exp[2].evalF(c) * redirscale
 				}
 			}
 		case helper_facing:
@@ -5649,6 +5655,11 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 			}
 		case helper_extendsmap:
 			extmap = exp[0].evalB(c)
+			if extmap {
+				for key, value := range crun.mapArray {
+					h.mapArray[key] = value
+				}
+			}
 		case helper_inheritjuggle:
 			h.inheritJuggle = exp[0].evalI(c)
 		case helper_inheritchannels:
@@ -5669,6 +5680,9 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 			}
 		case helper_ownprojectile:
 			h.ownProjectile = exp[0].evalB(c)
+		case helper_map:
+			mapKey := exp[0].evalS()
+			h.mapArray[mapKey] = exp[1].evalF(c)
 		}
 		return true
 	})
@@ -5680,7 +5694,7 @@ func (sc helper) Run(c *Char, _ []int32) bool {
 		h.localscl = crun.localscl
 		h.localcoord = crun.localcoord
 	}
-	crun.helperInit(h, st, pt, x, y, z, f, rp, extmap)
+	crun.helperInit(h, st, pt, pos, f, rp)
 	return false
 }
 

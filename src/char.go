@@ -2499,8 +2499,8 @@ func (p *Projectile) update() {
 		if p.status == ProjActive {
 			if p.removetime == 0 ||
 				p.removetime <= -2 && (p.anim == nil || p.anim.loopend) ||
-				p.pos[0] < (sys.xmin-sys.screenleft)/p.localscl-float32(p.edgebound) ||
-				p.pos[0] > (sys.xmax+sys.screenright)/p.localscl+float32(p.edgebound) ||
+				p.pos[0] < (sys.xmin-sys.screenleft())/p.localscl-float32(p.edgebound) ||
+				p.pos[0] > (sys.xmax+sys.screenright())/p.localscl+float32(p.edgebound) ||
 				p.velocity[0]*p.facing < 0 && p.pos[0] < sys.cam.XMin/p.localscl-float32(p.stagebound) ||
 				p.velocity[0]*p.facing > 0 && p.pos[0] > sys.cam.XMax/p.localscl+float32(p.stagebound) ||
 				p.velocity[1] > 0 && p.pos[1] > float32(p.heightbound[1]) ||
@@ -3062,10 +3062,10 @@ type StateState struct {
 	storeMoveType                bool
 	physics                      StateType
 	ps                           []int32
-	hitPauseExecutionToggleFlags [MaxPlayerNo][]bool // Flags if an sctrl runs during a hit pause on the current tick.
 	no, prevno                   int32
 	time                         int32
 	sb                           StateBytecode
+	//hitPauseExecutionToggleFlags [MaxPlayerNo][]bool // Flags if an sctrl runs during a hit pause on the current tick.
 }
 
 func (ss *StateState) changeStateType(t StateType) {
@@ -3083,6 +3083,8 @@ func (ss *StateState) clear() {
 	ss.changeMoveType(MT_I)
 	ss.physics = ST_N
 	ss.ps = nil
+
+	/*
 	// Iterate over each player's hitPauseExecutionToggleFlags
 	for i, v := range ss.hitPauseExecutionToggleFlags {
 		// Ensure the slice has enough capacity based on hitPauseToggleFlagCount
@@ -3097,11 +3099,14 @@ func (ss *StateState) clear() {
 	}
 	// Further clear the hitPauseExecutionToggleFlags
 	ss.clearHitPauseExecutionToggleFlags()
+	*/
+
 	ss.no, ss.prevno = 0, 0
 	ss.time = 0
 	ss.sb = StateBytecode{}
 }
 
+/*
 // Resets all hitPauseExecutionToggleFlags to false.
 // This ensures that all state controllers are set to execute on the next eligible tick.
 func (ss *StateState) clearHitPauseExecutionToggleFlags() {
@@ -3111,6 +3116,7 @@ func (ss *StateState) clearHitPauseExecutionToggleFlags() {
 		}
 	}
 }
+*/
 
 type HMF int32
 
@@ -5977,11 +5983,11 @@ func (c *Char) selfStatenoExist(stateno BytecodeValue) BytecodeValue {
 func (c *Char) stageFrontEdgeDist() float32 {
 	corner := float32(0)
 	if c.facing < 0 {
-		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft/c.localscl,
+		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft()/c.localscl,
 			sys.stage.leftbound*sys.stage.localscl/c.localscl)
 		return c.pos[0] - corner
 	} else {
-		corner = Min(sys.cam.XMax/c.localscl-sys.screenright/c.localscl,
+		corner = Min(sys.cam.XMax/c.localscl-sys.screenright()/c.localscl,
 			sys.stage.rightbound*sys.stage.localscl/c.localscl)
 		return corner - c.pos[0]
 	}
@@ -5990,11 +5996,11 @@ func (c *Char) stageFrontEdgeDist() float32 {
 func (c *Char) stageBackEdgeDist() float32 {
 	corner := float32(0)
 	if c.facing < 0 {
-		corner = Min(sys.cam.XMax/c.localscl-sys.screenright/c.localscl,
+		corner = Min(sys.cam.XMax/c.localscl-sys.screenright()/c.localscl,
 			sys.stage.rightbound*sys.stage.localscl/c.localscl)
 		return corner - c.pos[0]
 	} else {
-		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft/c.localscl,
+		corner = Max(sys.cam.XMin/c.localscl+sys.screenleft()/c.localscl,
 			sys.stage.leftbound*sys.stage.localscl/c.localscl)
 		return c.pos[0] - corner
 	}
@@ -6720,8 +6726,8 @@ func (c *Char) newHelper() (h *Char) {
 }
 
 // Init helper after reading the bytecode parameters
-func (c *Char) helperInit(h *Char, st int32, pt PosType, x, y, z float32, facing int32, rp [2]int32, extmap bool) {
-	p := c.helperPos(pt, [3]float32{x, y, z}, facing, &h.facing, h.localscl, false)
+func (c *Char) helperInit(h *Char, st int32, pt PosType, pos [3]float32, facing int32, rp [2]int32) {
+	p := c.helperPos(pt, pos, facing, &h.facing, h.localscl, false)
 	h.setPosX(p[0], true)
 	h.setPosY(p[1], true)
 	h.setPosZ(p[2], true)
@@ -6738,13 +6744,6 @@ func (c *Char) helperInit(h *Char, st int32, pt PosType, x, y, z float32, facing
 		c.forceRemapPal(h.palfx, rp)
 	} else {
 		h.palfx = c.getPalfx()
-	}
-
-	// Copy parent maps
-	if extmap {
-		for key, value := range c.mapArray {
-			h.mapArray[key] = value
-		}
 	}
 
 	// Mugen 1.1 behavior if invertblend param is omitted(Only if char mugenversion = 1.1)
@@ -9728,7 +9727,7 @@ func (c *Char) xScreenBound() {
 	x := c.pos[0]
 	before := x
 
-	if !sys.cam.roundstart && c.trackableByCamera() && c.csf(CSF_screenbound) && !c.scf(SCF_standby) {
+	if c.trackableByCamera() && c.csf(CSF_screenbound) && !c.scf(SCF_standby) {
 		min, max := c.edgeWidth[0], -c.edgeWidth[1]
 		if c.facing > 0 {
 			min, max = -max, -min
@@ -12156,9 +12155,9 @@ func (c *Char) tick() {
 		// This flag prevents prevMoveType from being changed twice
 		c.ss.storeMoveType = true
 		c.ss.changeMoveType(MT_H)
-		if c.hitPauseTime > 0 {
-			c.ss.clearHitPauseExecutionToggleFlags()
-		}
+		//if c.hitPauseTime > 0 {
+		//	c.ss.clearHitPauseExecutionToggleFlags()
+		//}
 		c.hitPauseTime = 0
 		//c.targetDrop(-1, false) // GitHub #1148
 		pn := c.playerNo
@@ -12235,7 +12234,7 @@ func (c *Char) tick() {
 		if c.hitPauseTime > 0 {
 			c.hitPauseTime--
 			if c.hitPauseTime == 0 {
-				c.ss.clearHitPauseExecutionToggleFlags()
+				//c.ss.clearHitPauseExecutionToggleFlags()
 				//Having a hitStateChangeIdx means that ChangeState was performed during the hitpause
 				if c.hitStateChangeIdx != -1 {
 					// For Mugen compatibility, the persistent is reset when the hitpause ends during ChangeState
