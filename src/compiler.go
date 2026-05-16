@@ -6806,7 +6806,9 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 
 			// Flag if following triggers can never be true because of triggerall = 0
 			// In which case the following triggers will still be parsed but not stored
-			allTerminated := false
+			// Update: This was excessive optimization. It complicated the code and created false positives in error logging
+			// Just let them be compiled as no-ops
+			//allTerminated := false
 
 			// Missing trigger number only needs to be printed once
 			warnedMissingTrigger := false
@@ -6854,7 +6856,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 						// Check if a previous trigger is missing
 						// e.g. found trigger3 but not trigger2
 						var missingIdx = -1
-						if !isAll && !allTerminated && tn > 1 {
+						if !isAll && tn > 1 {
 							if tidx > len(trexist) {
 								missingIdx = len(trexist)
 							} else {
@@ -6890,14 +6892,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 
 						// Handle triggerall
 						if isAll {
-							// If triggerall = 0 is encountered, flag it
-							if len(be) == 2 && be[0] == OC_int8 {
-								if be[1] == 0 {
-									allTerminated = true
-								}
-							} else if !allTerminated {
-								triggerall = append(triggerall, be)
-							}
+							triggerall = append(triggerall, be)
 							break
 						}
 
@@ -6918,7 +6913,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 							} else if trexist[tidx] == 0 {
 								trexist[tidx] = 1
 							}
-						} else if !allTerminated && trexist[tidx] >= 0 {
+						} else if trexist[tidx] >= 0 {
 							trigger[tidx] = append(trigger[tidx], be)
 							trexist[tidx] = 1
 						}
@@ -6929,6 +6924,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			if err != nil {
 				return errmes(err)
 			}
+
 			c.block.persistentIndex = int32(sctrl_index_counter)
 			sctrl_index_counter++
 
@@ -6939,11 +6935,14 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 				sbc.ctrlsps = make([]int32, newSize)
 				copy(sbc.ctrlsps, oldCtrlsps)
 			}
+
 			// Check that the sctrl has a valid type parameter
 			if scf == nil {
 				return errmes(Error("State controller type not specified"))
 			}
-			if len(trexist) == 0 || (!allTerminated && trexist[0] == 0) {
+
+			// trigger1 is mandatory
+			if len(trexist) == 0 || trexist[0] == 0 {
 				return errmes(Error("Missing trigger1"))
 			}
 
@@ -6954,53 +6953,49 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 				texp.append(OC_jz8, 0)
 				texp.append(OC_pop)
 			}
-			if allTerminated {
-				if len(texp) > 0 {
-					texp.appendValue(BytecodeBool(false))
+
+			// Loop over triggers
+			for i, tr := range trigger {
+				if trexist[i] == 0 {
+					break
 				}
-			} else {
-				for i, tr := range trigger {
-					if trexist[i] == 0 {
+				var te BytecodeExp
+				if trexist[i] < 0 {
+					te.append(OC_pop)
+					te.appendValue(BytecodeBool(false))
+				}
+				oldlen := len(te)
+				for j := len(tr) - 1; j >= 0; j-- {
+					tmp := tr[j]
+					if j < len(tr)-1 {
+						if len(te) > int(math.MaxUint8-1) {
+							tmp.appendI32Op(OC_jz, int32(len(te)+1))
+						} else {
+							tmp.append(OC_jz8, OpCode(len(te)+1))
+						}
+						tmp.append(OC_pop)
+					}
+					te = append(tmp, te...)
+				}
+				if len(te) == oldlen {
+					te = nil
+				}
+				if len(te) == 0 {
+					if trexist[i] > 0 {
+						if len(texp) > 0 {
+							texp.appendValue(BytecodeBool(true))
+							texp.append(OC_jmp8, 0)
+						}
 						break
 					}
-					var te BytecodeExp
-					if trexist[i] < 0 {
-						te.append(OC_pop)
-						te.appendValue(BytecodeBool(false))
+					if len(texp) > 0 && (i == len(trigger)-1 || trexist[i+1] == 0) {
+						texp.appendValue(BytecodeBool(false))
 					}
-					oldlen := len(te)
-					for j := len(tr) - 1; j >= 0; j-- {
-						tmp := tr[j]
-						if j < len(tr)-1 {
-							if len(te) > int(math.MaxUint8-1) {
-								tmp.appendI32Op(OC_jz, int32(len(te)+1))
-							} else {
-								tmp.append(OC_jz8, OpCode(len(te)+1))
-							}
-							tmp.append(OC_pop)
-						}
-						te = append(tmp, te...)
-					}
-					if len(te) == oldlen {
-						te = nil
-					}
-					if len(te) == 0 {
-						if trexist[i] > 0 {
-							if len(texp) > 0 {
-								texp.appendValue(BytecodeBool(true))
-								texp.append(OC_jmp8, 0)
-							}
-							break
-						}
-						if len(texp) > 0 && (i == len(trigger)-1 || trexist[i+1] == 0) {
-							texp.appendValue(BytecodeBool(false))
-						}
-					} else {
-						texp.append(te...)
-						if i < len(trigger)-1 && trexist[i+1] != 0 {
-							texp.append(OC_jnz8, 0)
-							texp.append(OC_pop)
-						}
+				} else {
+					texp.append(te...)
+					if i < len(trigger)-1 && trexist[i+1] != 0 {
+						texp.append(OC_jnz8, 0)
+						texp.append(OC_pop)
 					}
 				}
 			}
@@ -7016,14 +7011,12 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			appending := true
 			if len(c.block.trigger) == 0 {
 				appending = false
-				if !allTerminated {
-					for _, te := range trexist {
-						if te >= 0 {
-							if te > 0 {
-								appending = true
-							}
-							break
+				for _, te := range trexist {
+					if te >= 0 {
+						if te > 0 {
+							appending = true
 						}
+						break
 					}
 				}
 			}
