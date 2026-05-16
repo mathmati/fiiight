@@ -6805,6 +6805,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			var trexist []int8
 
 			// Flag if following triggers can never be true because of triggerall = 0
+			// In which case the following triggers will still be parsed but not stored
 			allTerminated := false
 
 			// Missing trigger number only needs to be printed once
@@ -6853,7 +6854,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 						// Check if a previous trigger is missing
 						// e.g. found trigger3 but not trigger2
 						var missingIdx = -1
-						if !isAll && tn > 1 {
+						if !isAll && !allTerminated && tn > 1 {
 							if tidx > len(trexist) {
 								missingIdx = len(trexist)
 							} else {
