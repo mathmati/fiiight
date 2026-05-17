@@ -5805,7 +5805,6 @@ func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
 
 func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSection, error) {
 	is := NewIniSection()
-	var _type, persistent, ignorehitpause bool
 
 	// Placeholder var to toggle all the nonsense Mugen's compiler allowed
 	// Maybe this could be sys.ignoreMostErrors. Or something configurable
@@ -5844,6 +5843,7 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 		if !strict {
 			fn = strings.TrimSpace(fn) // Mugen tolerates "var ("
 		}
+
 		switch strings.ToLower(fn) {
 		case "var", "fvar", "sysvar", "sysfvar", "map":
 		default:
@@ -5860,7 +5860,7 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 				uneven--
 				if uneven == 0 {
 					end = j
-					j = len(lhs)
+					j = len(lhs) // End loop
 				}
 			}
 		}
@@ -5885,15 +5885,13 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 		// They end up as an invalid parameter for the previous state controller and cause both blocks to be merged
 		if !strings.Contains(line, "=") {
 			lower := strings.ToLower(line)
-			if strings.Contains(lower, "state") {
-				// We check if at least one bracket exists to avoid false positives like "p2stateno"
-				if strings.Contains(line, "[") != strings.Contains(line, "]") {
-					msg := fmt.Sprintf("State header not closed")
-					if sys.ignoreMostErrors {
-						sys.appendToConsole(c.charWarn() + msg)
-					} else {
-						return nil, Error(msg)
-					}
+			// We check if at least one bracket exists to avoid false positives like "p2stateno"
+			if strings.Contains(lower, "state") && strings.Contains(line, "[") != strings.Contains(line, "]") {
+				msg := "State header not closed"
+				if sys.ignoreMostErrors {
+					sys.appendToConsole(c.charWarn() + msg)
+				} else {
+					return nil, Error(msg)
 				}
 			}
 		}
@@ -5945,70 +5943,43 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 			}
 		}
 
-		if len(name) > 0 {
-			_, _, isTrigger := parseTriggerNumber(name)
+		// Nothing to parse here
+		if len(name) == 0 {
+			continue
+		}
 
-			// Reject empty triggers
-			if isTrigger && len(data) == 0 {
-				return nil, Error(name + " cannot be empty")
+		// Check if this line is a trigger
+		_, _, isTrigger := parseTriggerNumber(name)
+
+		// Reject empty triggers
+		if isTrigger && len(data) == 0 {
+			return nil, Error(name + " cannot be empty")
+		}
+
+		// Check for duplicate parameters
+		// This includes "type", "persistent" and "ignorehitpause"
+		if _, ok := is[name]; ok && !isTrigger {
+			msg := fmt.Sprintf("Duplicate '%s' parameter", name)
+			if sys.ignoreMostErrors {
+				// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
+				LogMessage(c.charWarn() + msg)
+				continue
 			}
-
 			// Reject duplicate parameters (normally off)
-			_, ok := is[name]
-			if ok && !isTrigger {
-				if sys.ignoreMostErrors {
-					// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
-					LogMessage(c.charWarn() + fmt.Sprintf("Duplicate '%s' parameter", name))
-					continue
-				}
-				return nil, Error(name + " is duplicated")
-			}
+			return nil, Error(msg)
+		}
 
-			if sctrl != nil {
-				switch name {
-				case "type":
-					// Ignore and log if already found
-					if _type {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'type' parameter")
-							continue
-						}
-						return nil, Error("type is duplicated")
-					}
-					// Flag as found
-					_type = true
-				case "persistent":
-					if persistent {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'persistent' parameter")
-							continue
-						}
-						return nil, Error("persistent is duplicated")
-					}
-					persistent = true
-				case "ignorehitpause":
-					if ignorehitpause {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'ignorehitpause' parameter")
-							continue
-						}
-						return nil, Error("ignorehitpause is duplicated")
-					}
-					ignorehitpause = true
-					// Also save this one because some state controllers need it for their own "ignorehitpause" parameters
-					is[name] = data
-				default:
-					// Save remaining parameters that aren't triggers
-					if !isTrigger {
-						is[name] = data
-						continue
-					}
-				}
-				if err := sctrl(name, data); err != nil {
-					return nil, err
-				}
-			} else {
-				is[name] = data
+		// Store every non‑trigger key in the section map
+		// Previously, we only stored the specific sctrl parameters
+		// However, since some sctrl's like Explod also need "ignorehitpause" saved, we might as well just save everything
+		if !isTrigger {
+			is[name] = data
+		}
+
+		// Run this sctrl's specific compiler function
+		if sctrl != nil {
+			if err := sctrl(name, data); err != nil {
+				return nil, err
 			}
 		}
 	}
