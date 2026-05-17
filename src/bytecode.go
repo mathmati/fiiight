@@ -6934,12 +6934,10 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 					e.window = [4]float32{exp[0].evalF(c) * redirscale, exp[1].evalF(c) * redirscale, exp[2].evalF(c) * redirscale, exp[3].evalF(c) * redirscale}
 				})
 			case explod_ignorehitpause:
-				if c.stWgi().ikemenver[0] != 0 || c.stWgi().ikemenver[1] != 0 { // You could not modify this one in Mugen
-					ihp := exp[0].evalB(c)
-					eachExpl(func(e *Explod) {
-						e.ignorehitpause = ihp
-					})
-				}
+				ihp := exp[0].evalB(c)
+				eachExpl(func(e *Explod) {
+					e.ignorehitpause = ihp
+				})
 			case explod_bindid:
 				bId := exp[0].evalI(c)
 				if bId == -1 {

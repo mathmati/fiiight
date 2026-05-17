@@ -5995,7 +5995,10 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 						return nil, Error("ignorehitpause is duplicated")
 					}
 					ignorehitpause = true
+					// Also save this one because some state controllers need it for their own "ignorehitpause" parameters
+					is[name] = data
 				default:
+					// Save remaining parameters that aren't triggers
 					if !isTrigger {
 						is[name] = data
 						continue
@@ -7336,9 +7339,6 @@ func (c *CharCompiler) blockAttribSet(line *string, bl *StateBlock, sbc *StateBy
 			c.scan(line)
 			if err := c.needToken(")"); err != nil {
 				return err
-			}
-			if bl.persistent == 1 {
-				return Error("Persistent(1) is meaningless") // TODO: Do we really need to crash here?
 			}
 			if bl.persistent <= 0 {
 				bl.persistent = math.MaxInt32
