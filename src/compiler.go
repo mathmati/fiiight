@@ -5805,7 +5805,6 @@ func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
 
 func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSection, error) {
 	is := NewIniSection()
-	var _type, persistent, ignorehitpause bool
 
 	// Placeholder var to toggle all the nonsense Mugen's compiler allowed
 	// Maybe this could be sys.ignoreMostErrors. Or something configurable
@@ -5844,6 +5843,7 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 		if !strict {
 			fn = strings.TrimSpace(fn) // Mugen tolerates "var ("
 		}
+
 		switch strings.ToLower(fn) {
 		case "var", "fvar", "sysvar", "sysfvar", "map":
 		default:
@@ -5860,7 +5860,7 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 				uneven--
 				if uneven == 0 {
 					end = j
-					j = len(lhs)
+					j = len(lhs) // End loop
 				}
 			}
 		}
@@ -5885,15 +5885,13 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 		// They end up as an invalid parameter for the previous state controller and cause both blocks to be merged
 		if !strings.Contains(line, "=") {
 			lower := strings.ToLower(line)
-			if strings.Contains(lower, "state") {
-				// We check if at least one bracket exists to avoid false positives like "p2stateno"
-				if strings.Contains(line, "[") != strings.Contains(line, "]") {
-					msg := fmt.Sprintf("State header not closed")
-					if sys.ignoreMostErrors {
-						sys.appendToConsole(c.charWarn() + msg)
-					} else {
-						return nil, Error(msg)
-					}
+			// We check if at least one bracket exists to avoid false positives like "p2stateno"
+			if strings.Contains(lower, "state") && strings.Contains(line, "[") != strings.Contains(line, "]") {
+				msg := "State header not closed"
+				if sys.ignoreMostErrors {
+					sys.appendToConsole(c.charWarn() + msg)
+				} else {
+					return nil, Error(msg)
 				}
 			}
 		}
@@ -5945,67 +5943,43 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 			}
 		}
 
-		if len(name) > 0 {
-			_, _, isTrigger := parseTriggerNumber(name)
+		// Nothing to parse here
+		if len(name) == 0 {
+			continue
+		}
 
-			// Reject empty triggers
-			if isTrigger && len(data) == 0 {
-				return nil, Error(name + " cannot be empty")
+		// Check if this line is a trigger
+		_, _, isTrigger := parseTriggerNumber(name)
+
+		// Reject empty triggers
+		if isTrigger && len(data) == 0 {
+			return nil, Error(name + " cannot be empty")
+		}
+
+		// Check for duplicate parameters
+		// This includes "type", "persistent" and "ignorehitpause"
+		if _, ok := is[name]; ok && !isTrigger {
+			msg := fmt.Sprintf("Duplicate '%s' parameter", name)
+			if sys.ignoreMostErrors {
+				// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
+				LogMessage(c.charWarn() + msg)
+				continue
 			}
-
 			// Reject duplicate parameters (normally off)
-			_, ok := is[name]
-			if ok && !isTrigger {
-				if sys.ignoreMostErrors {
-					// Because duplicates are harmless and would flood the limited console space, we'll print them to the command line instead
-					LogMessage(c.charWarn() + fmt.Sprintf("Duplicate '%s' parameter", name))
-					continue
-				}
-				return nil, Error(name + " is duplicated")
-			}
+			return nil, Error(msg)
+		}
 
-			if sctrl != nil {
-				switch name {
-				case "type":
-					// Ignore and log if already found
-					if _type {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'type' parameter")
-							continue
-						}
-						return nil, Error("type is duplicated")
-					}
-					// Flag as found
-					_type = true
-				case "persistent":
-					if persistent {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'persistent' parameter")
-							continue
-						}
-						return nil, Error("persistent is duplicated")
-					}
-					persistent = true
-				case "ignorehitpause":
-					if ignorehitpause {
-						if sys.ignoreMostErrors {
-							LogMessage(c.charWarn() + "Duplicate 'ignorehitpause' parameter")
-							continue
-						}
-						return nil, Error("ignorehitpause is duplicated")
-					}
-					ignorehitpause = true
-				default:
-					if !isTrigger {
-						is[name] = data
-						continue
-					}
-				}
-				if err := sctrl(name, data); err != nil {
-					return nil, err
-				}
-			} else {
-				is[name] = data
+		// Store every non‑trigger key in the section map
+		// Previously, we only stored the specific sctrl parameters
+		// However, since some sctrl's like Explod also need "ignorehitpause" saved, we might as well just save everything
+		if !isTrigger {
+			is[name] = data
+		}
+
+		// Run this sctrl's specific compiler function
+		if sctrl != nil {
+			if err := sctrl(name, data); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -6805,7 +6779,10 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			var trexist []int8
 
 			// Flag if following triggers can never be true because of triggerall = 0
-			allTerminated := false
+			// In which case the following triggers will still be parsed but not stored
+			// Update: This was excessive optimization. It complicated the code and created false positives in error logging
+			// Just let them be compiled as no-ops
+			//allTerminated := false
 
 			// Missing trigger number only needs to be printed once
 			warnedMissingTrigger := false
@@ -6889,14 +6866,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 
 						// Handle triggerall
 						if isAll {
-							// If triggerall = 0 is encountered, flag it
-							if len(be) == 2 && be[0] == OC_int8 {
-								if be[1] == 0 {
-									allTerminated = true
-								}
-							} else if !allTerminated {
-								triggerall = append(triggerall, be)
-							}
+							triggerall = append(triggerall, be)
 							break
 						}
 
@@ -6917,7 +6887,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 							} else if trexist[tidx] == 0 {
 								trexist[tidx] = 1
 							}
-						} else if !allTerminated && trexist[tidx] >= 0 {
+						} else if trexist[tidx] >= 0 {
 							trigger[tidx] = append(trigger[tidx], be)
 							trexist[tidx] = 1
 						}
@@ -6928,6 +6898,7 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			if err != nil {
 				return errmes(err)
 			}
+
 			c.block.persistentIndex = int32(sctrl_index_counter)
 			sctrl_index_counter++
 
@@ -6938,11 +6909,14 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 				sbc.ctrlsps = make([]int32, newSize)
 				copy(sbc.ctrlsps, oldCtrlsps)
 			}
+
 			// Check that the sctrl has a valid type parameter
 			if scf == nil {
 				return errmes(Error("State controller type not specified"))
 			}
-			if len(trexist) == 0 || (!allTerminated && trexist[0] == 0) {
+
+			// trigger1 is mandatory
+			if len(trexist) == 0 || trexist[0] == 0 {
 				return errmes(Error("Missing trigger1"))
 			}
 
@@ -6953,53 +6927,49 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 				texp.append(OC_jz8, 0)
 				texp.append(OC_pop)
 			}
-			if allTerminated {
-				if len(texp) > 0 {
-					texp.appendValue(BytecodeBool(false))
+
+			// Loop over triggers
+			for i, tr := range trigger {
+				if trexist[i] == 0 {
+					break
 				}
-			} else {
-				for i, tr := range trigger {
-					if trexist[i] == 0 {
+				var te BytecodeExp
+				if trexist[i] < 0 {
+					te.append(OC_pop)
+					te.appendValue(BytecodeBool(false))
+				}
+				oldlen := len(te)
+				for j := len(tr) - 1; j >= 0; j-- {
+					tmp := tr[j]
+					if j < len(tr)-1 {
+						if len(te) > int(math.MaxUint8-1) {
+							tmp.appendI32Op(OC_jz, int32(len(te)+1))
+						} else {
+							tmp.append(OC_jz8, OpCode(len(te)+1))
+						}
+						tmp.append(OC_pop)
+					}
+					te = append(tmp, te...)
+				}
+				if len(te) == oldlen {
+					te = nil
+				}
+				if len(te) == 0 {
+					if trexist[i] > 0 {
+						if len(texp) > 0 {
+							texp.appendValue(BytecodeBool(true))
+							texp.append(OC_jmp8, 0)
+						}
 						break
 					}
-					var te BytecodeExp
-					if trexist[i] < 0 {
-						te.append(OC_pop)
-						te.appendValue(BytecodeBool(false))
+					if len(texp) > 0 && (i == len(trigger)-1 || trexist[i+1] == 0) {
+						texp.appendValue(BytecodeBool(false))
 					}
-					oldlen := len(te)
-					for j := len(tr) - 1; j >= 0; j-- {
-						tmp := tr[j]
-						if j < len(tr)-1 {
-							if len(te) > int(math.MaxUint8-1) {
-								tmp.appendI32Op(OC_jz, int32(len(te)+1))
-							} else {
-								tmp.append(OC_jz8, OpCode(len(te)+1))
-							}
-							tmp.append(OC_pop)
-						}
-						te = append(tmp, te...)
-					}
-					if len(te) == oldlen {
-						te = nil
-					}
-					if len(te) == 0 {
-						if trexist[i] > 0 {
-							if len(texp) > 0 {
-								texp.appendValue(BytecodeBool(true))
-								texp.append(OC_jmp8, 0)
-							}
-							break
-						}
-						if len(texp) > 0 && (i == len(trigger)-1 || trexist[i+1] == 0) {
-							texp.appendValue(BytecodeBool(false))
-						}
-					} else {
-						texp.append(te...)
-						if i < len(trigger)-1 && trexist[i+1] != 0 {
-							texp.append(OC_jnz8, 0)
-							texp.append(OC_pop)
-						}
+				} else {
+					texp.append(te...)
+					if i < len(trigger)-1 && trexist[i+1] != 0 {
+						texp.append(OC_jnz8, 0)
+						texp.append(OC_pop)
 					}
 				}
 			}
@@ -7015,14 +6985,12 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			appending := true
 			if len(c.block.trigger) == 0 {
 				appending = false
-				if !allTerminated {
-					for _, te := range trexist {
-						if te >= 0 {
-							if te > 0 {
-								appending = true
-							}
-							break
+				for _, te := range trexist {
+					if te >= 0 {
+						if te > 0 {
+							appending = true
 						}
+						break
 					}
 				}
 			}
@@ -7342,9 +7310,6 @@ func (c *CharCompiler) blockAttribSet(line *string, bl *StateBlock, sbc *StateBy
 			c.scan(line)
 			if err := c.needToken(")"); err != nil {
 				return err
-			}
-			if bl.persistent == 1 {
-				return Error("Persistent(1) is meaningless") // TODO: Do we really need to crash here?
 			}
 			if bl.persistent <= 0 {
 				bl.persistent = math.MaxInt32

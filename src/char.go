@@ -6744,6 +6744,7 @@ func (c *Char) helperInit(h *Char, st int32, pt PosType, pos [3]float32, facing 
 		c.forceRemapPal(h.palfx, rp)
 	} else {
 		h.palfx = c.getPalfx()
+		h.ignoreDarkenTime = c.ignoreDarkenTime
 	}
 
 	// Mugen 1.1 behavior if invertblend param is omitted(Only if char mugenversion = 1.1)
@@ -8926,7 +8927,7 @@ func (c *Char) p2BodyDistZ(oc *Char) BytecodeValue {
 
 func (c *Char) setPauseTime(pausetime, movetime int32) {
 	// Buffer a new Pause only if its timer is higher than the current one or the same player is overriding their own pause
-	// This method is more complex but also fairer than Mugen, where only the last pause triggered matters
+	// This method is more complex but also fairer than Mugen, where only the last triggered pause matters
 	if ^pausetime < sys.pausetimebuffer || sys.pauseplayerno == c.playerNo || c.playerNo != c.ss.sb.playerNo {
 		sys.pausetimebuffer = ^pausetime
 		sys.pauseplayerno = c.playerNo
@@ -8966,6 +8967,7 @@ func (c *Char) setSuperPauseTime(pausetime, movetime int32, unhittable bool, p2d
 	}
 
 	c.ignoreDarkenTime = pausetime
+	c.propagateIgnoreDarkenTime()
 
 	// Apply superp2defmul to other teams
 	// Having this here makes it stack when partners initiate a double pause. Mugen does the same
@@ -8977,6 +8979,46 @@ func (c *Char) setSuperPauseTime(pausetime, movetime int32, unhittable bool, p2d
 					e.superDefenseMulBuffer *= p2defmul
 				}
 			}
+		}
+	}
+}
+
+// In Mugen, the darkening effect depends on the ownpal parameter, making its mechanism fairly different from ours
+// We will emulate that by passing the timer along the "ownpal family tree"
+func (c *Char) propagateIgnoreDarkenTime() {
+	value := c.ignoreDarkenTime
+	top := c
+
+	// Find the top of the tree
+	// Mugen doesn't do this. If the current helper has no ownpal, both it and its parent will darken
+	if !c.ownpal {
+		for {
+			parent := top.parent(false)
+			if parent == nil {
+				break
+			}
+			top = parent
+			if top.ownpal {
+				break
+			}
+		}
+	}
+
+	top.ignoreDarkenTime = value
+
+	// Propagate down the tree
+	stack := []*Char{top}
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		for _, childID := range node.children {
+			child := sys.playerID(childID)
+			if child == nil || child.ownpal {
+				continue
+			}
+			child.ignoreDarkenTime = value
+			stack = append(stack, child)
 		}
 	}
 }
@@ -11490,9 +11532,6 @@ func (c *Char) actionPrepare() {
 			} else if sys.pausetime > 0 && c.pauseMovetime > 0 {
 				c.pauseMovetime--
 			}
-			if c.ignoreDarkenTime > 0 {
-				c.ignoreDarkenTime--
-			}
 		}
 
 		// Reset input modifiers
@@ -11555,6 +11594,11 @@ func (c *Char) actionPrepare() {
 		c.fLength = 2048
 		c.projection = Projection_Orthographic
 	}
+
+	if c.ignoreDarkenTime > 0 {
+		c.ignoreDarkenTime--
+	}
+
 	// Decrease unhittable timer
 	// This used to be in tick(), but Mugen Clsn display suggests it happens sooner than that
 	// This also used to be CharGlobalInfo, but that made root and helpers share the same timer
