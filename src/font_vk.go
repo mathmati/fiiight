@@ -526,6 +526,9 @@ func (r *FontRenderer_VK) LoadTrueTypeFont(reader io.Reader, scale int32, low, h
 
 	// Read the truetype font.
 	ttf, err := truetype.Parse(data)
+	if err != nil && err.Error() == "freetype: invalid TrueType format: bad kern table length" {
+		ttf, err = truetype.Parse(stripKernTable(data))
+	}
 	if err != nil {
 		return nil, err
 	}
