@@ -5114,6 +5114,8 @@ func (fs *FightScreen) reload() error {
 	new.aiLevels[1].active = fs.aiLevels[1].active
 	new.winCounts[0].active = fs.winCounts[0].active
 	new.winCounts[1].active = fs.winCounts[1].active
+	new.winCounts[0].wins = fs.winCounts[0].wins
+	new.winCounts[1].wins = fs.winCounts[1].wins
 	new.active = fs.active
 	new.bars = fs.bars
 	new.mode = fs.mode
