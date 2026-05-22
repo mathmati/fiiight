@@ -6549,7 +6549,7 @@ func (wi *MotifWin) isEnabled() bool {
 func (wi *MotifWin) init(m *Motif) {
 	won := sys.winnerTeam() != 0 && sys.winnerTeam() != int32(sys.home)+1
 	lostOrDraw := sys.winnerTeam() == 0 || sys.winnerTeam() == int32(sys.home)+1
-	hasModeResults := resultsScreenForMode(sys.gameMode) != nil
+	hasModeResults := wi.isEnabled() && resultsScreenForMode(sys.gameMode) != nil
 
 	if (wi.isEnabled() && won) || ((wi.loseEnabled || hasModeResults) && lostOrDraw) {
 		if err := sys.luaLState.DoString("hook.run('game.result_init')"); err != nil {
