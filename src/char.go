@@ -8962,11 +8962,13 @@ func (c *Char) setSuperPauseTime(pausetime, movetime int32, unhittable bool, p2d
 		c.superMovetime--
 	}
 
+	// Because the pause will only happen in the next frame, we'll extend this timer by 1
 	if unhittable {
 		c.unhittableTime = pausetime + Btoi(pausetime > 0)
 	}
 
-	c.ignoreDarkenTime = pausetime
+	// Same with this timer
+	c.ignoreDarkenTime = pausetime + Btoi(pausetime > 0)
 	c.propagateIgnoreDarkenTime()
 
 	// Apply superp2defmul to other teams
