@@ -6323,18 +6323,18 @@ func (c *CharCompiler) paramSaveData(is IniSection, sc *StateControllerBase, id 
 		if len(data) <= 1 {
 			return Error("savedata not specified")
 		}
-		var sv SaveData
+		var sv int32
 		switch strings.ToLower(data) {
 		case "map":
-			sv = SaveData_map
+			sv = 0
 		case "var":
-			sv = SaveData_var
+			sv = 1
 		case "fvar":
-			sv = SaveData_fvar
+			sv = 2
 		default:
 			return Error("Invalid savedata type: " + data)
 		}
-		sc.add(id, sc.iToExp(int32(sv)))
+		sc.add(id, sc.iToExp(sv))
 		return nil
 	})
 }
@@ -6471,6 +6471,32 @@ func (c *CharCompiler) paramClsnType(is IniSection, sc *StateControllerBase, par
 			return Error("Invalid Clsn type for " + paramName + ": " + data)
 		}
 		sc.add(id, sc.iToExp(box))
+		return nil
+	})
+}
+
+func (c *CharCompiler) paramStringList(is IniSection, sc *StateControllerBase, paramName string, opcode byte) error {
+	return c.stateParam(is, paramName, false, func(data string) error {
+		parts := strings.Split(data, ",")
+		var allBe []BytecodeExp
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if len(part) < 2 || part[0] != '"' || part[len(part)-1] != '"' {
+				return Error("Value must be enclosed in quotes: " + part)
+			}
+			unquoted, err := strconv.Unquote(part)
+			if err != nil {
+				return Error("Invalid quoted string: " + part)
+			}
+			be := BytecodeExp(unquoted)
+			allBe = append(allBe, be)
+		}
+		if len(allBe) > 0 {
+			sc.add(opcode, allBe)
+		}
 		return nil
 	})
 }

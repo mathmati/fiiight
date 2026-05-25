@@ -4710,28 +4710,6 @@ func (c *CharCompiler) lifebarAction(is IniSection, sc *StateControllerBase) (St
 	return *ret, err
 }
 
-func (c *CharCompiler) loadFile(is IniSection, sc *StateControllerBase) (StateController, error) {
-	ret, err := (*loadFile)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			loadFile_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "path", false, func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Path not enclosed in \"")
-			}
-			sc.add(loadFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.paramSaveData(is, sc, loadFile_saveData); err != nil {
-			return err
-		}
-		return nil
-	})
-	return *ret, err
-}
 
 func (c *CharCompiler) loadState(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*loadState)(sc), c.stateSec(is, func() error {
@@ -5509,25 +5487,41 @@ func (c *CharCompiler) roundTimeSet(is IniSection, sc *StateControllerBase) (Sta
 	return *ret, err
 }
 
+func (c *CharCompiler) saveLoadFileSub(is IniSection, sc *StateControllerBase) error {
+	if err := c.paramValue(is, sc, "redirectid", saveFile_redirectid, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "path", true, func(data string) error {
+		if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+			return Error("Path not enclosed in \"")
+		}
+		sc.add(saveFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := c.paramSaveData(is, sc, saveFile_savedata); err != nil {
+		return err
+	}
+	if err := c.paramStringList(is, sc, "maps", saveFile_maps); err != nil {
+		return err
+	}
+	if err := c.paramStringList(is, sc, "maps.include", saveFile_maps_include); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *CharCompiler) saveFile(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*saveFile)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			saveFile_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "path", false, func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Path not enclosed in \"")
-			}
-			sc.add(saveFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.paramSaveData(is, sc, saveFile_saveData); err != nil {
-			return err
-		}
-		return nil
+		return c.saveLoadFileSub(is, sc)
+	})
+	return *ret, err
+}
+
+func (c *CharCompiler) loadFile(is IniSection, sc *StateControllerBase) (StateController, error) {
+	ret, err := (*loadFile)(sc), c.stateSec(is, func() error {
+		return c.saveLoadFileSub(is, sc)
 	})
 	return *ret, err
 }

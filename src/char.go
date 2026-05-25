@@ -166,14 +166,6 @@ const (
 	Projection_Perspective2
 )
 
-type SaveData int32
-
-const (
-	SaveData_map SaveData = iota
-	SaveData_var
-	SaveData_fvar
-)
-
 type DebugClsnText struct {
 	x, y       float32
 	text       string
