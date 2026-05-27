@@ -283,6 +283,8 @@ func (c *CharCompiler) assertSpecial(is IniSection, sc *StateControllerBase) (St
 			// Ikemen global flags
 			case "camerafreeze":
 				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_camerafreeze)))
+			case "notimedisplay":
+				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_notimedisplay)))
 			case "globalnoko":
 				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_globalnoko)))
 			case "roundnotskip":

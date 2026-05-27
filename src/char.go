@@ -130,6 +130,7 @@ const (
 	GSF_timerfreeze
 	// Ikemen flags
 	GSF_camerafreeze
+	GSF_notimedisplay
 	GSF_roundfreeze
 	GSF_roundnotskip
 	GSF_skipfightdisplay

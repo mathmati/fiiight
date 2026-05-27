@@ -4845,6 +4845,8 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_camerafreeze))
 		case "globalnoko":
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_globalnoko))
+		case "notimedisplay":
+			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_notimedisplay))
 		case "roundfreeze":
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_roundfreeze))
 		case "roundnotskip":
