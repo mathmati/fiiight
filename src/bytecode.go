@@ -3119,6 +3119,8 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_gethitvar_fall_envshake_freq:
 		sys.bcStack.PushF(c.ghv.fall_envshake_freq)
 	case OC_ex_gethitvar_fall_envshake_ampl:
+		// This one is an int in Mugen but a float in Ikemen, so undefined returns 0 and true undefined respectively
+		// No issues so far, so no need to add a special case for the time being
 		sys.bcStack.PushI(int32(float32(c.ghv.fall_envshake_ampl) * (c.localscl / oc.localscl)))
 	case OC_ex_gethitvar_fall_envshake_phase:
 		sys.bcStack.PushF(c.ghv.fall_envshake_phase)
@@ -13254,6 +13256,7 @@ const (
 	text_scale
 	text_color
 	text_xshear
+	text_hidewithbars
 	text_id
 	text_last = iota + palFX_last + 1 - 1
 	text_redirectid
@@ -13396,6 +13399,8 @@ func (sc text) Run(c *Char, _ []int32) bool {
 			ts.SetColor(r, g, b, a)
 		case text_xshear:
 			ts.xshear = exp[0].evalF(c)
+		case text_hidewithbars:
+			ts.hidewithbars = exp[0].evalB(c)
 		case text_id:
 			ts.id = exp[0].evalI(c)
 		case text_redirectid:
@@ -13670,6 +13675,11 @@ func (sc modifyText) Run(c *Char, _ []int32) bool {
 				xs := exp[0].evalF(c)
 				eachText(func(ts *TextSprite) {
 					ts.xshear = xs
+				})
+			case text_hidewithbars:
+				v := exp[0].evalB(c)
+				eachText(func(ts *TextSprite) {
+					ts.hidewithbars = v
 				})
 			default:
 				if isPalFXParam(paramID) {

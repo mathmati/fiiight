@@ -775,10 +775,11 @@ type TextSprite struct {
 	textSpacing    [2]float32
 	textDelay      float32
 	textWrap       bool
-	friction       [2]float32
-	accel          [2]float32
 	vel            [2]float32
+	accel          [2]float32
+	friction       [2]float32
 	maxDist        [2]float32
+	hidewithbars   bool
 	// initial, unscaled values
 	offsetInit   [2]float32
 	scaleInit    [2]float32
@@ -1357,6 +1358,10 @@ func (ts *TextSprite) Update() {
 
 func (ts *TextSprite) Draw(ln int16) {
 	if sys.frameSkip || ts.layerno != ln || ts.fnt == nil || len(ts.text) == 0 {
+		return
+	}
+
+	if ts.hidewithbars && sys.shouldHideWithBars() {
 		return
 	}
 

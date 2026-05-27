@@ -1908,7 +1908,7 @@ func (e *Explod) update() {
 		return
 	}
 
-	if e.hidewithbars && (!sys.fightScreen.visible() || sys.gsf(GSF_nobardisplay) || !sys.fightScreen.bars) {
+	if e.hidewithbars && sys.shouldHideWithBars() {
 		return
 	}
 

@@ -5729,3 +5729,7 @@ func (s *System) cleanCustomShaders() {
 		}
 	}
 }
+
+func (s *System) shouldHideWithBars() bool {
+	return !s.fightScreen.visible() || s.gsf(GSF_nobardisplay) || !s.fightScreen.bars
+}
