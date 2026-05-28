@@ -5241,7 +5241,7 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 
 			// Only load palettes if necessary
 			if !hasTarget || !has11 {
-				loadCharPalettes(sc.sff, sc.sff.filename, charIdx)
+				sc.sff.loadActPalettes(charIdx)
 			}
 
 			// Check if the sprite uses or shares palette 1, 1

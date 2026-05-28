@@ -1252,7 +1252,7 @@ func systemScriptInit(l *lua.LState) {
 		/*Load palettes for an animation's underlying sprite file, if palette usage is enabled.
 		@function animLoadPalettes
 		@tparam Anim anim Animation userdata.
-		@tparam int param Palette parameter passed to `loadCharPalettes` (engine-specific semantics).
+		@tparam int param Palette parameter passed to `loadActPalettes` (engine-specific semantics).
 		function animLoadPalettes(anim, param) end*/
 		a, ok := toUserData(l, 1).(*Anim)
 		if !ok {
@@ -1260,7 +1260,7 @@ func systemScriptInit(l *lua.LState) {
 			return 0
 		}
 		if sys.usePalette == true {
-			loadCharPalettes(a.anim.sff, a.anim.sff.filename, int(numArg(l, 2)))
+			a.anim.sff.loadActPalettes(int(numArg(l, 2)))
 		}
 		return 0
 	})
