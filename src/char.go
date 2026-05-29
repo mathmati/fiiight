@@ -11809,6 +11809,8 @@ func (c *Char) actionRun() {
 					c.receivedHits = 0
 					c.ghv.score = 0
 					c.ghv.down_recovertime = c.gi().data.liedown.time
+					// Mugen specifically resets this one for some reason
+					c.ghv.fall_envshake_time = 0
 					// In Mugen, when returning to idle, characters cannot act until the next frame
 					// To account for this, combos in Mugen linger one frame longer than they normally would in a fighting game
 					// Ikemen's "fake combo" code used to replicate this behavior
