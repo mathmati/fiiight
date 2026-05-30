@@ -3119,6 +3119,8 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_gethitvar_fall_envshake_freq:
 		sys.bcStack.PushF(c.ghv.fall_envshake_freq)
 	case OC_ex_gethitvar_fall_envshake_ampl:
+		// This one is an int in Mugen but a float in Ikemen, so undefined returns 0 and true undefined respectively
+		// No issues so far, so no need to add a special case for the time being
 		sys.bcStack.PushI(int32(float32(c.ghv.fall_envshake_ampl) * (c.localscl / oc.localscl)))
 	case OC_ex_gethitvar_fall_envshake_phase:
 		sys.bcStack.PushF(c.ghv.fall_envshake_phase)
@@ -11952,57 +11954,6 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 	return false
 }
 
-type loadFile StateControllerBase
-
-const (
-	loadFile_path byte = iota
-	loadFile_saveData
-	loadFile_redirectid
-)
-
-func (sc loadFile) Run(c *Char, _ []int32) bool {
-	crun := getRedirectedChar(c, StateControllerBase(sc), loadFile_redirectid, "LoadFile")
-	if crun == nil {
-		return false
-	}
-
-	var path string
-	var data SaveData
-	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
-		switch paramID {
-		case loadFile_path:
-			path = exp[0].evalS()
-		case loadFile_saveData:
-			data = SaveData(exp[0].evalI(c))
-		}
-		return true
-	})
-	if path != "" {
-		decodeFile, err := os.Open(filepath.Dir(c.gi().def) + "/" + path)
-		if err != nil {
-			defer decodeFile.Close()
-			return false
-		}
-		defer decodeFile.Close()
-		decoder := gob.NewDecoder(decodeFile)
-		switch data {
-		case SaveData_map:
-			if err := decoder.Decode(&crun.mapArray); err != nil {
-				panic(err)
-			}
-		case SaveData_var:
-			if err := decoder.Decode(&crun.cnsvar); err != nil {
-				panic(err)
-			}
-		case SaveData_fvar:
-			if err := decoder.Decode(&crun.cnsfvar); err != nil {
-				panic(err)
-			}
-		}
-	}
-	return false
-}
-
 type loadState StateControllerBase
 
 const (
@@ -12339,7 +12290,9 @@ type saveFile StateControllerBase
 
 const (
 	saveFile_path byte = iota
-	saveFile_saveData
+	saveFile_savedata
+	saveFile_maps
+	saveFile_maps_include
 	saveFile_redirectid
 )
 
@@ -12350,37 +12303,190 @@ func (sc saveFile) Run(c *Char, _ []int32) bool {
 	}
 
 	var path string
-	var data SaveData
+	var savedata int32 = -1
+	var mapsList, mapsIncludeList []BytecodeExp
+
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case saveFile_path:
 			path = exp[0].evalS()
-		case saveFile_saveData:
-			data = SaveData(exp[0].evalI(c))
+		case saveFile_savedata:
+			savedata = exp[0].evalI(c)
+		case saveFile_maps:
+			mapsList = exp
+		case saveFile_maps_include:
+			mapsIncludeList = exp
 		}
 		return true
 	})
-	if path != "" {
-		encodeFile, err := os.Create(filepath.Dir(c.gi().def) + "/" + path)
-		if err != nil {
-			panic(err)
+
+	if path == "" || savedata < 0 {
+		return false
+	}
+
+	exactKeys := make([]string, len(mapsList))
+	for i, be := range mapsList {
+		exactKeys[i] = be.evalS()
+	}
+	includeSubstrings := make([]string, len(mapsIncludeList))
+	for i, be := range mapsIncludeList {
+		includeSubstrings[i] = be.evalS()
+	}
+
+	fullPath := filepath.Dir(c.gi().def) + "/" + path
+	f, err := os.Create(fullPath)
+	if err != nil {
+		sys.appendToConsole(crun.warn() + "SaveFile: " + err.Error())
+		return false
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+
+	// Preface the file with which type of variable we're saving
+	enc.Encode(savedata)
+
+	switch savedata {
+	case 0: // Map
+		if len(exactKeys) > 0 || len(includeSubstrings) > 0 {
+			// Apply filters
+			m := make(map[string]float32)
+			// Try exact match
+			for _, key := range exactKeys {
+				if val, ok := crun.mapArray[key]; ok {
+					m[key] = val
+				}
+			}
+			// Try "include"
+			for _, substr := range includeSubstrings {
+				for existingKey, val := range crun.mapArray {
+					if strings.Contains(existingKey, substr) {
+						m[existingKey] = val
+					}
+				}
+			}
+			enc.Encode(m)
+		} else {
+			// Save all maps
+			enc.Encode(crun.mapArray)
 		}
-		defer encodeFile.Close()
-		encoder := gob.NewEncoder(encodeFile)
-		switch data {
-		case SaveData_map:
-			if err := encoder.Encode(crun.mapArray); err != nil {
-				panic(err)
-			}
-		case SaveData_var:
-			if err := encoder.Encode(crun.cnsvar); err != nil {
-				panic(err)
-			}
-		case SaveData_fvar:
-			if err := encoder.Encode(crun.cnsfvar); err != nil {
-				panic(err)
-			}
+	case 1: // Var
+		enc.Encode(crun.cnsvar)
+	case 2: // Fvar
+		enc.Encode(crun.cnsfvar)
+	}
+	return false
+}
+
+type loadFile StateControllerBase
+
+func (sc loadFile) Run(c *Char, _ []int32) bool {
+	crun := getRedirectedChar(c, StateControllerBase(sc), saveFile_redirectid, "LoadFile")
+	if crun == nil {
+		return false
+	}
+
+	var path string
+	var sctrlSavedata int32 = -1
+	var mapsList, mapsIncludeList []BytecodeExp
+
+	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
+		switch paramID {
+		case saveFile_path:
+			path = exp[0].evalS()
+		case saveFile_savedata:
+			sctrlSavedata = exp[0].evalI(c)
+		case saveFile_maps:
+			mapsList = exp
+		case saveFile_maps_include:
+			mapsIncludeList = exp
 		}
+		return true
+	})
+
+	if path == "" || sctrlSavedata < 0 {
+		return false
+	}
+
+	exactKeys := make([]string, len(mapsList))
+	for i, be := range mapsList {
+		exactKeys[i] = be.evalS()
+	}
+	includeSubstrings := make([]string, len(mapsIncludeList))
+	for i, be := range mapsIncludeList {
+		includeSubstrings[i] = be.evalS()
+	}
+
+	fullPath := filepath.Dir(c.gi().def) + "/" + path
+	f, err := os.Open(fullPath)
+	if err != nil {
+		sys.appendToConsole(crun.warn() + "LoadFile: " + err.Error())
+		return false
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+
+	// Decode the type of save
+	var fileSavedata int32
+	if err := dec.Decode(&fileSavedata); err != nil {
+		sys.appendToConsole(crun.warn() + "LoadFile: cannot read savedata type")
+		return false
+	}
+
+	// Check if we're loading maps from a map save, and so on
+	if fileSavedata != sctrlSavedata {
+		sys.appendToConsole(crun.warn() + "LoadFile: savedata type does not match")
+		return false
+	}
+
+	switch fileSavedata {
+	case 0: // Map
+		var loaded map[string]float32
+		if err := dec.Decode(&loaded); err != nil {
+			sys.appendToConsole(crun.warn() + "LoadFile: cannot read map data")
+			return false
+		}
+		if len(exactKeys) > 0 || len(includeSubstrings) > 0 {
+			// Apply filters
+			for key, val := range loaded {
+				matched := false
+				// Try exact match
+				for _, ek := range exactKeys {
+					if key == ek {
+						matched = true
+						break
+					}
+				}
+				// Try "include"
+				if !matched {
+					for _, substr := range includeSubstrings {
+						if strings.Contains(key, substr) {
+							matched = true
+							break
+						}
+					}
+				}
+				if matched {
+					crun.mapArray[key] = val
+				}
+			}
+		} else {
+			// Load all maps
+			crun.mapArray = loaded
+		}
+	case 1: // Var
+		var loaded map[int32]int32
+		if err := dec.Decode(&loaded); err != nil {
+			sys.appendToConsole(crun.warn() + "LoadFile: cannot read var data")
+			return false
+		}
+		crun.cnsvar = loaded
+	case 2: // Fvar
+		var loaded map[int32]float32
+		if err := dec.Decode(&loaded); err != nil {
+			sys.appendToConsole(crun.warn() + "LoadFile: cannot read fvar data")
+			return false
+		}
+		crun.cnsfvar = loaded
 	}
 	return false
 }
@@ -13150,6 +13256,7 @@ const (
 	text_scale
 	text_color
 	text_xshear
+	text_hidewithbars
 	text_id
 	text_last = iota + palFX_last + 1 - 1
 	text_redirectid
@@ -13292,6 +13399,8 @@ func (sc text) Run(c *Char, _ []int32) bool {
 			ts.SetColor(r, g, b, a)
 		case text_xshear:
 			ts.xshear = exp[0].evalF(c)
+		case text_hidewithbars:
+			ts.hidewithbars = exp[0].evalB(c)
 		case text_id:
 			ts.id = exp[0].evalI(c)
 		case text_redirectid:
@@ -13566,6 +13675,11 @@ func (sc modifyText) Run(c *Char, _ []int32) bool {
 				xs := exp[0].evalF(c)
 				eachText(func(ts *TextSprite) {
 					ts.xshear = xs
+				})
+			case text_hidewithbars:
+				v := exp[0].evalB(c)
+				eachText(func(ts *TextSprite) {
+					ts.hidewithbars = v
 				})
 			default:
 				if isPalFXParam(paramID) {

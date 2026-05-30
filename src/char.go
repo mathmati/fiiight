@@ -130,6 +130,7 @@ const (
 	GSF_timerfreeze
 	// Ikemen flags
 	GSF_camerafreeze
+	GSF_notimedisplay
 	GSF_roundfreeze
 	GSF_roundnotskip
 	GSF_skipfightdisplay
@@ -164,14 +165,6 @@ const (
 	Projection_Orthographic Projection = iota
 	Projection_Perspective
 	Projection_Perspective2
-)
-
-type SaveData int32
-
-const (
-	SaveData_map SaveData = iota
-	SaveData_var
-	SaveData_fvar
 )
 
 type DebugClsnText struct {
@@ -1916,7 +1909,7 @@ func (e *Explod) update() {
 		return
 	}
 
-	if e.hidewithbars && (!sys.fightScreen.visible() || sys.gsf(GSF_nobardisplay) || !sys.fightScreen.bars) {
+	if e.hidewithbars && sys.shouldHideWithBars() {
 		return
 	}
 
@@ -8962,11 +8955,13 @@ func (c *Char) setSuperPauseTime(pausetime, movetime int32, unhittable bool, p2d
 		c.superMovetime--
 	}
 
+	// Because the pause will only happen in the next frame, we'll extend this timer by 1
 	if unhittable {
 		c.unhittableTime = pausetime + Btoi(pausetime > 0)
 	}
 
-	c.ignoreDarkenTime = pausetime
+	// Same with this timer
+	c.ignoreDarkenTime = pausetime + Btoi(pausetime > 0)
 	c.propagateIgnoreDarkenTime()
 
 	// Apply superp2defmul to other teams
@@ -11814,6 +11809,8 @@ func (c *Char) actionRun() {
 					c.receivedHits = 0
 					c.ghv.score = 0
 					c.ghv.down_recovertime = c.gi().data.liedown.time
+					// Mugen specifically resets this one for some reason
+					c.ghv.fall_envshake_time = 0
 					// In Mugen, when returning to idle, characters cannot act until the next frame
 					// To account for this, combos in Mugen linger one frame longer than they normally would in a fighting game
 					// Ikemen's "fake combo" code used to replicate this behavior

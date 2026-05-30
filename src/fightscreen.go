@@ -5466,8 +5466,10 @@ func (fs *FightScreen) draw(layerno int16) {
 			}
 
 			// Time
-			fs.time.bgDraw(layerno)
-			fs.time.draw(layerno, fs.fnt)
+			if !sys.gsf(GSF_notimedisplay) {
+				fs.time.bgDraw(layerno)
+				fs.time.draw(layerno, fs.fnt)
+			}
 
 			// WinIcon
 			for i := 0; i < len(fs.winIcons); i++ {

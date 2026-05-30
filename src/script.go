@@ -1252,7 +1252,7 @@ func systemScriptInit(l *lua.LState) {
 		/*Load palettes for an animation's underlying sprite file, if palette usage is enabled.
 		@function animLoadPalettes
 		@tparam Anim anim Animation userdata.
-		@tparam int param Palette parameter passed to `loadCharPalettes` (engine-specific semantics).
+		@tparam int param Palette parameter passed to `loadActPalettes` (engine-specific semantics).
 		function animLoadPalettes(anim, param) end*/
 		a, ok := toUserData(l, 1).(*Anim)
 		if !ok {
@@ -1260,7 +1260,7 @@ func systemScriptInit(l *lua.LState) {
 			return 0
 		}
 		if sys.usePalette == true {
-			loadCharPalettes(a.anim.sff, a.anim.sff.filename, int(numArg(l, 2)))
+			a.anim.sff.loadActPalettes(int(numArg(l, 2)))
 		}
 		return 0
 	})
@@ -1325,7 +1325,9 @@ func systemScriptInit(l *lua.LState) {
 		if !ok {
 			userDataError(l, 1, a)
 		}
-		pal := a.anim.palettedata.palettes[int(numArg(l, 2))-1]
+		palNum := int(numArg(l, 2))
+		palIdx := a.anim.palettedata.SelectablePalIndex(palNum)
+		pal := a.anim.palettedata.palettes[palIdx]
 		tbl := l.NewTable()
 		for k, v := range pal {
 			col := l.NewTable()
@@ -1350,8 +1352,9 @@ func systemScriptInit(l *lua.LState) {
 		if !ok {
 			userDataError(l, 1, a)
 		}
-		pal := int(numArg(l, 2)) - 1
-		palData := a.anim.palettedata.palettes[pal]
+		palNum := int(numArg(l, 2))
+		palIdx := a.anim.palettedata.SelectablePalIndex(palNum)
+		palData := a.anim.palettedata.palettes[palIdx]
 		tableArg(l, 3).ForEach(func(key, value lua.LValue) {
 			var color uint32
 			switch v := value.(type) {
@@ -1364,8 +1367,8 @@ func systemScriptInit(l *lua.LState) {
 				palData[int(lua.LVAsNumber(key))-1] = color
 			}
 		})
-		a.anim.palettedata.SetSource(pal, palData)
-		a.anim.palettedata.PalTex[pal] = NewTextureFromPalette(palData)
+		a.anim.palettedata.SetSource(palIdx, palData)
+		a.anim.palettedata.PalTex[palIdx] = NewTextureFromPalette(palData)
 		return 0
 	})
 	luaRegister(l, "animPrepare", func(l *lua.LState) int {
@@ -1579,8 +1582,10 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Anim anim The same animation userdata (for chaining).
 		function animSetColorPalette(anim, paletteId) end*/
 		a, _ := toUserData(l, 1).(*Anim)
+		palNum := int(numArg(l, 2))
+		palIdx := a.anim.palettedata.SelectablePalIndex(palNum)
 		if len(a.anim.palettedata.paletteMap) > 0 {
-			a.anim.palettedata.paletteMap[0] = int(numArg(l, 2)) - 1
+			a.anim.palettedata.paletteMap[0] = palIdx
 		}
 		l.Push(newUserData(l, a))
 		return 1
@@ -9231,6 +9236,8 @@ func triggerFunctions(l *lua.LState) {
 		// GlobalSpecialFlag (Ikemen)
 		case "camerafreeze":
 			l.Push(lua.LBool(sys.gsf(GSF_camerafreeze)))
+		case "notimedisplay":
+			l.Push(lua.LBool(sys.gsf(GSF_notimedisplay)))
 		case "roundfreeze":
 			l.Push(lua.LBool(sys.gsf(GSF_roundfreeze)))
 		case "roundnotskip":

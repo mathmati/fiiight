@@ -283,6 +283,8 @@ func (c *CharCompiler) assertSpecial(is IniSection, sc *StateControllerBase) (St
 			// Ikemen global flags
 			case "camerafreeze":
 				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_camerafreeze)))
+			case "notimedisplay":
+				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_notimedisplay)))
 			case "globalnoko":
 				sc.add(assertSpecial_flag_g, sc.i64ToExp(int64(GSF_globalnoko)))
 			case "roundnotskip":
@@ -3757,7 +3759,7 @@ func (c *CharCompiler) displayToClipboardSub(is IniSection,
 		return err
 	}
 	if err := c.stateParam(is, "params", false, func(data string) error {
-		bes, err := c.exprs(data, VT_Undefined, 100000)
+		bes, err := c.exprs(data, VT_Undefined, 100) // Arbitrary upper limit
 		if err != nil {
 			return err
 		}
@@ -3769,17 +3771,17 @@ func (c *CharCompiler) displayToClipboardSub(is IniSection,
 	b := false
 	if err := c.stateParam(is, "text", false, func(data string) error {
 		b = true
-		_else := false
+		notEnclosed := false
 		if len(data) >= 2 && data[0] == '"' {
 			if i := strings.Index(data[1:], "\""); i >= 0 {
 				data, _ = strconv.Unquote(data)
 			} else {
-				_else = true
+				notEnclosed = true
 			}
 		} else {
-			_else = true
+			notEnclosed = true
 		}
-		if _else {
+		if notEnclosed {
 			return Error("Text not enclosed in \"")
 		}
 		sc.add(displayToClipboard_text,
@@ -4710,28 +4712,6 @@ func (c *CharCompiler) lifebarAction(is IniSection, sc *StateControllerBase) (St
 	return *ret, err
 }
 
-func (c *CharCompiler) loadFile(is IniSection, sc *StateControllerBase) (StateController, error) {
-	ret, err := (*loadFile)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			loadFile_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "path", false, func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Path not enclosed in \"")
-			}
-			sc.add(loadFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.paramSaveData(is, sc, loadFile_saveData); err != nil {
-			return err
-		}
-		return nil
-	})
-	return *ret, err
-}
 
 func (c *CharCompiler) loadState(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*loadState)(sc), c.stateSec(is, func() error {
@@ -5509,25 +5489,41 @@ func (c *CharCompiler) roundTimeSet(is IniSection, sc *StateControllerBase) (Sta
 	return *ret, err
 }
 
+func (c *CharCompiler) saveLoadFileSub(is IniSection, sc *StateControllerBase) error {
+	if err := c.paramValue(is, sc, "redirectid", saveFile_redirectid, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "path", true, func(data string) error {
+		if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+			return Error("Path not enclosed in \"")
+		}
+		sc.add(saveFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := c.paramSaveData(is, sc, saveFile_savedata); err != nil {
+		return err
+	}
+	if err := c.paramStringList(is, sc, "maps", saveFile_maps); err != nil {
+		return err
+	}
+	if err := c.paramStringList(is, sc, "maps.include", saveFile_maps_include); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *CharCompiler) saveFile(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*saveFile)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			saveFile_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "path", false, func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Path not enclosed in \"")
-			}
-			sc.add(saveFile_path, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.paramSaveData(is, sc, saveFile_saveData); err != nil {
-			return err
-		}
-		return nil
+		return c.saveLoadFileSub(is, sc)
+	})
+	return *ret, err
+}
+
+func (c *CharCompiler) loadFile(is IniSection, sc *StateControllerBase) (StateController, error) {
+	ret, err := (*loadFile)(sc), c.stateSec(is, func() error {
+		return c.saveLoadFileSub(is, sc)
 	})
 	return *ret, err
 }
@@ -5673,140 +5669,148 @@ func (c *CharCompiler) targetScoreAdd(is IniSection, sc *StateControllerBase) (S
 	return *ret, err
 }
 
+func (c *CharCompiler) textSub(is IniSection, sc *StateControllerBase) error {
+	if err := c.paramValue(is, sc, "id",
+		text_id, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "removetime",
+		text_removetime, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "layerno",
+		text_layerno, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "params",
+		false, func(data string) error {
+		bes, err := c.exprs(data, VT_Undefined, 100)
+		if err != nil {
+			return err
+		}
+		sc.add(text_params, bes)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "text", false, func(data string) error {
+		notEnclosed := false
+		if len(data) >= 2 && data[0] == '"' {
+			if i := strings.Index(data[1:], "\""); i >= 0 {
+				data, _ = strconv.Unquote(data)
+			} else {
+				notEnclosed = true
+			}
+		} else {
+			notEnclosed = true
+		}
+		if notEnclosed {
+			return Error("Text not enclosed in \"")
+		}
+		sc.add(text_text, sc.iToExp(int32(sys.stringPool[c.playerNo].Add(data))))
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := c.stateParam(is, "font", false, func(data string) error {
+		prefix := c.getDataPrefix(&data, false)
+		// Only "f" (lifebar) or "m" (motif) are meaningful for Text/ModifyText.
+		if prefix != "f" && prefix != "m" {
+			prefix = ""
+		}
+		return c.scAdd(sc, text_font, data, VT_Int, 1,
+			sc.beToExp(BytecodeExp(prefix))...)
+	}); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "localcoord",
+		text_localcoord, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "bank",
+		text_bank, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "align",
+		text_align, VT_Int, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "textspacing",
+		text_textspacing, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "textdelay",
+		text_textdelay, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "pos",
+		text_pos, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "velocity",
+		text_velocity, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "maxdist",
+		text_maxdist, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "friction",
+		text_friction, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "accel",
+		text_accel, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "scale",
+		text_scale, VT_Float, 2, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "angle",
+		text_angle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "xangle",
+		text_xangle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "yangle",
+		text_yangle, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.palFXSub(is, sc, "palfx."); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "color",
+		text_color, VT_Int, 4, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "xshear",
+		text_xshear, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramProjection(is, sc, "projection",
+		text_projection); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "focallength",
+		text_focallength, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "hidewithbars",
+		text_hidewithbars, VT_Bool, 1, false); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *CharCompiler) text(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*text)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			text_redirectid, VT_Int, 1, false); err != nil {
+		if err := c.paramValue(is, sc, "redirectid", text_redirectid, VT_Int, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "id",
-			text_id, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "removetime",
-			text_removetime, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "layerno",
-			text_layerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "params", false, func(data string) error {
-			bes, err := c.exprs(data, VT_Undefined, 100000)
-			if err != nil {
-				return err
-			}
-			sc.add(text_params, bes)
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "text", false, func(data string) error {
-			_else := false
-			if len(data) >= 2 && data[0] == '"' {
-				if i := strings.Index(data[1:], "\""); i >= 0 {
-					data, _ = strconv.Unquote(data)
-				} else {
-					_else = true
-				}
-			} else {
-				_else = true
-			}
-			if _else {
-				return Error("Text not enclosed in \"")
-			}
-			sc.add(text_text, sc.iToExp(int32(sys.stringPool[c.playerNo].Add(data))))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "font", false, func(data string) error {
-			prefix := c.getDataPrefix(&data, false)
-			// Only "f" (lifebar) or "m" (motif) are meaningful for Text/ModifyText.
-			if prefix != "f" && prefix != "m" {
-				prefix = ""
-			}
-			return c.scAdd(sc, text_font, data, VT_Int, 1,
-				sc.beToExp(BytecodeExp(prefix))...)
-		}); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "localcoord",
-			text_localcoord, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "bank",
-			text_bank, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "align",
-			text_align, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "textspacing",
-			text_textspacing, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "textdelay",
-			text_textdelay, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "pos",
-			text_pos, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "velocity",
-			text_velocity, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "maxdist",
-			text_maxdist, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "friction",
-			text_friction, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "accel",
-			text_accel, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "scale",
-			text_scale, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "angle",
-			text_angle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xangle",
-			text_xangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "yangle",
-			text_yangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.palFXSub(is, sc, "palfx."); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "color",
-			text_color, VT_Int, 4, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xshear",
-			text_xshear, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramProjection(is, sc, "projection",
-			text_projection); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "focallength",
-			text_focallength, VT_Float, 1, false); err != nil {
-			return err
-		}
-		return nil
+		return c.textSub(is, sc)
 	})
 	return *ret, err
 }
@@ -5821,134 +5825,7 @@ func (c *CharCompiler) modifyText(is IniSection, sc *StateControllerBase) (State
 			modifytext_index, VT_Int, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "id",
-			text_id, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "removetime",
-			text_removetime, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "layerno",
-			text_layerno, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "params", false, func(data string) error {
-			bes, err := c.exprs(data, VT_Undefined, 100000)
-			if err != nil {
-				return err
-			}
-			sc.add(text_params, bes)
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "text", false, func(data string) error {
-			_else := false
-			if len(data) >= 2 && data[0] == '"' {
-				if i := strings.Index(data[1:], "\""); i >= 0 {
-					data, _ = strconv.Unquote(data)
-				} else {
-					_else = true
-				}
-			} else {
-				_else = true
-			}
-			if _else {
-				return Error("Text not enclosed in \"")
-			}
-			sc.add(text_text, sc.iToExp(int32(sys.stringPool[c.playerNo].Add(data))))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "font", false, func(data string) error {
-			prefix := c.getDataPrefix(&data, false)
-			// Only "f" (lifebar) or "m" (motif) are meaningful for Text/ModifyText.
-			if prefix != "f" && prefix != "m" {
-				prefix = ""
-			}
-			return c.scAdd(sc, text_font, data, VT_Int, 1,
-				sc.beToExp(BytecodeExp(prefix))...)
-		}); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "localcoord",
-			text_localcoord, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "bank",
-			text_bank, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "align",
-			text_align, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "textspacing",
-			text_textspacing, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "textdelay",
-			text_textdelay, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "pos",
-			text_pos, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "velocity",
-			text_velocity, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "maxdist",
-			text_maxdist, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "friction",
-			text_friction, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "accel",
-			text_accel, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "scale",
-			text_scale, VT_Float, 2, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "angle",
-			text_angle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xangle",
-			text_xangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "yangle",
-			text_yangle, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.palFXSub(is, sc, "palfx."); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "color",
-			text_color, VT_Int, 4, false); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "xshear",
-			text_xshear, VT_Float, 1, false); err != nil {
-			return err
-		}
-		if err := c.paramProjection(is, sc, "projection",
-			text_projection); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "focallength",
-			text_focallength, VT_Float, 1, false); err != nil {
-			return err
-		}
-		return nil
+		return c.textSub(is, sc)
 	})
 	return *ret, err
 }
