@@ -2491,6 +2491,7 @@ function start.f_selectScreen()
 		for side = 1, 2 do
 			local persist = motif.select_info['p' .. side].cursor.persist 
 			local totalSelected = #start.p[side].t_selected
+			local drawnCells = {} -- Track drawn cells to avoid duplicates
 			for k, v in pairs(start.p[side].t_selected) do
 				if v.cursor ~= nil then
 					--get cell coordinates
@@ -2514,7 +2515,11 @@ function start.f_selectScreen()
 							shouldDraw = true
 						end
 						if shouldDraw then
-							start.f_drawCursor(v.pn, x, y, 'done', true)
+							local cellKey = x .. ',' .. y
+							if not drawnCells[cellKey] then
+								start.f_drawCursor(v.pn, x, y, 'done', true)
+								drawnCells[cellKey] = true
+							end
 						end
 					end
 				end
@@ -3112,7 +3117,10 @@ function start.f_palMenu(side, cmd, player, member, selectState)
 	start.p[side].inPalMenu = true
 
 	-- accept selection
-	if #validPals <= 1 or getInput(cmd, motif.select_info['p' .. side].palmenu.done.key) or timerSelect == -1 then
+	local autoConfirm = #validPals <= 1
+	if autoConfirm or getInput(cmd, motif.select_info['p' .. side].palmenu.done.key) or timerSelect == -1 then
+		-- TODO: There's an issue here where when the palette is selected there will be 1 frame without any cursor
+		-- Since the "done" cursor only appears in the next frame
 		pal = (curIdx == maxIdx) and (start.c[player].randPalPreview or start.f_randomPal(charRef, validPals)) or validPals[curIdx]
 		st.pal, st.currentIdx = pal, curIdx
 
@@ -3142,8 +3150,8 @@ function start.f_palMenu(side, cmd, player, member, selectState)
 		end
 		selectState = 3
 		start.f_playWave(start.c[player].selRef, 'cursor', motif.select_info['p' .. side].select.snd[1], motif.select_info['p' .. side].select.snd[2])
-		-- Skip sound for auto-confirmation, since we already played the select character confirmation sound
-		if #validPals > 1 then
+		-- Skip cursor sound for auto-confirmation, since we already played the select character confirmation sound
+		if not autoConfirm then
 			sndPlay(motif.Snd, motif.select_info['p' .. side].palmenu.done.snd[1], motif.select_info['p' .. side].palmenu.done.snd[2])
 		end
 	 -- next palette
