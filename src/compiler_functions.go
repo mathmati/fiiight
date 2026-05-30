@@ -4712,7 +4712,6 @@ func (c *CharCompiler) lifebarAction(is IniSection, sc *StateControllerBase) (St
 	return *ret, err
 }
 
-
 func (c *CharCompiler) loadState(is IniSection, sc *StateControllerBase) (StateController, error) {
 	ret, err := (*loadState)(sc), c.stateSec(is, func() error {
 		sc.add(loadState_, nil)
@@ -5684,13 +5683,13 @@ func (c *CharCompiler) textSub(is IniSection, sc *StateControllerBase) error {
 	}
 	if err := c.stateParam(is, "params",
 		false, func(data string) error {
-		bes, err := c.exprs(data, VT_Undefined, 100)
-		if err != nil {
-			return err
-		}
-		sc.add(text_params, bes)
-		return nil
-	}); err != nil {
+			bes, err := c.exprs(data, VT_Undefined, 100)
+			if err != nil {
+				return err
+			}
+			sc.add(text_params, bes)
+			return nil
+		}); err != nil {
 		return err
 	}
 	if err := c.stateParam(is, "text", false, func(data string) error {
