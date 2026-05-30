@@ -471,6 +471,20 @@ func (pl *PaletteList) SwapPalMap(palMap *[]int) bool {
 	return true
 }
 
+// Returns the real index of a selectable palette
+// For instance if palette 3 is requested, it checks palette 1,3's location and returns that index
+func (pl *PaletteList) SelectablePalIndex(palNum int) int {
+	if palNum < 1 || palNum > sys.cfg.Config.PaletteMax {
+		return 0 // Fallback
+	}
+	key := [2]uint16{1, uint16(palNum)}
+	palIdx, ok := pl.PalTable[key]
+	if !ok {
+		return 0
+	}
+	return palIdx
+}
+
 // Convert palette color slice into the format used in textures
 func Pal32ToBytes(pal []uint32) []byte {
 	if len(pal) == 0 {
@@ -1615,25 +1629,6 @@ func preloadSff(filename string, char bool, preloadSpr map[[2]uint16]bool) (*Sff
 		return nil, nil, err
 	}
 
-	// Prepare palette mapping for the select screen
-	// The select screen expects them at "0 to PaletteMax-1"
-	// TODO: Select screen code could use the normal mapping method and thus do without workarounds
-	for i := 1; i <= sys.cfg.Config.PaletteMax; i++ {
-		key := [2]uint16{1, uint16(i)}
-		physIdx, ok := sff.palList.PalTable[key]
-		if !ok || physIdx < 0 {
-			continue
-		}
-		pal := sff.palList.Get(physIdx)
-		if pal == nil {
-			continue
-		}
-		logicalIdx := i - 1
-		sff.palList.SetSource(logicalIdx, pal)
-		sff.palList.PalTable[key] = logicalIdx // point logical key to logical slot
-		sff.palList.numcols[key] = len(pal)
-	}
-
 	// Prepare sprite reading
 	var shofs, xofs, size uint32 = sff.header.FirstSpriteHeaderOffset, 0, 0
 	var indexOfPrevious uint16
@@ -1952,12 +1947,13 @@ func (s *Sff) loadPalettes(f io.ReadSeeker, lofs uint32) error {
 		// We'll use a length check later instead because that's more reliable
 		s.palList.numcols[[2]uint16{gn[0], gn[1]}] = int(gn[2])
 
+		// This no longer seems necessary after merging select screen and ingame palette codes
 		// Clear conflicting selectable palette mapping
-		if i <= sys.cfg.Config.PaletteMax &&
-			s.palList.PalTable[[2]uint16{1, uint16(i+1)}] == s.palList.PalTable[[2]uint16{gn[0], gn[1]}] &&
-			(gn[0] != 1 || gn[1] != uint16(i+1)) {
-			s.palList.PalTable[[2]uint16{1, uint16(i+1)}] = -1
-		}
+		//if i <= sys.cfg.Config.PaletteMax &&
+		//	s.palList.PalTable[[2]uint16{1, uint16(i+1)}] == s.palList.PalTable[[2]uint16{gn[0], gn[1]}] &&
+		//	(gn[0] != 1 || gn[1] != uint16(i+1)) {
+		//	s.palList.PalTable[[2]uint16{1, uint16(i+1)}] = -1
+		//}
 	}
 
 	return nil
