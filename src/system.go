@@ -2554,16 +2554,20 @@ func (s *System) action() {
 		s.zmin = s.stage.topbound * s.stage.localscl
 		s.zmax = s.stage.botbound * s.stage.localscl
 		//s.bgPalFX.step()
+
 		s.envShake.next()
 		if s.envcol_time > 0 {
 			s.envcol_time--
 		}
-		s.zoom.update()
+
+		// Step pause timers
 		if s.supertime > 0 {
 			s.supertime--
 		} else if s.pausetime > 0 {
 			s.pausetime--
 		}
+
+		// Start pause timers
 		if s.supertimebuffer < 0 {
 			s.supertimebuffer = ^s.supertimebuffer
 			s.supertime = s.supertimebuffer
@@ -2572,6 +2576,7 @@ func (s *System) action() {
 			s.pausetimebuffer = ^s.pausetimebuffer
 			s.pausetime = s.pausetimebuffer
 		}
+
 		// In Mugen 1.1, few global AssertSpecial flags persist during pauses. Seemingly only TimerFreeze
 		if s.supertime <= 0 && s.pausetime <= 0 {
 			s.specialFlag = 0
@@ -2580,9 +2585,14 @@ func (s *System) action() {
 			// "NoKOSlow" added to facilitate custom slowdown. In Mugen that flag only needs to be asserted in first frame of KO slowdown
 			s.specialFlag = (s.specialFlag&GSF_nokoslow | s.specialFlag&GSF_timerfreeze)
 		}
+
+		// Run the main character logic
 		s.charList.action()
+
+		// The following must be placed after char action or they will lag behind 1 frame
 		s.allPalFX.step()
 		s.bgPalFX.step()
+		s.zoom.update()
 		s.nomusic = s.gsf(GSF_nomusic) && !sys.postMatchFlg
 	}
 
