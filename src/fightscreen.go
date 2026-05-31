@@ -2405,7 +2405,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	return co
 }
 
-func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy bool) {
+func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 	co.bg.Action()
 	co.top.Action()
 
@@ -2422,10 +2422,18 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy b
 	// True hits are only updated by Char(). The live tally is only used for combo display behavior
 	//co.trueHits = hits
 
+	// Handle show/hide speed
 	if co.resttime > 0 {
+		// Slide in
 		co.counterX -= co.counterX / co.showspeed
+		// Snap to visible position
+		if Abs(co.counterX) < 1 {
+			co.counterX = 0
+		}
 	} else if co.trueHits < 2 {
+		// Slide out when combo ends
 		co.counterX -= sys.fightScreen.fnt_scale * co.hidespeed * float32(sys.fightScreen.localcoord[0]) / 320
+		// Snap to starting position
 		if co.counterX < co.start_x*2 {
 			co.counterX = co.start_x * 2
 		}
@@ -2435,9 +2443,10 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy b
 		co.shaketime--
 	}
 
-	// TODO: Most commercial games don't rely on the dizzy flag
-	// They keep the combo active as long as hits >= 2
-	if Abs(co.counterX) < 1 && !dizzy {
+	// The displayed time only decrements when the counter is in the visible position
+	// Currently, the way the timer decrements while the combo is still ongoing can make it stay visible varying amounts of time past the end of the combo
+	// This makes it not always sync correctly with the "nice combo" actions
+	if co.counterX == 0 {
 		co.resttime--
 	}
 
@@ -5156,7 +5165,7 @@ func (fs *FightScreen) step() {
 	}
 	// Time
 	fs.time.step()
-	cb, cd, cp, dz := [2]int32{}, [2]int32{}, [2]float32{}, [2]bool{}
+	cb, cd, cp := [2]int32{}, [2]int32{}, [2]float32{}
 	targets := [2]int32{}
 	// Combo
 	for _, ch := range sys.chars {
@@ -5169,9 +5178,6 @@ func (fs *FightScreen) step() {
 				// Perhaps helper percentages shouldn't be tracked, but ignoring them creates scenarios where the lifebars show 0% damage which looks wrong
 				cp[side] += float32(c.receivedDmg) / float32(c.lifeMax) * 100
 				targets[side]++
-				if c.scf(SCF_dizzy) {
-					dz[side] = true
-				}
 			}
 		}
 	}
@@ -5181,7 +5187,7 @@ func (fs *FightScreen) step() {
 		}
 	}
 	for i := range fs.combos {
-		fs.combos[i].step(cb[i], cd[i], cp[i], dz[i]) // Combo hits, combo damage, combo damage percentage, dizzy flag
+		fs.combos[i].step(cb[i], cd[i], cp[i]) // Combo hits, combo damage, combo damage percentage
 	}
 	// Action
 	for i := range fs.actions {
