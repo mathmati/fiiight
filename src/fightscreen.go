@@ -2327,8 +2327,8 @@ type FightScreenCombo struct {
 	start_x       float32
 	counter       map[int32]*FSText
 	counter_shake bool
-	counter_time  int32
-	counter_mult  float32
+	counter_time  int32 // Shake effect duration
+	counter_mult  float32 // Shake effect scale correction factor
 	text          map[int32]*FSText
 	bg            AnimLayout
 	top           AnimLayout
@@ -2343,7 +2343,7 @@ type FightScreenCombo struct {
 	shownPct      float32
 	resttime      int32
 	counterX      float32
-	shaketime     int32
+	curShaketime  int32
 	autoalign     bool
 	newCombo      bool
 }
@@ -2439,8 +2439,8 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		}
 	}
 
-	if co.shaketime > 0 {
-		co.shaketime--
+	if co.curShaketime > 0 {
+		co.curShaketime--
 	}
 
 	// The displayed time only decrements when the counter is in the visible position
@@ -2455,7 +2455,7 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		// Reset visuals when hits changed
 		if co.newCombo || co.shownHits != co.trueHits {
 			if co.counter_shake {
-				co.shaketime = co.counter_time
+				co.curShaketime = co.counter_time
 			}
 			for i := range co.counter {
 				co.counter[i].resetTxtPfx()
@@ -2504,7 +2504,7 @@ func (co *FightScreenCombo) reset() {
 	co.shownPct = 0
 	co.resttime = 0
 	co.counterX = co.start_x * 2
-	co.shaketime = 0
+	co.curShaketime = 0
 }
 
 func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
@@ -2528,7 +2528,9 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 		}
 	}
 
+	// Replace operator with current combo value
 	counter := strings.Replace(co.counter[cv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
+
 	x := float32(co.pos[0])
 	if side == 0 {
 		if co.start_x <= 0 {
@@ -2545,8 +2547,14 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 			x -= co.counterX
 		}
 	}
+
+	// BG
 	co.bg.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
+
+	// Track total string length
 	var length float32
+
+	// Text
 	if co.text[tv].font[0] >= 0 && getFont(f, co.text[tv].font[0]) != nil {
 		text := strings.Replace(co.text[tv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
 		text = strings.Replace(text, "%d", fmt.Sprintf("%v", co.shownDmg), 1)
@@ -2583,6 +2591,8 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 				co.text[tv].palfx, co.text[tv].frgba)
 		}
 	}
+
+	// Counter
 	if co.counter[cv].font[0] >= 0 && getFont(f, co.counter[cv].font[0]) != nil {
 		if side == 0 && co.autoalign {
 			if ff := getFont(f, co.counter[cv].font[0]); ff != nil {
@@ -2590,10 +2600,17 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 			}
 		}
 
-		z := 1 + float32(co.shaketime)*co.counter_mult*float32(math.Sin(float64(co.shaketime)*(math.Pi/2.5)))
+		// Shake effect
+		// TODO: More customizable parameters
+		// TODO: Maximum scale is currently determined by "time * correction factor". That seems especially odd
+		arg := float64(co.counter_time - co.curShaketime) * math.Pi / 2.5
+		z := 1 + float32(co.curShaketime)*co.counter_mult*float32(math.Cos(arg))
+
 		co.counter[cv].lay.DrawText((x-length+sys.fightScreen.offsetX)/z, float32(co.pos[1])/z, z*sys.fightScreen.scale, layerno,
 			counter, getFont(f, co.counter[cv].font[0]), co.counter[cv].font[1], co.counter[cv].font[2], co.counter[cv].palfx, co.counter[cv].frgba)
 	}
+
+	// Top
 	co.top.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
 }
 
