@@ -1858,11 +1858,14 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 			refFace.face.PalTex = refFace.face.CachePalTex(charPal)
 		}
 
+		// Save current brightness
+		//oldBright := sys.brightness
+
 		// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
-		oldBright := sys.brightness
-		if refChar.ignoreDarkenTime > 0 {
-			sys.brightness = 1.0
-		}
+		// Update: This is an odd thing to do since the rest of the fight screen darkens
+		//if refChar.ignoreDarkenTime > 0 {
+		//	sys.brightness = 1.0
+		//}
 
 		// Draw the actual face sprite
 		fa.face_lay.DrawFaceSprite((float32(fa.pos[0])+sys.fightScreen.offsetX)*sys.fightScreen.scale, float32(fa.pos[1])*sys.fightScreen.scale, layerno,
@@ -1874,7 +1877,7 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 		}
 
 		// Restore original system brightness
-		sys.brightness = oldBright
+		//sys.brightness = oldBright
 	}
 
 	// Draw top layer
@@ -1891,13 +1894,14 @@ func (fa *FightScreenFace) drawTeammates(layerno int16, charpn int) {
 	//	return
 	//}
 
-	refChar := sys.chars[charpn][0]
+	// Save current brightness
+	oldBright := sys.brightness
 
 	// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
-	oldBright := sys.brightness
-	if refChar.ignoreDarkenTime > 0 {
-		sys.brightness = 1.0
-	}
+	//refChar := sys.chars[charpn][0]
+	//if refChar.ignoreDarkenTime > 0 {
+	//	sys.brightness = 1.0
+	//}
 
 	teamSize := int32(len(fa.teammate_face))
 
