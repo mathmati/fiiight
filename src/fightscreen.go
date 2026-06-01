@@ -2412,6 +2412,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	is.ReadF32(pre+"counter.shake.ampl", &co.counterShake.ampl)
 	is.ReadF32(pre+"counter.shake.scale", &co.counterShake.scale)
 	is.ReadF32(pre+"counter.shake.angle", &co.counterShake.angle)
+	is.ReadF32(pre+"counter.shake.angleadd", &co.counterShake.angleadd)
 
 	co.text[0] = readFSText(pre+"text.", is, "", 2, f, align)
 	for k, v := range readMultipleFSText(pre, "text", is, "", 2, f, align) {
@@ -2650,6 +2651,7 @@ type ComboShake struct {
 	freq     float32
 	phase    float32
 	angle    float32
+	angleadd float32
 }
 
 func (cs *ComboShake) restart() {
@@ -2691,7 +2693,11 @@ func (cs *ComboShake) getOffset() (x, y float32) {
 	curAmp := cs.ampl * t
 	phaseRad := Rad(cs.phase) + Rad(cs.freq)*float32(cs.time-cs.curTime)
 	val := curAmp * float32(math.Cos(float64(phaseRad)))
-	radAng := Rad(cs.angle)
+
+	elapsed := float32(cs.time - cs.curTime)
+	currentAngleDeg := cs.angle + cs.angleadd*elapsed
+	radAng := Rad(currentAngleDeg)
+
 	x = val * float32(math.Cos(float64(radAng)))
 	y = val * float32(math.Sin(float64(radAng)))
 	return
