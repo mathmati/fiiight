@@ -2330,9 +2330,6 @@ type FightScreenCombo struct {
 	pos           [2]int32
 	start_x       float32
 	counter       map[int32]*FSText
-	//counter_shake bool
-	//counter_time  int32 // Shake effect duration
-	//counter_mult  float32 // Shake effect scale correction factor
 	text          map[int32]*FSText
 	bg            AnimLayout
 	top           AnimLayout
@@ -2359,18 +2356,17 @@ func newFightScreenCombo() *FightScreenCombo {
 		showspeed:    8,
 		hidespeed:    4,
 		counter:      make(map[int32]*FSText),
-		//counter_time: 7,
-		//counter_mult: 1.0 / 20,
 		text:         make(map[int32]*FSText),
 		autoalign:    true,
 		counterShake: ComboShake{
 			freq:  60, // Same as EnvShake
-			scale: 1.35, // Derived from old Ikemen formula
 			decay:  1.0, // Linear
+			scale: 1.0, // No change
 		},
 		textShake: ComboShake{
 			freq:  60,
 			decay:  1.0,
+			scale: 1.0,
 		},
 	}
 }
@@ -2381,7 +2377,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	is.ReadI32(pre+"pos", &co.pos[0], &co.pos[1])
 	is.ReadF32(pre+"start.x", &co.start_x)
 	if side == 1 {
-		// mugen 1.0 implementation reuses winmugen code where both sides shared the same values
+		// Mugen 1.0 implementation reuses Winmugen code where both sides shared the same values
 		if pre == "team2." {
 			co.start_x = float32(sys.fightScreen.localcoord[0]) - co.start_x
 		} else {
@@ -2403,18 +2399,22 @@ func readFightScreenCombo(pre string, is IniSection,
 		co.counter[k] = v
 	}
 
-	// Counter shake
-	// TODO: Shouldn't these also have multiple values?
-	is.ReadBool(pre+"counter.shake", &co.counterShake.enabled)
-
-	// Old shake syntax
+	// Old counter shake syntax
+	// TODO: Shouldn't shaking parameters also support "multiple values"?
+	var old bool
+	if is.ReadBool(pre+"counter.shake", &old) {
+		if old {
+			co.counterShake.time = 8 // Mugen value
+			co.counterShake.scale = 1.35 // Derived from old Ikemen formula
+		}
+	}
 	is.ReadI32(pre+"counter.time", &co.counterShake.time)
 	var mult float32
 	if is.ReadF32(pre+"counter.mult", &mult) {
 		co.counterShake.scale = 1 + float32(co.counterShake.time) * mult
 	}
 
-	// New shake syntax
+	// New counter shake syntax
 	is.ReadI32(pre+"counter.shake.time", &co.counterShake.time)
 	is.ReadF32(pre+"counter.shake.freq", &co.counterShake.freq)
 	is.ReadF32(pre+"counter.shake.phase", &co.counterShake.phase) // Conditional default like in EnvShake seems unnecessary
@@ -2431,7 +2431,6 @@ func readFightScreenCombo(pre string, is IniSection,
 	}
 
 	// Text shake
-	is.ReadBool(pre+"text.shake", &co.textShake.enabled)
 	is.ReadI32(pre+"text.shake.time", &co.textShake.time)
 	is.ReadF32(pre+"text.shake.freq", &co.textShake.freq)
 	is.ReadF32(pre+"text.shake.phase", &co.textShake.phase)
@@ -2552,10 +2551,8 @@ func (co *FightScreenCombo) reset() {
 	co.resttime = 0
 	co.counterX = co.start_x * 2
 
-	// Reset combo counter shake
-	co.counterShake.active = false
+	// Reset combo shake
 	co.counterShake.curTime = 0
-	co.textShake.active = false
 	co.textShake.curTime = 0
 }
 
@@ -2694,10 +2691,7 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 }
 
 type ComboShake struct {
-	enabled  bool // Global toggle
-	active   bool // Currently active
 	time     int32
-	curTime  int32
 	ampl     float32
 	scale    float32
 	freq     float32
@@ -2705,23 +2699,18 @@ type ComboShake struct {
 	dir      float32 // It's an angle but this name is consistent with EnvShake
 	diradd   float32
 	decay    float32
+	curTime  int32
 }
 
 func (cs *ComboShake) restart() {
-	if !cs.enabled || cs.time <= 0 {
-		cs.active = false
+	if cs.time <= 0 {
 		return
 	}
-	cs.active = true
 	cs.curTime = cs.time
 }
 
 func (cs *ComboShake) update() {
-	if !cs.active {
-		return
-	}
 	if cs.curTime <= 0 {
-		cs.active = false
 		return
 	}
 	cs.curTime--
@@ -2739,7 +2728,7 @@ func (cs *ComboShake) getDecay() float32 {
 }
 
 func (cs *ComboShake) getScale() float32 {
-	if !cs.active || cs.scale == 1 {
+	if cs.curTime <= 0 || cs.scale == 1 {
 		return 1
 	}
 	decay := cs.getDecay()
@@ -2750,7 +2739,7 @@ func (cs *ComboShake) getScale() float32 {
 }
 
 func (cs *ComboShake) getOffset() (x, y float32) {
-	if !cs.active || cs.ampl == 0 {
+	if cs.curTime <= 0 || cs.ampl == 0 {
 		return 0, 0
 	}
 	curAmp := cs.ampl * cs.getDecay()
@@ -2762,7 +2751,7 @@ func (cs *ComboShake) getOffset() (x, y float32) {
 	radAng := Rad(currentAngleDeg)
 
 	x = val * float32(math.Cos(float64(radAng)))
-	y = val * float32(math.Sin(float64(radAng)))
+	y = -val * float32(math.Sin(float64(radAng))) // Negated for counter‑clockwise
 	return
 }
 
