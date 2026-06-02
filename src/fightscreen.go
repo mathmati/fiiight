@@ -2580,6 +2580,7 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	// Replace operator with current combo value
 	counter := strings.Replace(co.counter[cv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
 
+	// Compute base x position
 	x := float32(co.pos[0])
 	if side == 0 {
 		if co.start_x <= 0 {
@@ -2601,32 +2602,35 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	// BG
 	co.bg.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
 
-	// Track total string length
-	var length float32
-
-	// Text
-	var maxWidth float32
-	var lineHeight float32
+	// Text block pre-processing
 	var ffText *Fnt
+	var textBlockWidth float32
+	var lineHeight float32
+	var lines []string
 	if co.text[tv].font[0] >= 0 && getFont(f, co.text[tv].font[0]) != nil {
+		// Replace operator with current combo hits
 		text := strings.Replace(co.text[tv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
+		// Replace operator with current combo damage
 		text = strings.Replace(text, "%d", fmt.Sprintf("%v", co.shownDmg), 1)
-		// Truncate the percentage to avoid rounding to 100% unless the enemy is defeated
-		truncatedPct := math.Floor(float64(co.shownPct)*math.Pow10(int(co.places))) / math.Pow10(int(co.places))
-		// Split float value
-		s := strings.Split(fmt.Sprintf("%.[2]*[1]f", truncatedPct, co.places), ".")
-		// Decimal separator
-		if co.places > 0 && len(s) > 1 {
-			s[0] = s[0] + co.separator + s[1]
+
+		// Only process combo damage percentage if necessary
+		if strings.Contains(co.text[tv].text, "%p") {
+			// Truncate the percentage to avoid rounding to 100% unless the enemy is defeated
+			truncatedPct := math.Floor(float64(co.shownPct)*math.Pow10(int(co.places))) / math.Pow10(int(co.places))
+			// Split float value
+			s := strings.Split(fmt.Sprintf("%.[2]*[1]f", truncatedPct, co.places), ".")
+			// Decimal separator
+			if co.places > 0 && len(s) > 1 {
+				s[0] = s[0] + co.separator + s[1]
+			}
+			// Replace %p with formatted string
+			text = strings.Replace(text, "%p", s[0], 1)
 		}
-		// Replace %p with formatted string
-		text = strings.Replace(text, "%p", s[0], 1)
 
 		// Split on new line
-		lines := strings.Split(text, "\\n")
+		lines = strings.Split(text, "\\n")
 
-		// Compute line metrics and block dimensions
-		var lineWidths []float32
+		// Compute text block dimensions
 		ffText = getFont(f, co.text[tv].font[0])
 		if ffText != nil {
 			lineHeight = float32(ffText.Size[1])*co.text[tv].lay.scale[1]*sys.fightScreen.fnt_scale +
@@ -2634,20 +2638,22 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 			for _, line := range lines {
 				w := float32(ffText.TextWidth(line, co.text[tv].font[1], 0)) *
 					co.text[tv].lay.scale[0] * sys.fightScreen.fnt_scale
-				lineWidths = append(lineWidths, w)
-				if w > maxWidth {
-					maxWidth = w
+				if w > textBlockWidth {
+					textBlockWidth = w
 				}
 			}
 		}
+	}
 
-		// Compute block reference position
+	// Draw text
+	if len(lines) > 0 && ffText != nil {
 		blockX := x + sys.fightScreen.offsetX
 		blockY := float32(co.pos[1])
 
-		// Apply shake transformation to the whole block
+		// Apply shake effect
 		scaleShakeText := co.textShake.getScale()
 		xShakeText, yShakeText := co.textShake.getOffset()
+
 		drawBlockX := (blockX + xShakeText) / scaleShakeText
 		drawBlockY := (blockY + yShakeText) / scaleShakeText
 		finalScale := scaleShakeText * sys.fightScreen.scale
@@ -2664,20 +2670,22 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	// Counter
 	if co.counter[cv].font[0] >= 0 && getFont(f, co.counter[cv].font[0]) != nil {
 		// Apply autoalign
+		var counterShift float32
 		if side == 0 && co.autoalign {
 			if ff := getFont(f, co.counter[cv].font[0]); ff != nil {
-				length = float32(ff.TextWidth(counter, co.counter[cv].font[1], 0)) * co.counter[cv].lay.scale[0] * sys.fightScreen.fnt_scale
+				counterShift = float32(ff.TextWidth(counter, co.counter[cv].font[1], 0)) *
+					co.counter[cv].lay.scale[0] * sys.fightScreen.fnt_scale
 			}
 		}
 		if side == 1 && co.autoalign {
-			length += maxWidth
+			counterShift = counterShift + textBlockWidth
 		}
 
 		// Apply shake effect
 		scaleShake := co.counterShake.getScale()
 		xShake, yShake := co.counterShake.getOffset()
 
-		drawX := (x - length + sys.fightScreen.offsetX + xShake) / scaleShake
+		drawX := (x - counterShift + sys.fightScreen.offsetX + xShake) / scaleShake
 		drawY := (float32(co.pos[1]) + yShake) / scaleShake
 		finalScale := scaleShake * sys.fightScreen.scale
 
