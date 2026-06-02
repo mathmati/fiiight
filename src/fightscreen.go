@@ -2365,6 +2365,7 @@ func newFightScreenCombo() *FightScreenCombo {
 		counterShake: ComboShake{
 			freq:  60, // Same as EnvShake
 			scale: 1.35, // Derived from old Ikemen formula
+			decay:  1.0, // Linear
 		},
 	}
 }
@@ -2413,6 +2414,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	is.ReadF32(pre+"counter.shake.scale", &co.counterShake.scale)
 	is.ReadF32(pre+"counter.shake.angle", &co.counterShake.angle)
 	is.ReadF32(pre+"counter.shake.angleadd", &co.counterShake.angleadd)
+	is.ReadF32(pre+"counter.shake.decay", &co.counterShake.decay)
 
 	co.text[0] = readFSText(pre+"text.", is, "", 2, f, align)
 	for k, v := range readMultipleFSText(pre, "text", is, "", 2, f, align) {
@@ -2652,6 +2654,7 @@ type ComboShake struct {
 	phase    float32
 	angle    float32
 	angleadd float32
+	decay    float32
 }
 
 func (cs *ComboShake) restart() {
@@ -2674,14 +2677,25 @@ func (cs *ComboShake) update() {
 	cs.curTime--
 }
 
+func (cs *ComboShake) getDecay() float32 {
+	if cs.time <= 0 {
+		return 0
+	}
+	t := float32(cs.curTime) / float32(cs.time)
+	if cs.decay == 0 {
+		return 1
+	}
+	return float32(math.Pow(float64(t), float64(cs.decay)))
+}
+
 func (cs *ComboShake) getScale() float32 {
 	if !cs.active || cs.scale == 1 {
 		return 1
 	}
-	t := float32(cs.curTime) / float32(cs.time)
+	decay := cs.getDecay()
 	phaseRad := Rad(cs.phase) + Rad(cs.freq)*float32(cs.time-cs.curTime)
 	cosVal := float32(math.Cos(float64(phaseRad)))
-	exponent := float32(math.Log(float64(cs.scale))) * t * cosVal
+	exponent := float32(math.Log(float64(cs.scale))) * decay * cosVal
 	return float32(math.Exp(float64(exponent)))
 }
 
@@ -2689,8 +2703,7 @@ func (cs *ComboShake) getOffset() (x, y float32) {
 	if !cs.active || cs.ampl == 0 {
 		return 0, 0
 	}
-	t := float32(cs.curTime) / float32(cs.time)
-	curAmp := cs.ampl * t
+	curAmp := cs.ampl * cs.getDecay()
 	phaseRad := Rad(cs.phase) + Rad(cs.freq)*float32(cs.time-cs.curTime)
 	val := curAmp * float32(math.Cos(float64(phaseRad)))
 
