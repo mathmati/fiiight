@@ -568,6 +568,8 @@ const (
 	OC_ex_gethitvar_fall_envshake_phase
 	OC_ex_gethitvar_fall_envshake_mul
 	OC_ex_gethitvar_fall_envshake_dir
+	OC_ex_gethitvar_fall_envshake_diradd
+	OC_ex_gethitvar_fall_envshake_decay
 	OC_ex_gethitvar_attr
 	OC_ex_gethitvar_dizzypoints
 	OC_ex_gethitvar_guardpoints
@@ -726,10 +728,6 @@ const (
 	OC_ex_prevmovetype
 	OC_ex_prevstatetype
 	OC_ex_reversaldefattr
-	OC_ex_envshakevar_time
-	OC_ex_envshakevar_freq
-	OC_ex_envshakevar_ampl
-	OC_ex_envshakevar_dir
 	OC_ex_angle
 	OC_ex_scale_x
 	OC_ex_scale_y
@@ -741,7 +739,14 @@ const (
 	OC_ex_selfcommand
 )
 const (
-	OC_ex2_index OpCode = iota
+	OC_ex2_envshakevar_time OpCode = iota
+	OC_ex2_envshakevar_freq
+	OC_ex2_envshakevar_phase
+	OC_ex2_envshakevar_ampl
+	OC_ex2_envshakevar_dir
+	OC_ex2_envshakevar_diradd
+	OC_ex2_envshakevar_decay
+	OC_ex2_index
 	OC_ex2_fightscreenvar_info_author
 	OC_ex2_fightscreenvar_info_localcoord_x
 	OC_ex2_fightscreenvar_info_localcoord_y
@@ -3118,16 +3123,20 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.ghv.fall_envshake_time)
 	case OC_ex_gethitvar_fall_envshake_freq:
 		sys.bcStack.PushF(c.ghv.fall_envshake_freq)
+	case OC_ex_gethitvar_fall_envshake_phase:
+		sys.bcStack.PushF(c.ghv.fall_envshake_phase)
 	case OC_ex_gethitvar_fall_envshake_ampl:
 		// This one is an int in Mugen but a float in Ikemen, so undefined returns 0 and true undefined respectively
 		// No issues so far, so no need to add a special case for the time being
 		sys.bcStack.PushI(int32(float32(c.ghv.fall_envshake_ampl) * (c.localscl / oc.localscl)))
-	case OC_ex_gethitvar_fall_envshake_phase:
-		sys.bcStack.PushF(c.ghv.fall_envshake_phase)
 	case OC_ex_gethitvar_fall_envshake_mul:
 		sys.bcStack.PushF(c.ghv.fall_envshake_mul)
 	case OC_ex_gethitvar_fall_envshake_dir:
 		sys.bcStack.PushF(c.ghv.fall_envshake_dir)
+	case OC_ex_gethitvar_fall_envshake_diradd:
+		sys.bcStack.PushF(c.ghv.fall_envshake_diradd)
+	case OC_ex_gethitvar_fall_envshake_decay:
+		sys.bcStack.PushF(c.ghv.fall_envshake_decay)
 	case OC_ex_gethitvar_attr:
 		// same as c.hitDefAttr()
 		attr := be.ReadIntAt(i)
@@ -3286,14 +3295,6 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.dizzyPoints)
 	case OC_ex_dizzypointsmax:
 		sys.bcStack.PushI(c.dizzyPointsMax)
-	case OC_ex_envshakevar_time:
-		sys.bcStack.PushI(sys.envShake.curTime)
-	case OC_ex_envshakevar_freq:
-		sys.bcStack.PushF(sys.envShake.freq)
-	case OC_ex_envshakevar_ampl:
-		sys.bcStack.PushF(float32(math.Abs(float64(sys.envShake.ampl / oc.localscl))))
-	case OC_ex_envshakevar_dir:
-		sys.bcStack.PushF(sys.envShake.dir)
 	case OC_ex_fighttime:
 		sys.bcStack.PushI(sys.matchTime)
 	case OC_ex_firstattack:
@@ -3556,6 +3557,20 @@ func (be BytecodeExp) run_ex2(c *Char, i *int, oc *Char) {
 	camOff := float32(0)
 	camCorrected := false
 	switch opc {
+	case OC_ex2_envshakevar_time:
+		sys.bcStack.PushI(sys.envShake.curTime)
+	case OC_ex2_envshakevar_freq:
+		sys.bcStack.PushF(sys.envShake.freq)
+	case OC_ex2_envshakevar_phase:
+		sys.bcStack.PushF(sys.envShake.phase)
+	case OC_ex2_envshakevar_ampl:
+		sys.bcStack.PushF(float32(math.Abs(float64(sys.envShake.ampl / oc.localscl))))
+	case OC_ex2_envshakevar_dir:
+		sys.bcStack.PushF(sys.envShake.dir)
+	case OC_ex2_envshakevar_diradd:
+		sys.bcStack.PushF(sys.envShake.diradd)
+	case OC_ex2_envshakevar_decay:
+		sys.bcStack.PushF(sys.envShake.decay)
 	case OC_ex2_index:
 		sys.bcStack.PushI(c.indexTrigger())
 	case OC_ex2_fightscreenvar_info_author:
@@ -7373,17 +7388,21 @@ const (
 	hitDef_yaccel
 	hitDef_zaccel
 	hitDef_envshake_time
-	hitDef_envshake_ampl
-	hitDef_envshake_phase
 	hitDef_envshake_freq
+	hitDef_envshake_phase
+	hitDef_envshake_ampl
 	hitDef_envshake_mul
 	hitDef_envshake_dir
+	hitDef_envshake_diradd
+	hitDef_envshake_decay
 	hitDef_fall_envshake_time
-	hitDef_fall_envshake_ampl
-	hitDef_fall_envshake_phase
 	hitDef_fall_envshake_freq
+	hitDef_fall_envshake_phase
+	hitDef_fall_envshake_ampl
 	hitDef_fall_envshake_mul
 	hitDef_fall_envshake_dir
+	hitDef_fall_envshake_diradd
+	hitDef_fall_envshake_decay
 	hitDef_dizzypoints
 	hitDef_guardpoints
 	hitDef_redlife
@@ -7695,28 +7714,36 @@ func (sc hitDef) runSub(c *Char, hd *HitDef, paramID byte, exp []BytecodeExp) {
 		hd.zaccel = exp[0].evalF(c)
 	case hitDef_envshake_time:
 		hd.envshake_time = exp[0].evalI(c)
-	case hitDef_envshake_ampl:
-		hd.envshake_ampl = exp[0].evalI(c)
 	case hitDef_envshake_freq:
 		hd.envshake_freq = Max(0, exp[0].evalF(c))
 	case hitDef_envshake_phase:
 		hd.envshake_phase = exp[0].evalF(c)
+	case hitDef_envshake_ampl:
+		hd.envshake_ampl = exp[0].evalI(c)
 	case hitDef_envshake_mul:
 		hd.envshake_mul = exp[0].evalF(c)
 	case hitDef_envshake_dir:
 		hd.envshake_dir = exp[0].evalF(c)
+	case hitDef_envshake_diradd:
+		hd.envshake_diradd = exp[0].evalF(c)
+	case hitDef_envshake_decay:
+		hd.envshake_decay = exp[0].evalF(c)
 	case hitDef_fall_envshake_time:
 		hd.fall_envshake_time = exp[0].evalI(c)
-	case hitDef_fall_envshake_ampl:
-		hd.fall_envshake_ampl = exp[0].evalI(c)
 	case hitDef_fall_envshake_freq:
 		hd.fall_envshake_freq = Max(0, exp[0].evalF(c))
 	case hitDef_fall_envshake_phase:
 		hd.fall_envshake_phase = exp[0].evalF(c)
+	case hitDef_fall_envshake_ampl:
+		hd.fall_envshake_ampl = exp[0].evalI(c)
 	case hitDef_fall_envshake_mul:
 		hd.fall_envshake_mul = exp[0].evalF(c)
 	case hitDef_fall_envshake_dir:
 		hd.fall_envshake_dir = exp[0].evalF(c)
+	case hitDef_fall_envshake_diradd:
+		hd.fall_envshake_diradd = exp[0].evalF(c)
+	case hitDef_fall_envshake_decay:
+		hd.fall_envshake_decay = exp[0].evalF(c)
 	case hitDef_dizzypoints:
 		hd.dizzypoints = Max(IErr+1, exp[0].evalI(c))
 	case hitDef_guardpoints:
@@ -9090,11 +9117,6 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				eachProj(func(p *Projectile) {
 					p.hitdef.envshake_time = v1
 				})
-			case hitDef_envshake_ampl:
-				v1 := exp[0].evalI(c)
-				eachProj(func(p *Projectile) {
-					p.hitdef.envshake_ampl = v1
-				})
 			case hitDef_envshake_freq:
 				v1 := Max(0, exp[0].evalF(c))
 				eachProj(func(p *Projectile) {
@@ -9104,6 +9126,11 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				v1 := exp[0].evalF(c)
 				eachProj(func(p *Projectile) {
 					p.hitdef.envshake_phase = v1
+				})
+			case hitDef_envshake_ampl:
+				v1 := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.envshake_ampl = v1
 				})
 			case hitDef_envshake_mul:
 				v1 := exp[0].evalF(c)
@@ -9115,15 +9142,20 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				eachProj(func(p *Projectile) {
 					p.hitdef.envshake_dir = v1
 				})
+			case hitDef_envshake_diradd:
+				v1 := exp[0].evalF(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.envshake_diradd = v1
+				})
+			case hitDef_envshake_decay:
+				v1 := exp[0].evalF(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.envshake_decay = v1
+				})
 			case hitDef_fall_envshake_time:
 				v1 := exp[0].evalI(c)
 				eachProj(func(p *Projectile) {
 					p.hitdef.fall_envshake_time = v1
-				})
-			case hitDef_fall_envshake_ampl:
-				v1 := exp[0].evalI(c)
-				eachProj(func(p *Projectile) {
-					p.hitdef.fall_envshake_ampl = v1
 				})
 			case hitDef_fall_envshake_freq:
 				v1 := Max(0, exp[0].evalF(c))
@@ -9135,6 +9167,11 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				eachProj(func(p *Projectile) {
 					p.hitdef.fall_envshake_phase = v1
 				})
+			case hitDef_fall_envshake_ampl:
+				v1 := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.fall_envshake_ampl = v1
+				})
 			case hitDef_fall_envshake_mul:
 				v1 := exp[0].evalF(c)
 				eachProj(func(p *Projectile) {
@@ -9144,6 +9181,16 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				v1 := exp[0].evalF(c)
 				eachProj(func(p *Projectile) {
 					p.hitdef.fall_envshake_dir = v1
+				})
+			case hitDef_fall_envshake_diradd:
+				v1 := exp[0].evalF(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.fall_envshake_diradd = v1
+				})
+			case hitDef_fall_envshake_decay:
+				v1 := exp[0].evalF(c)
+				eachProj(func(p *Projectile) {
+					p.hitdef.fall_envshake_decay = v1
 				})
 			case hitDef_dizzypoints:
 				v1 := Max(IErr+1, exp[0].evalI(c))
@@ -10823,7 +10870,8 @@ func (sc fallEnvShake) Run(c *Char, _ []int32) bool {
 					ampl:    float32(crun.ghv.fall_envshake_ampl) * c.localscl,
 					mul:     crun.ghv.fall_envshake_mul,
 					dir:     crun.ghv.fall_envshake_dir,
-					decay:   1.0, // TODO
+					diradd:  crun.ghv.fall_envshake_diradd,
+					decay:   crun.ghv.fall_envshake_decay,
 				}
 				sys.envShake.setDefaultPhase()
 				sys.envShake.restart()
@@ -14392,6 +14440,8 @@ const (
 	getHitVarSet_fall_envshake_phase
 	getHitVarSet_fall_envshake_time
 	getHitVarSet_fall_envshake_dir
+	getHitVarSet_fall_envshake_diradd
+	getHitVarSet_fall_envshake_decay
 	getHitVarSet_fall_kill
 	getHitVarSet_fall_recover
 	getHitVarSet_fall_recovertime
@@ -14459,16 +14509,20 @@ func (sc getHitVarSet) Run(c *Char, _ []int32) bool {
 			crun.ghv.fall_damage = exp[0].evalI(c)
 		case getHitVarSet_fall_envshake_ampl:
 			crun.ghv.fall_envshake_ampl = int32(exp[0].evalF(c) * redirscale)
+		case getHitVarSet_fall_envshake_time:
+			crun.ghv.fall_envshake_time = exp[0].evalI(c)
 		case getHitVarSet_fall_envshake_freq:
 			crun.ghv.fall_envshake_freq = exp[0].evalF(c)
+		case getHitVarSet_fall_envshake_phase:
+			crun.ghv.fall_envshake_phase = exp[0].evalF(c)
 		case getHitVarSet_fall_envshake_mul:
 			crun.ghv.fall_envshake_mul = exp[0].evalF(c)
 		case getHitVarSet_fall_envshake_dir:
 			crun.ghv.fall_envshake_dir = exp[0].evalF(c)
-		case getHitVarSet_fall_envshake_phase:
-			crun.ghv.fall_envshake_phase = exp[0].evalF(c)
-		case getHitVarSet_fall_envshake_time:
-			crun.ghv.fall_envshake_time = exp[0].evalI(c)
+		case getHitVarSet_fall_envshake_diradd:
+			crun.ghv.fall_envshake_diradd = exp[0].evalF(c)
+		case getHitVarSet_fall_envshake_decay:
+			crun.ghv.fall_envshake_decay = exp[0].evalF(c)
 		case getHitVarSet_fall_kill:
 			crun.ghv.fall_kill = exp[0].evalB(c)
 		case getHitVarSet_fall_recover:

@@ -8310,10 +8310,16 @@ func triggerFunctions(l *lua.LState) {
 			ln = lua.LNumber(sys.envShake.curTime)
 		case "freq":
 			ln = lua.LNumber(sys.envShake.freq)
+		case "phase":
+			ln = lua.LNumber(sys.envShake.phase)
 		case "ampl":
 			ln = lua.LNumber(sys.envShake.ampl)
 		case "dir":
 			ln = lua.LNumber(sys.envShake.dir)
+		case "diradd":
+			ln = lua.LNumber(sys.envShake.diradd)
+		case "decay":
+			ln = lua.LNumber(sys.envShake.decay)
 		default:
 			l.RaiseError("\nInvalid argument: %v\n", strArg(l, 1))
 		}
@@ -8550,8 +8556,6 @@ func triggerFunctions(l *lua.LState) {
 		c := sys.debugWC
 		var lv lua.LValue
 		switch strings.ToLower(strArg(l, 1)) {
-		case "fall.envshake.dir":
-			lv = lua.LNumber(c.ghv.fall_envshake_dir)
 		case "animtype":
 			lv = lua.LNumber(c.gethitAnimtype())
 		case "air.animtype":
@@ -8654,12 +8658,18 @@ func triggerFunctions(l *lua.LState) {
 			lv = lua.LNumber(c.ghv.fall_envshake_time)
 		case "fall.envshake.freq":
 			lv = lua.LNumber(c.ghv.fall_envshake_freq)
-		case "fall.envshake.ampl":
-			lv = lua.LNumber(c.ghv.fall_envshake_ampl)
 		case "fall.envshake.phase":
 			lv = lua.LNumber(c.ghv.fall_envshake_phase)
+		case "fall.envshake.ampl":
+			lv = lua.LNumber(c.ghv.fall_envshake_ampl)
 		case "fall.envshake.mul":
 			lv = lua.LNumber(c.ghv.fall_envshake_mul)
+		case "fall.envshake.dir":
+			lv = lua.LNumber(c.ghv.fall_envshake_dir)
+		case "fall.envshake.diradd":
+			lv = lua.LNumber(c.ghv.fall_envshake_diradd)
+		case "fall.envshake.decay":
+			lv = lua.LNumber(c.ghv.fall_envshake_decay)
 		case "attr":
 			lv = attrLStr(c.ghv.attr)
 		case "dizzypoints":

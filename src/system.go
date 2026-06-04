@@ -5529,6 +5529,7 @@ func (es *EnvShake) clear() {
 
 func (es *EnvShake) restart() {
 	if es.time <= 0 {
+		es.clear() // Just in case
 		return
 	}
 	es.curTime = es.time
