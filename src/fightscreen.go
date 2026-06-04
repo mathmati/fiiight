@@ -2469,10 +2469,6 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 	// True hits are only updated by Char(). The live tally is only used for combo display behavior
 	//co.trueHits = hits
 
-	// Update shake every frame
-	co.counterShake.update()
-	co.textShake.update()
-
 	// Handle show/hide speed
 	if co.resttime > 0 {
 		// Slide in
@@ -2518,6 +2514,10 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		co.shownPct = percentage
 		co.newCombo = false
 	}
+
+	// Update shaking effects
+	co.counterShake.update()
+	co.textShake.update()
 
 	// Multiple counter fonts
 	var cv int32
@@ -2651,12 +2651,12 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 		blockY := float32(co.pos[1])
 
 		// Apply shake effect
-		scaleShakeText := co.textShake.getScale()
-		xShakeText, yShakeText := co.textShake.getOffset()
+		textShakeScale := co.textShake.getScale()
+		textShakeOffset := co.textShake.getOffset()
 
-		drawBlockX := (blockX + xShakeText) / scaleShakeText
-		drawBlockY := (blockY + yShakeText) / scaleShakeText
-		finalScale := scaleShakeText * sys.fightScreen.scale
+		drawBlockX := (blockX + textShakeOffset[0]) / textShakeScale
+		drawBlockY := (blockY + textShakeOffset[1]) / textShakeScale
+		finalScale := textShakeScale * sys.fightScreen.scale
 
 		// Draw each line
 		for i, line := range lines {
@@ -2682,12 +2682,12 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 		}
 
 		// Apply shake effect
-		scaleShake := co.counterShake.getScale()
-		xShake, yShake := co.counterShake.getOffset()
+		shakeScale := co.counterShake.getScale()
+		shakeOffset := co.counterShake.getOffset()
 
-		drawX := (x - counterShift + sys.fightScreen.offsetX + xShake) / scaleShake
-		drawY := (float32(co.pos[1]) + yShake) / scaleShake
-		finalScale := scaleShake * sys.fightScreen.scale
+		drawX := (x - counterShift + sys.fightScreen.offsetX + shakeOffset[0]) / shakeScale
+		drawY := (float32(co.pos[1]) + shakeOffset[1]) / shakeScale
+		finalScale := shakeScale * sys.fightScreen.scale
 
 		co.counter[cv].lay.DrawText(drawX, drawY, finalScale, layerno,
 			counter, getFont(f, co.counter[cv].font[0]), co.counter[cv].font[1], co.counter[cv].font[2],
@@ -2698,20 +2698,31 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	co.top.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
 }
 
+// This is like a miniature EnvShake applied to a single object
 type ComboShake struct {
-	time     int32
-	ampl     float32
-	scale    float32
-	freq     float32
-	phase    float32
-	dir      float32 // It's an angle but this name is consistent with EnvShake
-	diradd   float32
-	decay    float32
-	curTime  int32
+	time      int32
+	ampl      float32
+	scale     float32
+	freq      float32
+	phase     float32
+	dir       float32 // It's an angle but this name is consistent with EnvShake
+	diradd    float32
+	decay     float32
+	curTime   int32
+	curOffset [2]float32
+	curScale  float32
+}
+
+// Uses a reset instead of a clear because we don't want to lose the original parameters
+func (cs *ComboShake) reset() {
+	cs.curTime = 0
+	cs.curOffset = [2]float32{0, 0}
+	cs.curScale = 1
 }
 
 func (cs *ComboShake) restart() {
 	if cs.time <= 0 {
+		cs.reset() // Just in case
 		return
 	}
 	cs.curTime = cs.time
@@ -2719,48 +2730,59 @@ func (cs *ComboShake) restart() {
 
 func (cs *ComboShake) update() {
 	if cs.curTime <= 0 {
+		if cs.time > 0 {
+			cs.reset()
+		}
 		return
 	}
+
+	// Handle decay
+	var decay float32 = 1
+	if cs.decay != 0 && cs.time > 0 {
+		t := float32(cs.curTime) / float32(cs.time)
+		decay = float32(math.Pow(float64(t), float64(cs.decay)))
+	}
+
+	elapsed := float32(cs.time - cs.curTime)
+
+	// Calculate offset and cache it
+	// There's no benefit to caching it yet, but it may be useful for future features and keeps the code similar to EnvShake
+	if cs.ampl == 0 {
+		cs.curOffset = [2]float32{0, 0}
+	} else {
+		curAmp := cs.ampl * decay
+		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
+		val := curAmp * float32(math.Cos(float64(phaseRad)))
+
+		currentAngleDeg := cs.dir + cs.diradd*elapsed
+		radAng := Rad(currentAngleDeg)
+
+		x := val * float32(math.Cos(float64(radAng)))
+		y := -val * float32(math.Sin(float64(radAng))) // Negated for counter‑clockwise
+
+		cs.curOffset = [2]float32{x, y}
+	}
+
+	// Calculate scale and cache it
+	if cs.scale == 1 {
+		cs.curScale = 1
+	} else {
+		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
+		cosVal := float32(math.Cos(float64(phaseRad)))
+		exponent := float32(math.Log(float64(cs.scale))) * decay * cosVal
+		cs.curScale = float32(math.Exp(float64(exponent)))
+	}
+
+	// Step timer only after computing offset and scale
 	cs.curTime--
 }
 
-func (cs *ComboShake) getDecay() float32 {
-	if cs.time <= 0 {
-		return 0
-	}
-	t := float32(cs.curTime) / float32(cs.time)
-	if cs.decay == 0 {
-		return 1
-	}
-	return float32(math.Pow(float64(t), float64(cs.decay)))
+func (cs *ComboShake) getOffset() [2]float32 {
+	return cs.curOffset
 }
 
 func (cs *ComboShake) getScale() float32 {
-	if cs.curTime <= 0 || cs.scale == 1 {
-		return 1
-	}
-	decay := cs.getDecay()
-	phaseRad := Rad(cs.phase) + Rad(cs.freq)*float32(cs.time-cs.curTime)
-	cosVal := float32(math.Cos(float64(phaseRad)))
-	exponent := float32(math.Log(float64(cs.scale))) * decay * cosVal
-	return float32(math.Exp(float64(exponent)))
-}
-
-func (cs *ComboShake) getOffset() (x, y float32) {
-	if cs.curTime <= 0 || cs.ampl == 0 {
-		return 0, 0
-	}
-	curAmp := cs.ampl * cs.getDecay()
-	phaseRad := Rad(cs.phase) + Rad(cs.freq)*float32(cs.time-cs.curTime)
-	val := curAmp * float32(math.Cos(float64(phaseRad)))
-
-	elapsed := float32(cs.time - cs.curTime)
-	currentAngleDeg := cs.dir + cs.diradd*elapsed
-	radAng := Rad(currentAngleDeg)
-
-	x = val * float32(math.Cos(float64(radAng)))
-	y = -val * float32(math.Sin(float64(radAng))) // Negated for counter‑clockwise
-	return
+	return cs.curScale
 }
 
 type FSMsg struct {
