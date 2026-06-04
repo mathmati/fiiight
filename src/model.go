@@ -363,17 +363,17 @@ func loadEnvironment(filepath string) (*Environment, error) {
 	env.GGXLUT = &GLTFTexture{}
 	if hdrImg, ok := img.(hdr.Image); ok {
 		bounds := img.Bounds()
-		size := bounds.Max.X * bounds.Max.Y * 3
+		size := bounds.Max.X * bounds.Max.Y * 4
 		data := make([]float32, 0, size)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				color := hdrImg.HDRAt(x, y)
-				r, g, b, _ := color.HDRRGBA()
-				data = append(data, float32(r), float32(g), float32(b))
+				r, g, b, a := color.HDRRGBA()
+				data = append(data, float32(r), float32(g), float32(b), float32(a))
 			}
 		}
-		for i, j := 0, len(data)-3; i < j; i, j = i+3, j-3 {
-			data[i], data[i+1], data[i+2], data[j], data[j+1], data[j+2] = data[j], data[j+1], data[j+2], data[i], data[i+1], data[i+2]
+		for i, j := 0, len(data)-4; i < j; i, j = i+4, j-4 {
+			data[i], data[i+1], data[i+2], data[i+3], data[j], data[j+1], data[j+2], data[j+3] = data[j], data[j+1], data[j+2], data[j+3], data[i], data[i+1], data[i+2], data[i+3]
 		}
 		sys.mainThreadTask <- func() {
 			if !gfx.IsModelEnabled() {

@@ -106,12 +106,12 @@ func (r *Renderer_VK) newDataTexture(width, height int32) Texture {
 	return t
 }
 func (r *Renderer_VK) newHDRTexture(width, height int32) Texture {
-	t := r.newTexture(width, height, 32*3, true) //float
+	t := r.newTexture(width, height, 32*4, true) //float
 	t.(*Texture_VK).sampler = r.GetSampler(VulkanSamplerInfo{TextureSamplingFilterLinear, TextureSamplingFilterLinear, TextureSamplingWrapMirroredRepeat, TextureSamplingWrapMirroredRepeat})
 	return t
 }
 func (r *Renderer_VK) newCubeMapTexture(widthHeight int32, mipmap bool, lowestMipLevel int32) Texture {
-	t := &Texture_VK{widthHeight, widthHeight, 96, false, 1, [2]int32{0, 0}, [4]float32{0, 0, 1, 1}, nil, nil, nil}
+	t := &Texture_VK{widthHeight, widthHeight, 128, false, 1, [2]int32{0, 0}, [4]float32{0, 0, 1, 1}, nil, nil, nil}
 	if mipmap {
 		t.mipLevels = uint32(math.Floor(math.Log2(float64(widthHeight)))+1) - uint32(lowestMipLevel)
 		t.sampler = r.GetSampler(VulkanSamplerInfo{TextureSamplingFilterLinear, TextureSamplingFilterLinearMipMapLinear, TextureSamplingWrapClampToEdge, TextureSamplingWrapClampToEdge})

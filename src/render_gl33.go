@@ -246,7 +246,7 @@ func (r *Renderer_GL33) newDataTexture(width, height int32) Texture {
 func (r *Renderer_GL33) newHDRTexture(width, height int32) Texture {
 	r.SetActiveTexture0() //gl.ActiveTexture(gl.TEXTURE0)
 
-	t := r.generateTexture(width, height, 96, false)
+	t := r.generateTexture(width, height, 128, false)
 
 	gl.BindTexture(gl.TEXTURE_2D, t.handle)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
@@ -263,7 +263,7 @@ func (r *Renderer_GL33) newCubeMapTexture(widthHeight int32, mipmap bool, lowest
 
 	gl.BindTexture(gl.TEXTURE_CUBE_MAP, t.handle)
 	for i := 0; i < 6; i++ {
-		gl.TexImage2D(uint32(gl.TEXTURE_CUBE_MAP_POSITIVE_X+i), 0, gl.RGB32F, widthHeight, widthHeight, 0, gl.RGB, gl.FLOAT, nil)
+		gl.TexImage2D(uint32(gl.TEXTURE_CUBE_MAP_POSITIVE_X+i), 0, gl.RGBA32F, widthHeight, widthHeight, 0, gl.RGBA, gl.FLOAT, nil)
 	}
 
 	if mipmap {
