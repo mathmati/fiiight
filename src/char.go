@@ -11374,18 +11374,23 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 				c.juggle = 0
 			}
 		}
+		// Apply PalFX to target
 		if hd.palfx.time > 0 && getter.palfx != nil {
 			getter.palfx.clearWithNeg(true)
 			getter.palfx.PalFXDef = hd.palfx
 		}
+		// Apply EnvShake
 		if hd.envshake_time > 0 {
 			sys.envShake.time = hd.envshake_time
-			sys.envShake.freq = hd.envshake_freq * float32(math.Pi) / 180
-			sys.envShake.ampl = float32(int32(float32(hd.envshake_ampl) * c.localscl))
+			sys.envShake.freq = hd.envshake_freq
 			sys.envShake.phase = hd.envshake_phase
+			sys.envShake.ampl = float32(int32(float32(hd.envshake_ampl) * c.localscl)) // Truncated
 			sys.envShake.mul = hd.envshake_mul
-			sys.envShake.dir = hd.envshake_dir * float32(math.Pi) / 180
+			sys.envShake.dir = hd.envshake_dir
+			sys.envShake.diradd = 0
+			sys.envShake.decay = 1.0
 			sys.envShake.setDefaultPhase()
+			sys.envShake.restart()
 		}
 		// Cornerpush on hit
 		// In Mugen it is only set if the enemy is already in the corner before the hit

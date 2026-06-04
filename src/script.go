@@ -8307,13 +8307,13 @@ func triggerFunctions(l *lua.LState) {
 		var ln lua.LNumber
 		switch strings.ToLower(strArg(l, 1)) {
 		case "time":
-			ln = lua.LNumber(sys.envShake.time)
+			ln = lua.LNumber(sys.envShake.curTime)
 		case "freq":
-			ln = lua.LNumber(sys.envShake.freq / float32(math.Pi) * 180)
+			ln = lua.LNumber(sys.envShake.freq)
 		case "ampl":
 			ln = lua.LNumber(sys.envShake.ampl)
 		case "dir":
-			ln = lua.LNumber(sys.envShake.dir / float32(math.Pi) * 180)
+			ln = lua.LNumber(sys.envShake.dir)
 		default:
 			l.RaiseError("\nInvalid argument: %v\n", strArg(l, 1))
 		}

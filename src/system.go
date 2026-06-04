@@ -2555,7 +2555,6 @@ func (s *System) action() {
 		s.zmax = s.stage.botbound * s.stage.localscl
 		//s.bgPalFX.step()
 
-		s.envShake.next()
 		if s.envcol_time > 0 {
 			s.envcol_time--
 		}
@@ -2592,6 +2591,7 @@ func (s *System) action() {
 		// The following must be placed after char action or they will lag behind 1 frame
 		s.allPalFX.step()
 		s.bgPalFX.step()
+		s.envShake.update()
 		s.zoom.update()
 		s.nomusic = s.gsf(GSF_nomusic) && !sys.postMatchFlg
 	}
@@ -5506,53 +5506,90 @@ func (l *Loader) runTread() bool {
 }
 
 type EnvShake struct {
-	time  int32
-	freq  float32
-	ampl  float32
-	phase float32
-	mul   float32
-	dir   float32 // rad, for ampl=-4:  0: down first, 90: left first, 180: up first, 270: right first
+	time       int32
+	freq       float32
+	ampl       float32
+	phase      float32
+	mul        float32
+	dir        float32
+	diradd     float32
+	decay      float32
+	curTime    int32
+	curOffset  [2]float32
 }
 
 func (es *EnvShake) clear() {
 	*es = EnvShake{
-		freq:  float32(math.Pi / 3),
-		ampl:  -4.0,
+		freq:  60,
 		phase: float32(math.NaN()),
+		ampl:  -4,
 		mul:   1.0,
-		dir:   0.0}
+	}
+}
+
+func (es *EnvShake) restart() {
+	if es.time <= 0 {
+		return
+	}
+	es.curTime = es.time
 }
 
 func (es *EnvShake) setDefaultPhase() {
 	if math.IsNaN(float64(es.phase)) {
-		if es.freq >= math.Pi/2 {
-			es.phase = math.Pi / 2
+		if es.freq >= 90.0 {
+			es.phase = 90.0
 		} else {
 			es.phase = 0
 		}
 	}
 }
 
-func (es *EnvShake) next() {
-	if es.time > 0 {
-		es.time--
-		es.phase += es.freq
-		if es.phase > math.Pi*2 {
-			es.ampl *= es.mul
-			es.phase -= math.Pi * 2
+func (es *EnvShake) update() {
+	if es.curTime <= 0 {
+		// Only run clear() if necessary
+		if es.time > 0 {
+			es.clear()
 		}
-	} else {
-		es.ampl = 0
+		return
 	}
+
+	// Recompute offset once per frame and cache it
+	elapsed := float32(es.time - es.curTime)
+	currentPhase := es.phase + es.freq*elapsed
+	currentDir := es.dir + es.diradd*elapsed
+
+	var factor float64 = 1.0
+
+	// Mul is applied once per cycle
+	if es.mul != 0 && es.mul != 1 {
+		cycles := math.Floor(float64(es.freq*elapsed) / 360.0)
+		factor *= math.Pow(float64(es.mul), cycles)
+	}
+
+	// Apply decay
+	t := float64(es.curTime) / float64(es.time)
+	if es.decay != 0 && t > 0 {
+		factor *= math.Pow(t, float64(es.decay))
+	}
+
+	ampl := float64(es.ampl) * factor
+	if ampl == 0 {
+		es.curOffset = [2]float32{0, 0}
+	} else {
+		phaseRad := float64(currentPhase) * math.Pi / 180.0
+		dirRad := float64(currentDir) * math.Pi / 180.0
+		offset := ampl * math.Sin(phaseRad)
+		x := float32(offset * math.Sin(-dirRad))
+		y := float32(offset * math.Cos(-dirRad))
+		es.curOffset = [2]float32{x, y}
+	}
+
+	// Step timer only after computing the offset
+	es.curTime--
 }
 
 func (es *EnvShake) getOffset() [2]float32 {
-	if es.time > 0 {
-		offset := (es.ampl * float32(math.Sin(float64(es.phase))))
-		return [2]float32{offset * float32(math.Sin(float64(-es.dir))),
-			offset * float32(math.Cos(float64(-es.dir)))}
-	}
-	return [2]float32{0, 0}
+	return es.curOffset
 }
 
 type ZoomEffect struct {

@@ -3287,13 +3287,13 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_dizzypointsmax:
 		sys.bcStack.PushI(c.dizzyPointsMax)
 	case OC_ex_envshakevar_time:
-		sys.bcStack.PushI(sys.envShake.time)
+		sys.bcStack.PushI(sys.envShake.curTime)
 	case OC_ex_envshakevar_freq:
-		sys.bcStack.PushF(sys.envShake.freq / float32(math.Pi) * 180)
+		sys.bcStack.PushF(sys.envShake.freq)
 	case OC_ex_envshakevar_ampl:
 		sys.bcStack.PushF(float32(math.Abs(float64(sys.envShake.ampl / oc.localscl))))
 	case OC_ex_envshakevar_dir:
-		sys.bcStack.PushF(sys.envShake.dir / float32(math.Pi) * 180)
+		sys.bcStack.PushF(sys.envShake.dir)
 	case OC_ex_fighttime:
 		sys.bcStack.PushI(sys.matchTime)
 	case OC_ex_firstattack:
@@ -9996,10 +9996,13 @@ const (
 	envShake_mul
 	envShake_phase
 	envShake_dir
+	envShake_diradd
+	envShake_decay
 )
 
 func (sc envShake) Run(c *Char, _ []int32) bool {
 	sys.envShake.clear()
+
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case envShake_time:
@@ -10009,17 +10012,24 @@ func (sc envShake) Run(c *Char, _ []int32) bool {
 			// Because of how localscl works, the amplitude will be slightly smaller during widescreen
 			// This also happens in Mugen however
 		case envShake_freq:
-			sys.envShake.freq = Max(0, exp[0].evalF(c)*float32(math.Pi)/180)
+			sys.envShake.freq = Max(0, exp[0].evalF(c))
 		case envShake_phase:
-			sys.envShake.phase = Max(-180*float32(math.Pi)/180, exp[0].evalF(c)*float32(math.Pi)/180)
+			sys.envShake.phase = Clamp(exp[0].evalF(c), -180, 180) // TODO: Why is it clamped here but not in other places
 		case envShake_mul:
 			sys.envShake.mul = exp[0].evalF(c)
 		case envShake_dir:
-			sys.envShake.dir = Max(0, exp[0].evalF(c)*float32(math.Pi)/180)
+			sys.envShake.dir = exp[0].evalF(c)
+		case envShake_diradd:
+			sys.envShake.diradd = exp[0].evalF(c)
+		case envShake_decay:
+			sys.envShake.decay = exp[0].evalF(c)
 		}
 		return true
 	})
+
 	sys.envShake.setDefaultPhase()
+	sys.envShake.restart()
+
 	return false
 }
 
@@ -10806,18 +10816,25 @@ func (sc fallEnvShake) Run(c *Char, _ []int32) bool {
 		switch paramID {
 		case fallEnvShake_:
 			if crun.ghv.fall_envshake_time > 0 {
-				sys.envShake = EnvShake{time: crun.ghv.fall_envshake_time,
-					freq:  crun.ghv.fall_envshake_freq * math.Pi / 180,
-					ampl:  float32(crun.ghv.fall_envshake_ampl) * c.localscl,
-					phase: crun.ghv.fall_envshake_phase,
-					mul:   crun.ghv.fall_envshake_mul,
-					dir:   crun.ghv.fall_envshake_dir * float32(math.Pi) / 180}
+				sys.envShake = EnvShake{
+					time:    crun.ghv.fall_envshake_time,
+					freq:    crun.ghv.fall_envshake_freq,
+					phase:   crun.ghv.fall_envshake_phase,
+					ampl:    float32(crun.ghv.fall_envshake_ampl) * c.localscl,
+					mul:     crun.ghv.fall_envshake_mul,
+					dir:     crun.ghv.fall_envshake_dir,
+					decay:   1.0, // TODO
+				}
 				sys.envShake.setDefaultPhase()
+				sys.envShake.restart()
+				// Consume variable to prevent retriggering
+				// https://github.com/ikemen-engine/Ikemen-GO/issues/583
 				crun.ghv.fall_envshake_time = 0
 			}
 		}
 		return true
 	})
+
 	return false
 }
 
