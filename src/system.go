@@ -4610,9 +4610,10 @@ func (s *Select) AddChar(def string) *SelectChar {
 		}
 		return nil
 	})
+
 	// preload animations
 	if len(anim_orig) > 0 {
-		LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
+		err := LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 			str, err := LoadText(filename) // LoadText is zip-aware
 			if err != nil {
 				return err
@@ -4633,14 +4634,22 @@ func (s *Select) AddChar(def string) *SelectChar {
 			}
 			return nil
 		})
+		// Crash if we expected an AIR file but didn't find any
+		if err != nil {
+			panic(fmt.Sprintf("Cannot open air file for character %s: %v", def, err))
+		}
 	}
-	// preload portion of sff file
+
+	// Try to use the "_preload.sff" file if available
 	fp := fmt.Sprintf("%v_preload.sff", strings.TrimSuffix(sc.def, filepath.Ext(sc.def)))
 	if fp = FileExist(fp); len(fp) == 0 {
+		// Fall back to normal SFF
 		fp = sprite_orig
 	}
+
+	// preload portion of sff file
 	if len(fp) > 0 {
-		LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
+		err := LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
 			var selPal []int32
 			var err_sff error
 			sc.sff, selPal, err_sff = preloadSff(file, true, listSpr)
@@ -4687,13 +4696,19 @@ func (s *Select) AddChar(def string) *SelectChar {
 			}
 			return nil
 		})
+		// Crash if we expected a SFF file but didn't find any
+		if err != nil {
+			panic(fmt.Sprintf("Cannot open sprite file for character %s: %v", def, err))
+		}
 	} else {
+		// If we deliberately lack a SFF, then make a dummy one
 		sc.sff = newSff()
 		sc.anims.updateSff(sc.sff)
 		for k := range s.charSpritePreload {
 			sc.anims.addSprite(sc.sff, k[0], k[1])
 		}
 	}
+
 	return sc
 }
 
