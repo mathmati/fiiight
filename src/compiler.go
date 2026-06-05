@@ -1294,6 +1294,9 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 			if err != nil {
 				return err
 			}
+			if bv2.IsNone() && len(be2) == 0 {
+				return Error("Missing value after ':=' operator")
+			}
 			be2.appendValue(bv2)
 			if rd {
 				out.appendI32Op(OC_nordrun, int32(len(be2)))
@@ -1416,10 +1419,12 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 	var err error
 	switch c.token {
 	case "":
-		if sys.ignoreMostErrors {
-			return bvNone(), nil
-		}
-		return bvNone(), Error("Nothing assigned")
+		// Because empty parameter values are not parsed at all, we don't need to ignore them here
+		// So it's safer to crash in case the value is accidentally empty
+		//if sys.ignoreMostErrors {
+		//	return bvNone(), nil
+		//}
+		return bvNone(), Error("Empty expression")
 	// Redirections without arguments
 	case "root", "parent", "p2", "stateowner":
 		switch c.token {
@@ -1593,8 +1598,7 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 		out.append(be2...)
 		return bvNone(), nil
 	case "-":
-		if len(*in) > 0 && (((*in)[0] >= '0' && (*in)[0] <= '9') ||
-			(*in)[0] == '.') {
+		if len(*in) > 0 && (((*in)[0] >= '0' && (*in)[0] <= '9') || (*in)[0] == '.') {
 			c.token += c.tokenizer(in)
 			bv = c.number(c.token)
 			if bv.IsNone() {
@@ -1604,6 +1608,9 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 			c.token = c.tokenizer(in)
 			if bv, err = c.expValue(&be1, in, false); err != nil {
 				return bvNone(), err
+			}
+			if bv.IsNone() && len(be1) == 0 {
+				return bvNone(), Error("Missing expression after '-'")
 			}
 			if bv.IsNone() {
 				if rd {
@@ -4901,6 +4908,9 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 			bv2, err := c.expEqne(&be2, in)
 			if err != nil {
 				return bvNone(), err
+			}
+			if bv2.IsNone() && len(be2) == 0 {
+				return bvNone(), Error("Missing value after ':=' operator")
 			}
 			be2.appendValue(bv2)
 			if rd {

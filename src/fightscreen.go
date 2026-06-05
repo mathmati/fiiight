@@ -1858,11 +1858,14 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 			refFace.face.PalTex = refFace.face.CachePalTex(charPal)
 		}
 
+		// Save current brightness
+		//oldBright := sys.brightness
+
 		// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
-		oldBright := sys.brightness
-		if refChar.ignoreDarkenTime > 0 {
-			sys.brightness = 1.0
-		}
+		// Update: This is an odd thing to do since the rest of the fight screen darkens
+		//if refChar.ignoreDarkenTime > 0 {
+		//	sys.brightness = 1.0
+		//}
 
 		// Draw the actual face sprite
 		fa.face_lay.DrawFaceSprite((float32(fa.pos[0])+sys.fightScreen.offsetX)*sys.fightScreen.scale, float32(fa.pos[1])*sys.fightScreen.scale, layerno,
@@ -1874,7 +1877,7 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 		}
 
 		// Restore original system brightness
-		sys.brightness = oldBright
+		//sys.brightness = oldBright
 	}
 
 	// Draw top layer
@@ -1891,13 +1894,14 @@ func (fa *FightScreenFace) drawTeammates(layerno int16, charpn int) {
 	//	return
 	//}
 
-	refChar := sys.chars[charpn][0]
+	// Save current brightness
+	oldBright := sys.brightness
 
 	// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
-	oldBright := sys.brightness
-	if refChar.ignoreDarkenTime > 0 {
-		sys.brightness = 1.0
-	}
+	//refChar := sys.chars[charpn][0]
+	//if refChar.ignoreDarkenTime > 0 {
+	//	sys.brightness = 1.0
+	//}
 
 	teamSize := int32(len(fa.teammate_face))
 
@@ -2327,8 +2331,8 @@ type FightScreenCombo struct {
 	start_x       float32
 	counter       map[int32]*FSText
 	counter_shake bool
-	counter_time  int32
-	counter_mult  float32
+	counter_time  int32 // Shake effect duration
+	counter_mult  float32 // Shake effect scale correction factor
 	text          map[int32]*FSText
 	bg            AnimLayout
 	top           AnimLayout
@@ -2343,7 +2347,7 @@ type FightScreenCombo struct {
 	shownPct      float32
 	resttime      int32
 	counterX      float32
-	shaketime     int32
+	curShaketime  int32
 	autoalign     bool
 	newCombo      bool
 }
@@ -2405,7 +2409,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	return co
 }
 
-func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy bool) {
+func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 	co.bg.Action()
 	co.top.Action()
 
@@ -2422,22 +2426,31 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy b
 	// True hits are only updated by Char(). The live tally is only used for combo display behavior
 	//co.trueHits = hits
 
+	// Handle show/hide speed
 	if co.resttime > 0 {
+		// Slide in
 		co.counterX -= co.counterX / co.showspeed
+		// Snap to visible position
+		if Abs(co.counterX) < 1 {
+			co.counterX = 0
+		}
 	} else if co.trueHits < 2 {
+		// Slide out when combo ends
 		co.counterX -= sys.fightScreen.fnt_scale * co.hidespeed * float32(sys.fightScreen.localcoord[0]) / 320
+		// Snap to starting position
 		if co.counterX < co.start_x*2 {
 			co.counterX = co.start_x * 2
 		}
 	}
 
-	if co.shaketime > 0 {
-		co.shaketime--
+	if co.curShaketime > 0 {
+		co.curShaketime--
 	}
 
-	// TODO: Most commercial games don't rely on the dizzy flag
-	// They keep the combo active as long as hits >= 2
-	if Abs(co.counterX) < 1 && !dizzy {
+	// The displayed time only decrements when the counter is in the visible position
+	// Currently, the way the timer decrements while the combo is still ongoing can make it stay visible varying amounts of time past the end of the combo
+	// This makes it not always sync correctly with the "nice combo" actions
+	if co.counterX == 0 {
 		co.resttime--
 	}
 
@@ -2446,7 +2459,7 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32, dizzy b
 		// Reset visuals when hits changed
 		if co.newCombo || co.shownHits != co.trueHits {
 			if co.counter_shake {
-				co.shaketime = co.counter_time
+				co.curShaketime = co.counter_time
 			}
 			for i := range co.counter {
 				co.counter[i].resetTxtPfx()
@@ -2495,7 +2508,7 @@ func (co *FightScreenCombo) reset() {
 	co.shownPct = 0
 	co.resttime = 0
 	co.counterX = co.start_x * 2
-	co.shaketime = 0
+	co.curShaketime = 0
 }
 
 func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
@@ -2519,7 +2532,9 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 		}
 	}
 
+	// Replace operator with current combo value
 	counter := strings.Replace(co.counter[cv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
+
 	x := float32(co.pos[0])
 	if side == 0 {
 		if co.start_x <= 0 {
@@ -2536,8 +2551,14 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 			x -= co.counterX
 		}
 	}
+
+	// BG
 	co.bg.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
+
+	// Track total string length
 	var length float32
+
+	// Text
 	if co.text[tv].font[0] >= 0 && getFont(f, co.text[tv].font[0]) != nil {
 		text := strings.Replace(co.text[tv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
 		text = strings.Replace(text, "%d", fmt.Sprintf("%v", co.shownDmg), 1)
@@ -2574,6 +2595,8 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 				co.text[tv].palfx, co.text[tv].frgba)
 		}
 	}
+
+	// Counter
 	if co.counter[cv].font[0] >= 0 && getFont(f, co.counter[cv].font[0]) != nil {
 		if side == 0 && co.autoalign {
 			if ff := getFont(f, co.counter[cv].font[0]); ff != nil {
@@ -2581,10 +2604,17 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 			}
 		}
 
-		z := 1 + float32(co.shaketime)*co.counter_mult*float32(math.Sin(float64(co.shaketime)*(math.Pi/2.5)))
+		// Shake effect
+		// TODO: More customizable parameters
+		// TODO: Maximum scale is currently determined by "time * correction factor". That seems especially odd
+		arg := float64(co.counter_time - co.curShaketime) * math.Pi / 2.5
+		z := 1 + float32(co.curShaketime)*co.counter_mult*float32(math.Cos(arg))
+
 		co.counter[cv].lay.DrawText((x-length+sys.fightScreen.offsetX)/z, float32(co.pos[1])/z, z*sys.fightScreen.scale, layerno,
 			counter, getFont(f, co.counter[cv].font[0]), co.counter[cv].font[1], co.counter[cv].font[2], co.counter[cv].palfx, co.counter[cv].frgba)
 	}
+
+	// Top
 	co.top.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
 }
 
@@ -5156,7 +5186,7 @@ func (fs *FightScreen) step() {
 	}
 	// Time
 	fs.time.step()
-	cb, cd, cp, dz := [2]int32{}, [2]int32{}, [2]float32{}, [2]bool{}
+	cb, cd, cp := [2]int32{}, [2]int32{}, [2]float32{}
 	targets := [2]int32{}
 	// Combo
 	for _, ch := range sys.chars {
@@ -5169,9 +5199,6 @@ func (fs *FightScreen) step() {
 				// Perhaps helper percentages shouldn't be tracked, but ignoring them creates scenarios where the lifebars show 0% damage which looks wrong
 				cp[side] += float32(c.receivedDmg) / float32(c.lifeMax) * 100
 				targets[side]++
-				if c.scf(SCF_dizzy) {
-					dz[side] = true
-				}
 			}
 		}
 	}
@@ -5181,7 +5208,7 @@ func (fs *FightScreen) step() {
 		}
 	}
 	for i := range fs.combos {
-		fs.combos[i].step(cb[i], cd[i], cp[i], dz[i]) // Combo hits, combo damage, combo damage percentage, dizzy flag
+		fs.combos[i].step(cb[i], cd[i], cp[i]) // Combo hits, combo damage, combo damage percentage
 	}
 	// Action
 	for i := range fs.actions {

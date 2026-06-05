@@ -2554,16 +2554,20 @@ func (s *System) action() {
 		s.zmin = s.stage.topbound * s.stage.localscl
 		s.zmax = s.stage.botbound * s.stage.localscl
 		//s.bgPalFX.step()
+
 		s.envShake.next()
 		if s.envcol_time > 0 {
 			s.envcol_time--
 		}
-		s.zoom.update()
+
+		// Step pause timers
 		if s.supertime > 0 {
 			s.supertime--
 		} else if s.pausetime > 0 {
 			s.pausetime--
 		}
+
+		// Start pause timers
 		if s.supertimebuffer < 0 {
 			s.supertimebuffer = ^s.supertimebuffer
 			s.supertime = s.supertimebuffer
@@ -2572,6 +2576,7 @@ func (s *System) action() {
 			s.pausetimebuffer = ^s.pausetimebuffer
 			s.pausetime = s.pausetimebuffer
 		}
+
 		// In Mugen 1.1, few global AssertSpecial flags persist during pauses. Seemingly only TimerFreeze
 		if s.supertime <= 0 && s.pausetime <= 0 {
 			s.specialFlag = 0
@@ -2580,9 +2585,14 @@ func (s *System) action() {
 			// "NoKOSlow" added to facilitate custom slowdown. In Mugen that flag only needs to be asserted in first frame of KO slowdown
 			s.specialFlag = (s.specialFlag&GSF_nokoslow | s.specialFlag&GSF_timerfreeze)
 		}
+
+		// Run the main character logic
 		s.charList.action()
+
+		// The following must be placed after char action or they will lag behind 1 frame
 		s.allPalFX.step()
 		s.bgPalFX.step()
+		s.zoom.update()
 		s.nomusic = s.gsf(GSF_nomusic) && !sys.postMatchFlg
 	}
 
@@ -4600,9 +4610,10 @@ func (s *Select) AddChar(def string) *SelectChar {
 		}
 		return nil
 	})
+
 	// preload animations
 	if len(anim_orig) > 0 {
-		LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
+		err := LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 			str, err := LoadText(filename) // LoadText is zip-aware
 			if err != nil {
 				return err
@@ -4623,14 +4634,22 @@ func (s *Select) AddChar(def string) *SelectChar {
 			}
 			return nil
 		})
+		// Crash if we expected an AIR file but didn't find any
+		if err != nil {
+			panic(fmt.Sprintf("Cannot open air file for character %s: %v", def, err))
+		}
 	}
-	// preload portion of sff file
+
+	// Try to use the "_preload.sff" file if available
 	fp := fmt.Sprintf("%v_preload.sff", strings.TrimSuffix(sc.def, filepath.Ext(sc.def)))
 	if fp = FileExist(fp); len(fp) == 0 {
+		// Fall back to normal SFF
 		fp = sprite_orig
 	}
+
+	// preload portion of sff file
 	if len(fp) > 0 {
-		LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
+		err := LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
 			var selPal []int32
 			var err_sff error
 			sc.sff, selPal, err_sff = preloadSff(file, true, listSpr)
@@ -4677,13 +4696,19 @@ func (s *Select) AddChar(def string) *SelectChar {
 			}
 			return nil
 		})
+		// Crash if we expected a SFF file but didn't find any
+		if err != nil {
+			panic(fmt.Sprintf("Cannot open sprite file for character %s: %v", def, err))
+		}
 	} else {
+		// If we deliberately lack a SFF, then make a dummy one
 		sc.sff = newSff()
 		sc.anims.updateSff(sc.sff)
 		for k := range s.charSpritePreload {
 			sc.anims.addSprite(sc.sff, k[0], k[1])
 		}
 	}
+
 	return sc
 }
 
