@@ -985,6 +985,34 @@ function main.f_charParam(t, c)
 	end
 end
 
+-- Converts character order params to a roster order-table key:
+local function orderParamMode(param)
+	if param == 'order' then
+		return 'default'
+	end
+	local mode = tostring(param or ''):match('^order(.+)$')
+	if mode ~= nil and mode ~= '' then
+		return mode
+	end
+	return nil
+end
+
+-- Add char ref to unified per-mode order table.
+local function addOrderChar(mode, order, ref)
+	mode = mode or 'default'
+	order = tonumber(order)
+	if order == nil or ref == nil then
+		return
+	end
+	if main.t_orderChars[mode] == nil then
+		main.t_orderChars[mode] = {}
+	end
+	if main.t_orderChars[mode][order] == nil then
+		main.t_orderChars[mode][order] = {}
+	end
+	table.insert(main.t_orderChars[mode][order], ref)
+end
+
 function main.f_addChar(line, playable, loading, slot)
 	table.insert(main.t_selChars, {})
 	local row = #main.t_selChars
@@ -1048,17 +1076,21 @@ function main.f_addChar(line, playable, loading, slot)
 		main.t_selChars[row].char_ref = main.t_charDef[main.t_selChars[row].char:lower()]
 	end
 	if playable then
-		--order param
-		if main.t_orderChars[main.t_selChars[row].order] == nil then
-			main.t_orderChars[main.t_selChars[row].order] = {}
+		-- order / order<gamemode> params
+		local hasSurvivalOrder = false
+		for k, v in pairs(main.t_selChars[row]) do
+			local mode = orderParamMode(k)
+			if mode ~= nil then
+				if mode == 'survival' then
+					hasSurvivalOrder = true
+				end
+				addOrderChar(mode, v, row - 1)
+			end
 		end
-		table.insert(main.t_orderChars[main.t_selChars[row].order], row - 1)
-		--ordersurvival param
-		local num = main.t_selChars[row].ordersurvival or 1
-		if main.t_orderSurvival[num] == nil then
-			main.t_orderSurvival[num] = {}
+		-- Preserve legacy Survival behavior: chars without ordersurvival still belong to survival order 1.
+		if not hasSurvivalOrder then
+			addOrderChar('survival', 1, row - 1)
 		end
-		table.insert(main.t_orderSurvival[num], row - 1)
 		--bonus games mode
 		if main.t_selChars[row].bonus ~= nil and main.t_selChars[row].bonus == 1 then
 			table.insert(main.t_bonusChars, row - 1)
@@ -1217,9 +1249,8 @@ function main.f_addStage(file, hidden, line)
 end
 
 main.t_includeStage = {{}, {}} --includestage = 1, includestage = -1
-main.t_orderChars = {}
+main.t_orderChars = {default = {}}
 main.t_orderStages = {}
-main.t_orderSurvival = {}
 main.t_bonusChars = {}
 main.t_selGrid = {}
 main.t_selOptions = {}
@@ -2908,13 +2939,12 @@ function main.f_unlockChar(num, bool, reset)
 		if main.t_selChars[num].hidden ~= 0 then
 			main.t_selChars[num].hidden_default = main.t_selChars[num].hidden
 			main.t_selChars[num].hidden = 0
-			for k, t in pairs({order = main.t_orderChars, ordersurvival = main.t_orderSurvival}) do
-				if main.t_selChars[num][k] ~= nil and main.t_selChars[num][k] < 0 then
-					main.t_selChars[num][k] = 0 - main.t_selChars[num][k]
-					if t[main.t_selChars[num][k]] == nil then
-						t[main.t_selChars[num][k]] = {}
-					end
-					table.insert(t[main.t_selChars[num][k]], main.t_selChars[num].char_ref)
+			for k, v in pairs(main.t_selChars[num]) do
+				local mode = orderParamMode(k)
+				local order = tonumber(v)
+				if mode ~= nil and order ~= nil and order < 0 then
+					main.t_selChars[num][k] = 0 - order
+					addOrderChar(mode, main.t_selChars[num][k], main.t_selChars[num].char_ref)
 				end
 			end
 			start.t_grid[main.t_selChars[num].row][main.t_selChars[num].col].hidden = main.t_selChars[num].hidden
@@ -3699,7 +3729,6 @@ if gameOption('Debug.DumpLuaTables') then
 	main.f_printTable(main.t_selStoryMode, "debug/t_selStoryMode.txt")
 	main.f_printTable(main.t_orderChars, "debug/t_orderChars.txt")
 	main.f_printTable(main.t_orderStages, "debug/t_orderStages.txt")
-	main.f_printTable(main.t_orderSurvival, "debug/t_orderSurvival.txt")
 	main.f_printTable(main.t_randomChars, "debug/t_randomChars.txt")
 	main.f_printTable(main.t_bonusChars, "debug/t_bonusChars.txt")
 	main.f_printTable(main.t_stageDef, "debug/t_stageDef.txt")

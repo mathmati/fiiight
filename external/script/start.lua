@@ -25,6 +25,22 @@ local cursorDone = {}
 --;===========================================================
 --; COMMON FUNCTIONS
 --;===========================================================
+-- Returns the unified order table used by the active mode.
+-- Priority: order<gameMode>, order<baseMode>, order
+function start.f_getOrderChars(baseMode)
+	local mode = gameMode() or ''
+	local checked = {}
+	for _, key in ipairs({mode, baseMode, 'default'}) do
+		if key ~= nil and key ~= '' and not checked[key] then
+			checked[key] = true
+			if type(main.t_orderChars[key]) == 'table' then
+				return main.t_orderChars[key]
+			end
+		end
+	end
+	return {}
+end
+
 --; ROSTER
 --converts '.maxmatches' style table (key = order, value = max matches) to key = match number, value = subtable with char num and order data
 function start.f_unifySettings(t, t_chars)
@@ -38,17 +54,6 @@ function start.f_unifySettings(t, t_chars)
 				infinite = true
 			end
 			for j = 1, num do --iterate up to max amount of matches versus characters with this order
-				--[[if j * start.p[2].numChars > #t_chars[i] and #ret > 0 then --if there are not enough characters to fill all slots and at least 1 fight is already assigned
-					local stop = true
-					for k = (j - 1) * start.p[2].numChars + 1, #t_chars[i] do --loop through characters left for this match
-						if start.f_getCharData(t_chars[i][k]).single == 1 then --and allow appending if any of the remaining characters has 'single' flag set
-							stop = false
-						end
-					end
-					if stop then
-						break
-					end
-				end]]
 				table.insert(ret, {['rmin'] = start.p[2].numChars, ['rmax'] = start.p[2].numChars, ['order'] = i})
 			end
 			if infinite then
@@ -64,30 +69,56 @@ end
 -- by start.f_makeRoster function, depending on game mode. Can be appended via
 -- external module, without conflicting with default scripts.
 start.t_makeRoster = {}
-start.t_makeRoster.arcade = function()
-	if start.p[2].teamMode == 0 then --Single
-		if start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches ~= nil and main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_arcademaxmatches'] ~= nil then --custom settings exists as char param
-			return start.f_unifySettings(main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_arcademaxmatches'], main.t_orderChars), main.t_orderChars
-		else --default settings
-			return start.f_unifySettings(main.t_selOptions.arcademaxmatches, main.t_orderChars), main.t_orderChars
-		end
-	else --Simul / Turns / Tag
-		if start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches ~= nil and main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_teammaxmatches'] ~= nil then --custom settings exists as char param
-			return start.f_unifySettings(main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_teammaxmatches'], main.t_orderChars), main.t_orderChars
-		else --default settings
-			return start.f_unifySettings(main.t_selOptions.teammaxmatches, main.t_orderChars), main.t_orderChars
+function start.f_rosterMaxMatches(baseMode)
+	local charData = start.f_getCharData(start.p[1].t_selected[1].ref)
+	local mode = gameMode() or ''
+	local t_chars = start.f_getOrderChars(baseMode)
+	local fallback = start.p[2].teamMode == 0 and 'arcade' or 'team'
+	local useMode = mode ~= '' and mode ~= 'arcade' and mode ~= 'team'
+	local candidates = {}
+	local function add(prefix, name)
+		if name == nil or name == '' then
+			return
+ 		end
+		if prefix ~= nil and prefix ~= '' then
+			table.insert(candidates, prefix .. '_' .. name .. 'maxmatches')
+		else
+			table.insert(candidates, name .. 'maxmatches')
 		end
 	end
+	if charData.maxmatches ~= nil then
+		if useMode then
+			add(charData.maxmatches, mode)
+		end
+		if baseMode ~= nil and baseMode ~= mode then
+			add(charData.maxmatches, baseMode)
+		end
+		add(charData.maxmatches, fallback)
+	end
+	if useMode then
+		add(nil, mode)
+	end
+	if baseMode ~= nil and baseMode ~= mode then
+		add(nil, baseMode)
+	end
+	add(nil, fallback)
+	for _, key in ipairs(candidates) do
+		if main.t_selOptions[key] ~= nil then
+			return start.f_unifySettings(main.t_selOptions[key], t_chars), t_chars
+		end
+	end
+	return start.f_unifySettings(main.t_selOptions[fallback .. 'maxmatches'], t_chars), t_chars
+end
+
+start.t_makeRoster.arcade = function()
+	return start.f_rosterMaxMatches('arcade')
 end
 start.t_makeRoster.teamcoop = start.t_makeRoster.arcade
 start.t_makeRoster.netplayteamcoop = start.t_makeRoster.arcade
 start.t_makeRoster.timeattack = start.t_makeRoster.arcade
+
 start.t_makeRoster.survival = function()
-	if start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches ~= nil and main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_survivalmaxmatches'] ~= nil then --custom settings exists as char param
-		return start.f_unifySettings(main.t_selOptions[start.f_getCharData(start.p[1].t_selected[1].ref).maxmatches .. '_survivalmaxmatches'], main.t_orderSurvival), main.t_orderSurvival
-	else --default settings
-		return start.f_unifySettings(main.t_selOptions.survivalmaxmatches, main.t_orderSurvival), main.t_orderSurvival
-	end
+	return start.f_rosterMaxMatches('survival')
 end
 start.t_makeRoster.survivalcoop = start.t_makeRoster.survival
 start.t_makeRoster.netplaysurvivalcoop = start.t_makeRoster.survival
@@ -1341,16 +1372,13 @@ end
 
 --removes char with particular ref from table
 function start.f_excludeChar(t, ref)
-	for _, sel in ipairs(main.t_selChars) do
-		if sel.char_ref == ref then
-			if t[sel.order] ~= nil then
-				for k, v in ipairs(t[sel.order]) do
-					if v == ref then
-						table.remove(t[sel.order], k)
-					end
+	for _, list in pairs(t) do
+		if type(list) == 'table' then
+			for i = #list, 1, -1 do
+				if list[i] == ref then
+					table.remove(list, i)
 				end
 			end
-			break
 		end
 	end
 	return t
@@ -1682,7 +1710,7 @@ function start.f_selectMode()
 		if start.reset then
 			-- Save current remap state. main.f_restoreInput() should restore to this.
 			main.f_saveBaseRemapInput()
-			main.t_availableChars = main.f_tableCopy(main.t_orderChars)
+			main.t_availableChars = main.f_tableCopy(start.f_getOrderChars())
 			--generate default roster
 			if main.makeRoster then
 				start.t_roster = start.f_makeRoster()
@@ -3126,9 +3154,10 @@ function start.f_palMenu(side, cmd, player, member, selectState)
 
 		-- done anim after pal confirmation - primary face
 		local done_anim = pCfg.face.done.anim
+		local done_spr = pCfg.face.done.spr
 		local preview_anim = pCfg.palmenu.preview.anim
-		if done_anim ~= preview_anim then
-			if st.face_anim ~= done_anim and (main.coop or motif.select_info['p' .. side].face.num > 1 or main.f_tableLength(start.p[side].t_selected) + 1 == start.p[side].numChars) then
+		if done_anim ~= preview_anim or done_spr[1] ~= -1 then
+			if (st.face_anim ~= done_anim or done_spr[1] ~= -1) and (main.coop or motif.select_info['p' .. side].face.num > 1 or main.f_tableLength(start.p[side].t_selected) + 1 == start.p[side].numChars) then
 				local a = start.f_animGet(start.c[player].selRef, side, member, pCfg.face.done, pCfg.face, false, st.face_data)
 				if a then
 					st.face_data = start.loadPalettes(a, charRef, pal)
@@ -3360,14 +3389,15 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 					-- if select anim differs from done anim and coop or pX.face.num allows to display more than 1 portrait or it's the last team member
 					local done_anim = pCfg.face.done.anim
 					local done_anim2 = pCfg.face2.done.anim
+					local done_spr = pCfg.face.done.spr
 					local palmenu_preview_anim = pCfg.palmenu.preview.anim
 					local face_anim = start.p[side].t_selTemp[member].face_anim
 					local face2_anim = start.p[side].t_selTemp[member].face2_anim
 					local canShow = main.coop or motif.select_info['p' .. side].face.num > 1 or main.f_tableLength(start.p[side].t_selected) + 1 == start.p[side].numChars
 					local canShow2 = main.coop or motif.select_info['p' .. side].face2.num > 1 or main.f_tableLength(start.p[side].t_selected) + 1 == start.p[side].numChars
 					-- primary face "done" / preview
-					if face_anim ~= done_anim and canShow then
-						if motif.select_info.paletteselect == 0 and done_anim ~= -1 then
+					if (face_anim ~= done_anim or done_spr[1] ~= -1) and canShow then
+						if motif.select_info.paletteselect == 0 and (done_anim ~= -1 or done_spr[1] ~= -1) then
 							setDoneAnim(start.c[player].selRef, side, member, pCfg.face.done, pCfg.face, 'face_data')
 						elseif palmenu_preview_anim ~= -1 and motif.select_info.paletteselect ~= 0 then
 							start.f_playWave(start.c[player].selRef, 'cursor', motif.select_info['p' .. side].palmenu.preview.snd[1], motif.select_info['p' .. side].palmenu.preview.snd[2])
