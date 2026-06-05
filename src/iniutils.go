@@ -2846,7 +2846,7 @@ func parseMusicSection(section *ini.Section) Music {
 
 	// Parse keys
 	for _, key := range section.Keys() {
-		rawKey := strings.TrimSpace(key.Name())  // e.g. "title.bgm.loop" or "bgmusic"
+		rawKey := strings.TrimSpace(key.Name())                // e.g. "title.bgm.loop" or "bgmusic"
 		rawVal := strings.TrimSpace(StripComment(key.Value())) // e.g. "1, 2, 3"
 		if rawKey == "" {
 			continue
