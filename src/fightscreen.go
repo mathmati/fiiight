@@ -2331,7 +2331,7 @@ type FightScreenCombo struct {
 	start_x       float32
 	counter       map[int32]*FSText
 	counter_shake bool
-	counter_time  int32 // Shake effect duration
+	counter_time  int32   // Shake effect duration
 	counter_mult  float32 // Shake effect scale correction factor
 	text          map[int32]*FSText
 	bg            AnimLayout
@@ -2607,7 +2607,7 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 		// Shake effect
 		// TODO: More customizable parameters
 		// TODO: Maximum scale is currently determined by "time * correction factor". That seems especially odd
-		arg := float64(co.counter_time - co.curShaketime) * math.Pi / 2.5
+		arg := float64(co.counter_time-co.curShaketime) * math.Pi / 2.5
 		z := 1 + float32(co.curShaketime)*co.counter_mult*float32(math.Cos(arg))
 
 		co.counter[cv].lay.DrawText((x-length+sys.fightScreen.offsetX)/z, float32(co.pos[1])/z, z*sys.fightScreen.scale, layerno,
