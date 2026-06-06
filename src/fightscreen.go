@@ -2327,45 +2327,45 @@ func (ti *FightScreenTime) draw(layerno int16, f map[int]*Fnt) {
 }
 
 type FightScreenCombo struct {
-	pos           [2]int32
-	start_x       float32
-	counter       map[int32]*FSText
-	text          map[int32]*FSText
-	bg            AnimLayout
-	top           AnimLayout
-	displaytime   int32
-	showspeed     float32
-	hidespeed     float32
-	separator     string
-	places        int32
-	trueHits      int32
-	shownHits     int32
-	shownDmg      int32
-	shownPct      float32
-	resttime      int32
-	counterX      float32
-	autoalign     bool
-	newCombo      bool
-	counterShake  ComboShake
-	textShake     ComboShake
+	pos          [2]int32
+	start_x      float32
+	counter      map[int32]*FSText
+	text         map[int32]*FSText
+	bg           AnimLayout
+	top          AnimLayout
+	displaytime  int32
+	showspeed    float32
+	hidespeed    float32
+	separator    string
+	places       int32
+	trueHits     int32
+	shownHits    int32
+	shownDmg     int32
+	shownPct     float32
+	resttime     int32
+	counterX     float32
+	autoalign    bool
+	newCombo     bool
+	counterShake ComboShake
+	textShake    ComboShake
 }
 
 func newFightScreenCombo() *FightScreenCombo {
 	return &FightScreenCombo{
-		displaytime:  90,
-		showspeed:    8,
-		hidespeed:    4,
-		counter:      make(map[int32]*FSText),
-		text:         make(map[int32]*FSText),
-		autoalign:    true,
+		displaytime: 90,
+		showspeed:   8,
+		hidespeed:   4,
+		counter:     make(map[int32]*FSText),
+		text:        make(map[int32]*FSText),
+		autoalign:   true,
 		counterShake: ComboShake{
-			freq:  60, // Same as EnvShake
-			decay:  1.0, // Linear
+			freq:  60,  // Same as EnvShake
+			decay: 1.0, // Linear
 			scale: 1.0, // No change
 		},
 		textShake: ComboShake{
 			freq:  60,
-			decay:  1.0,
+			decay: 1.0,
 			scale: 1.0,
 		},
 	}
@@ -2404,14 +2404,14 @@ func readFightScreenCombo(pre string, is IniSection,
 	var old bool
 	if is.ReadBool(pre+"counter.shake", &old) {
 		if old {
-			co.counterShake.time = 8 // Mugen value
+			co.counterShake.time = 8     // Mugen value
 			co.counterShake.scale = 1.35 // Derived from old Ikemen formula
 		}
 	}
 	is.ReadI32(pre+"counter.time", &co.counterShake.time)
 	var mult float32
 	if is.ReadF32(pre+"counter.mult", &mult) {
-		co.counterShake.scale = 1 + float32(co.counterShake.time) * mult
+		co.counterShake.scale = 1 + float32(co.counterShake.time)*mult
 	}
 
 	// New counter shake syntax

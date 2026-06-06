@@ -5506,16 +5506,16 @@ func (l *Loader) runTread() bool {
 }
 
 type EnvShake struct {
-	time       int32
-	freq       float32
-	ampl       float32
-	phase      float32
-	mul        float32
-	dir        float32
-	diradd     float32
-	decay      float32
-	curTime    int32
-	curOffset  [2]float32
+	time      int32
+	freq      float32
+	ampl      float32
+	phase     float32
+	mul       float32
+	dir       float32
+	diradd    float32
+	decay     float32
+	curTime   int32
+	curOffset [2]float32
 }
 
 func (es *EnvShake) clear() {

@@ -10864,14 +10864,14 @@ func (sc fallEnvShake) Run(c *Char, _ []int32) bool {
 		case fallEnvShake_:
 			if crun.ghv.fall_envshake_time > 0 {
 				sys.envShake = EnvShake{
-					time:    crun.ghv.fall_envshake_time,
-					freq:    crun.ghv.fall_envshake_freq,
-					phase:   crun.ghv.fall_envshake_phase,
-					ampl:    float32(crun.ghv.fall_envshake_ampl) * c.localscl,
-					mul:     crun.ghv.fall_envshake_mul,
-					dir:     crun.ghv.fall_envshake_dir,
-					diradd:  crun.ghv.fall_envshake_diradd,
-					decay:   crun.ghv.fall_envshake_decay,
+					time:   crun.ghv.fall_envshake_time,
+					freq:   crun.ghv.fall_envshake_freq,
+					phase:  crun.ghv.fall_envshake_phase,
+					ampl:   float32(crun.ghv.fall_envshake_ampl) * c.localscl,
+					mul:    crun.ghv.fall_envshake_mul,
+					dir:    crun.ghv.fall_envshake_dir,
+					diradd: crun.ghv.fall_envshake_diradd,
+					decay:  crun.ghv.fall_envshake_decay,
 				}
 				sys.envShake.setDefaultPhase()
 				sys.envShake.restart()
