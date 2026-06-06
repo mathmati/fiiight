@@ -2405,6 +2405,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	if is.ReadBool(pre+"counter.shake", &old) {
 		if old {
 			co.counterShake.time = 8     // Mugen value
+			co.counterShake.phase = 90   // Like old Ikemen default
 			co.counterShake.scale = 1.35 // Derived from old Ikemen formula
 		}
 	}
@@ -2416,8 +2417,10 @@ func readFightScreenCombo(pre string, is IniSection,
 
 	// New counter shake syntax
 	is.ReadI32(pre+"counter.shake.time", &co.counterShake.time)
-	is.ReadF32(pre+"counter.shake.freq", &co.counterShake.freq)
-	is.ReadF32(pre+"counter.shake.phase", &co.counterShake.phase) // Conditional default like in EnvShake seems unnecessary
+	if is.ReadF32(pre+"counter.shake.freq", &co.counterShake.freq) {
+		co.counterShake.setDefaultPhase()
+	}
+	is.ReadF32(pre+"counter.shake.phase", &co.counterShake.phase)
 	is.ReadF32(pre+"counter.shake.ampl", &co.counterShake.ampl)
 	is.ReadF32(pre+"counter.shake.scale", &co.counterShake.scale)
 	is.ReadF32(pre+"counter.shake.dir", &co.counterShake.dir)
@@ -2432,7 +2435,9 @@ func readFightScreenCombo(pre string, is IniSection,
 
 	// Text shake
 	is.ReadI32(pre+"text.shake.time", &co.textShake.time)
-	is.ReadF32(pre+"text.shake.freq", &co.textShake.freq)
+	if is.ReadF32(pre+"text.shake.freq", &co.textShake.freq) {
+		co.textShake.setDefaultPhase()
+	}
 	is.ReadF32(pre+"text.shake.phase", &co.textShake.phase)
 	is.ReadF32(pre+"text.shake.ampl", &co.textShake.ampl)
 	is.ReadF32(pre+"text.shake.scale", &co.textShake.scale)
@@ -2449,6 +2454,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	co.separator, _, _ = is.getText("format.decimal.separator")
 	is.ReadI32("format.decimal.places", &co.places)
 	is.ReadBool(pre+"autoalign", &co.autoalign)
+
 	return co
 }
 
@@ -2728,6 +2734,15 @@ func (cs *ComboShake) restart() {
 	cs.curTime = cs.time
 }
 
+func (cs *ComboShake) setDefaultPhase() {
+	// No need for NaN
+	if cs.freq >= 90.0 {
+		cs.phase = 90.0
+	} else {
+		cs.phase = 0
+	}
+}
+
 func (cs *ComboShake) update() {
 	if cs.curTime <= 0 {
 		if cs.time > 0 {
@@ -2752,7 +2767,7 @@ func (cs *ComboShake) update() {
 	} else {
 		curAmp := cs.ampl * decay
 		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
-		val := curAmp * float32(math.Cos(float64(phaseRad)))
+		val := curAmp * float32(math.Sin(float64(phaseRad)))
 
 		currentAngleDeg := cs.dir + cs.diradd*elapsed
 		radAng := Rad(currentAngleDeg)
@@ -2768,8 +2783,8 @@ func (cs *ComboShake) update() {
 		cs.curScale = 1
 	} else {
 		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
-		cosVal := float32(math.Cos(float64(phaseRad)))
-		exponent := float32(math.Log(float64(cs.scale))) * decay * cosVal
+		sinVal := float32(math.Sin(float64(phaseRad)))
+		exponent := float32(math.Log(float64(cs.scale))) * decay * sinVal
 		cs.curScale = float32(math.Exp(float64(exponent)))
 	}
 
