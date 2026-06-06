@@ -5646,6 +5646,8 @@ func (c *Char) explodVar(eid BytecodeValue, idx BytecodeValue, vtype OpCode) Byt
 			v = BytecodeFloat(e.friction[2])
 		case OC_ex2_explodvar_id:
 			v = BytecodeInt(e.id)
+		case OC_ex2_explodvar_ignorehitpause:
+			v = BytecodeBool(e.ignorehitpause)
 		case OC_ex2_explodvar_layerno:
 			v = BytecodeInt(e.layerno)
 		case OC_ex2_explodvar_pausemovetime:
