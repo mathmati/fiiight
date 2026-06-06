@@ -5114,7 +5114,7 @@ func loadFightScreen(def string) (*FightScreen, error) {
 				teamNum := team + 1
 				teamPrefix := fmt.Sprintf("team%v.", teamNum)
 
-				if sys.fightScreen.ikemenver[0] == 0 && sys.fightScreen.ikemenver[1] == 0 {
+				if fs.ikemenver[0] == 0 && fs.ikemenver[1] == 0 { // Not sys.fightScreen yet
 					// Check if "teamX.pos" exists to determine whether or not to use "teamX" prefixes
 					// Mugen works slightly different and apparently checks whether "pos" or "team1.pos" is found first in order to determine what syntax to use
 					// Such prefixes were only added in Mugen 1.0, hence it running this check
