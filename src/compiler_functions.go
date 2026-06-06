@@ -3327,6 +3327,14 @@ func (c *CharCompiler) envShake(is IniSection, sc *StateControllerBase) (StateCo
 			envShake_dir, VT_Float, 1, false); err != nil {
 			return err
 		}
+		if err := c.paramValue(is, sc, "diradd",
+			envShake_diradd, VT_Float, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "decay",
+			envShake_decay, VT_Float, 1, false); err != nil {
+			return err
+		}
 		return nil
 	})
 	return *ret, err
@@ -6498,28 +6506,36 @@ func (c *CharCompiler) getHitVarSet(is IniSection, sc *StateControllerBase) (Sta
 			getHitVarSet_fall_damage, VT_Int, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "fall.envshake.ampl",
-			getHitVarSet_fall_envshake_ampl, VT_Int, 1, false); err != nil {
+		if err := c.paramValue(is, sc, "fall.envshake.time",
+			getHitVarSet_fall_envshake_time, VT_Int, 1, false); err != nil {
 			return err
 		}
 		if err := c.paramValue(is, sc, "fall.envshake.freq",
 			getHitVarSet_fall_envshake_freq, VT_Float, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "fall.envshake.mul",
-			getHitVarSet_fall_envshake_mul, VT_Float, 1, false); err != nil {
-			return err
-		}
 		if err := c.paramValue(is, sc, "fall.envshake.phase",
 			getHitVarSet_fall_envshake_phase, VT_Float, 1, false); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "fall.envshake.time",
-			getHitVarSet_fall_envshake_time, VT_Int, 1, false); err != nil {
+		if err := c.paramValue(is, sc, "fall.envshake.ampl",
+			getHitVarSet_fall_envshake_ampl, VT_Int, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "fall.envshake.mul",
+			getHitVarSet_fall_envshake_mul, VT_Float, 1, false); err != nil {
 			return err
 		}
 		if err := c.paramValue(is, sc, "fall.envshake.dir",
 			getHitVarSet_fall_envshake_dir, VT_Float, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "fall.envshake.diradd",
+			getHitVarSet_fall_envshake_diradd, VT_Float, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "fall.envshake.decay",
+			getHitVarSet_fall_envshake_decay, VT_Float, 1, false); err != nil {
 			return err
 		}
 		if err := c.paramValue(is, sc, "fall.kill",

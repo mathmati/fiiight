@@ -4506,13 +4506,13 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 		}
 		switch c.token {
 		case "time":
-			opc = OC_ex_envshakevar_time
+			opc = OC_ex2_envshakevar_time
 		case "freq":
-			opc = OC_ex_envshakevar_freq
+			opc = OC_ex2_envshakevar_freq
 		case "ampl":
-			opc = OC_ex_envshakevar_ampl
+			opc = OC_ex2_envshakevar_ampl
 		case "dir":
-			opc = OC_ex_envshakevar_dir
+			opc = OC_ex2_envshakevar_dir
 		default:
 			return bvNone(), Error("Invalid EnvShakeVar argument: " + c.token)
 		}

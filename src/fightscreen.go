@@ -2330,9 +2330,6 @@ type FightScreenCombo struct {
 	pos           [2]int32
 	start_x       float32
 	counter       map[int32]*FSText
-	counter_shake bool
-	counter_time  int32   // Shake effect duration
-	counter_mult  float32 // Shake effect scale correction factor
 	text          map[int32]*FSText
 	bg            AnimLayout
 	top           AnimLayout
@@ -2347,9 +2344,10 @@ type FightScreenCombo struct {
 	shownPct      float32
 	resttime      int32
 	counterX      float32
-	curShaketime  int32
 	autoalign     bool
 	newCombo      bool
+	counterShake  ComboShake
+	textShake     ComboShake
 }
 
 func newFightScreenCombo() *FightScreenCombo {
@@ -2358,10 +2356,18 @@ func newFightScreenCombo() *FightScreenCombo {
 		showspeed:    8,
 		hidespeed:    4,
 		counter:      make(map[int32]*FSText),
-		counter_time: 7,
-		counter_mult: 1.0 / 20,
 		text:         make(map[int32]*FSText),
 		autoalign:    true,
+		counterShake: ComboShake{
+			freq:  60, // Same as EnvShake
+			decay:  1.0, // Linear
+			scale: 1.0, // No change
+		},
+		textShake: ComboShake{
+			freq:  60,
+			decay:  1.0,
+			scale: 1.0,
+		},
 	}
 }
 
@@ -2371,7 +2377,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	is.ReadI32(pre+"pos", &co.pos[0], &co.pos[1])
 	is.ReadF32(pre+"start.x", &co.start_x)
 	if side == 1 {
-		// mugen 1.0 implementation reuses winmugen code where both sides shared the same values
+		// Mugen 1.0 implementation reuses Winmugen code where both sides shared the same values
 		if pre == "team2." {
 			co.start_x = float32(sys.fightScreen.localcoord[0]) - co.start_x
 		} else {
@@ -2386,17 +2392,54 @@ func readFightScreenCombo(pre string, is IniSection,
 			align = -1
 		}
 	}
+
+	// Read main counter string then optional multiple values
 	co.counter[0] = readFSText(pre+"counter.", is, "%i", 2, f, align)
 	for k, v := range readMultipleFSText(pre, "counter", is, "%i", 2, f, align) {
 		co.counter[k] = v
 	}
-	is.ReadBool(pre+"counter.shake", &co.counter_shake)
-	is.ReadI32(pre+"counter.time", &co.counter_time)
-	is.ReadF32(pre+"counter.mult", &co.counter_mult)
+
+	// Old counter shake syntax
+	// TODO: Shouldn't shaking parameters also support "multiple values"?
+	var old bool
+	if is.ReadBool(pre+"counter.shake", &old) {
+		if old {
+			co.counterShake.time = 8 // Mugen value
+			co.counterShake.scale = 1.35 // Derived from old Ikemen formula
+		}
+	}
+	is.ReadI32(pre+"counter.time", &co.counterShake.time)
+	var mult float32
+	if is.ReadF32(pre+"counter.mult", &mult) {
+		co.counterShake.scale = 1 + float32(co.counterShake.time) * mult
+	}
+
+	// New counter shake syntax
+	is.ReadI32(pre+"counter.shake.time", &co.counterShake.time)
+	is.ReadF32(pre+"counter.shake.freq", &co.counterShake.freq)
+	is.ReadF32(pre+"counter.shake.phase", &co.counterShake.phase) // Conditional default like in EnvShake seems unnecessary
+	is.ReadF32(pre+"counter.shake.ampl", &co.counterShake.ampl)
+	is.ReadF32(pre+"counter.shake.scale", &co.counterShake.scale)
+	is.ReadF32(pre+"counter.shake.dir", &co.counterShake.dir)
+	is.ReadF32(pre+"counter.shake.diradd", &co.counterShake.diradd)
+	is.ReadF32(pre+"counter.shake.decay", &co.counterShake.decay)
+
+	// Read main text string then optional multiple values
 	co.text[0] = readFSText(pre+"text.", is, "", 2, f, align)
 	for k, v := range readMultipleFSText(pre, "text", is, "", 2, f, align) {
 		co.text[k] = v
 	}
+
+	// Text shake
+	is.ReadI32(pre+"text.shake.time", &co.textShake.time)
+	is.ReadF32(pre+"text.shake.freq", &co.textShake.freq)
+	is.ReadF32(pre+"text.shake.phase", &co.textShake.phase)
+	is.ReadF32(pre+"text.shake.ampl", &co.textShake.ampl)
+	is.ReadF32(pre+"text.shake.scale", &co.textShake.scale)
+	is.ReadF32(pre+"text.shake.dir", &co.textShake.dir)
+	is.ReadF32(pre+"text.shake.diradd", &co.textShake.diradd)
+	is.ReadF32(pre+"text.shake.decay", &co.textShake.decay)
+
 	co.bg = ReadAnimLayout(pre+"bg0.", is, sff, at, 2)
 	co.top = ReadAnimLayout(pre+"top.", is, sff, at, 2)
 	is.ReadI32(pre+"displaytime", &co.displaytime)
@@ -2443,10 +2486,6 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		}
 	}
 
-	if co.curShaketime > 0 {
-		co.curShaketime--
-	}
-
 	// The displayed time only decrements when the counter is in the visible position
 	// Currently, the way the timer decrements while the combo is still ongoing can make it stay visible varying amounts of time past the end of the combo
 	// This makes it not always sync correctly with the "nice combo" actions
@@ -2458,9 +2497,8 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 	if co.trueHits >= 2 && (co.newCombo || co.shownHits != co.trueHits || co.shownDmg != damage) {
 		// Reset visuals when hits changed
 		if co.newCombo || co.shownHits != co.trueHits {
-			if co.counter_shake {
-				co.curShaketime = co.counter_time
-			}
+			co.counterShake.restart()
+			co.textShake.restart()
 			for i := range co.counter {
 				co.counter[i].resetTxtPfx()
 			}
@@ -2476,6 +2514,10 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		co.shownPct = percentage
 		co.newCombo = false
 	}
+
+	// Update shaking effects
+	co.counterShake.update()
+	co.textShake.update()
 
 	// Multiple counter fonts
 	var cv int32
@@ -2508,7 +2550,10 @@ func (co *FightScreenCombo) reset() {
 	co.shownPct = 0
 	co.resttime = 0
 	co.counterX = co.start_x * 2
-	co.curShaketime = 0
+
+	// Reset combo shake
+	co.counterShake.curTime = 0
+	co.textShake.curTime = 0
 }
 
 func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
@@ -2535,11 +2580,13 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	// Replace operator with current combo value
 	counter := strings.Replace(co.counter[cv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
 
+	// Compute base x position
 	x := float32(co.pos[0])
 	if side == 0 {
 		if co.start_x <= 0 {
 			x += co.counterX
 		}
+		// Apply autoalign
 		if co.counter[cv].font[0] >= 0 && co.autoalign {
 			if ff := getFont(f, co.counter[cv].font[0]); ff != nil {
 				x += float32(ff.TextWidth(counter, co.counter[cv].font[1], 0)) *
@@ -2555,67 +2602,187 @@ func (co *FightScreenCombo) draw(layerno int16, f map[int]*Fnt, side int) {
 	// BG
 	co.bg.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
 
-	// Track total string length
-	var length float32
-
-	// Text
+	// Text block pre-processing
+	var ffText *Fnt
+	var textBlockWidth float32
+	var lineHeight float32
+	var lines []string
 	if co.text[tv].font[0] >= 0 && getFont(f, co.text[tv].font[0]) != nil {
+		// Replace operator with current combo hits
 		text := strings.Replace(co.text[tv].text, "%i", fmt.Sprintf("%v", co.shownHits), 1)
+		// Replace operator with current combo damage
 		text = strings.Replace(text, "%d", fmt.Sprintf("%v", co.shownDmg), 1)
-		// Truncate the percentage to avoid rounding to 100% unless the enemy is defeated
-		truncatedPct := math.Floor(float64(co.shownPct)*math.Pow10(int(co.places))) / math.Pow10(int(co.places))
-		// Split float value
-		s := strings.Split(fmt.Sprintf("%.[2]*[1]f", truncatedPct, co.places), ".")
-		// Decimal separator
-		if co.places > 0 {
-			if len(s) > 1 {
+
+		// Only process combo damage percentage if necessary
+		if strings.Contains(co.text[tv].text, "%p") {
+			// Truncate the percentage to avoid rounding to 100% unless the enemy is defeated
+			truncatedPct := math.Floor(float64(co.shownPct)*math.Pow10(int(co.places))) / math.Pow10(int(co.places))
+			// Split float value
+			s := strings.Split(fmt.Sprintf("%.[2]*[1]f", truncatedPct, co.places), ".")
+			// Decimal separator
+			if co.places > 0 && len(s) > 1 {
 				s[0] = s[0] + co.separator + s[1]
 			}
+			// Replace %p with formatted string
+			text = strings.Replace(text, "%p", s[0], 1)
 		}
-		// Replace %p with formatted string
-		text = strings.Replace(text, "%p", s[0], 1)
+
 		// Split on new line
-		for k, v := range strings.Split(text, "\\n") {
-			if side == 1 && co.autoalign {
-				if ff := getFont(f, co.text[tv].font[0]); ff != nil {
-					if lt := float32(ff.TextWidth(v, co.text[tv].font[1], 0)) * co.text[tv].lay.scale[0] * sys.fightScreen.fnt_scale; lt > length {
-						length = lt
-					}
+		lines = strings.Split(text, "\\n")
+
+		// Compute text block dimensions
+		ffText = getFont(f, co.text[tv].font[0])
+		if ffText != nil {
+			lineHeight = float32(ffText.Size[1])*co.text[tv].lay.scale[1]*sys.fightScreen.fnt_scale +
+				float32(ffText.Spacing[1])*co.text[tv].lay.scale[1]*sys.fightScreen.fnt_scale
+			for _, line := range lines {
+				w := float32(ffText.TextWidth(line, co.text[tv].font[1], 0)) *
+					co.text[tv].lay.scale[0] * sys.fightScreen.fnt_scale
+				if w > textBlockWidth {
+					textBlockWidth = w
 				}
 			}
-			co.text[tv].lay.DrawText(x+sys.fightScreen.offsetX, float32(co.pos[1])+
-				func() float32 {
-					if ff := getFont(f, co.text[tv].font[0]); ff != nil {
-						return float32(ff.Size[1])*co.text[tv].lay.scale[1]*sys.fightScreen.fnt_scale +
-							float32(ff.Spacing[1])*co.text[tv].lay.scale[1]*sys.fightScreen.fnt_scale
-					}
-					return 0
-				}()*float32(k),
-				sys.fightScreen.scale, layerno, v, getFont(f, co.text[tv].font[0]), co.text[tv].font[1], co.text[tv].font[2],
+		}
+	}
+
+	// Draw text
+	if len(lines) > 0 && ffText != nil {
+		blockX := x + sys.fightScreen.offsetX
+		blockY := float32(co.pos[1])
+
+		// Apply shake effect
+		textShakeScale := co.textShake.getScale()
+		textShakeOffset := co.textShake.getOffset()
+
+		drawBlockX := (blockX + textShakeOffset[0]) / textShakeScale
+		drawBlockY := (blockY + textShakeOffset[1]) / textShakeScale
+		finalScale := textShakeScale * sys.fightScreen.scale
+
+		// Draw each line
+		for i, line := range lines {
+			y := drawBlockY + float32(i)*lineHeight
+			co.text[tv].lay.DrawText(drawBlockX, y, finalScale, layerno, line,
+				ffText, co.text[tv].font[1], co.text[tv].font[2],
 				co.text[tv].palfx, co.text[tv].frgba)
 		}
 	}
 
 	// Counter
 	if co.counter[cv].font[0] >= 0 && getFont(f, co.counter[cv].font[0]) != nil {
+		// Apply autoalign
+		var counterShift float32
 		if side == 0 && co.autoalign {
 			if ff := getFont(f, co.counter[cv].font[0]); ff != nil {
-				length = float32(ff.TextWidth(counter, co.counter[cv].font[1], 0)) * co.counter[cv].lay.scale[0] * sys.fightScreen.fnt_scale
+				counterShift = float32(ff.TextWidth(counter, co.counter[cv].font[1], 0)) *
+					co.counter[cv].lay.scale[0] * sys.fightScreen.fnt_scale
 			}
 		}
+		if side == 1 && co.autoalign {
+			counterShift = counterShift + textBlockWidth
+		}
 
-		// Shake effect
-		// TODO: More customizable parameters
-		// TODO: Maximum scale is currently determined by "time * correction factor". That seems especially odd
-		arg := float64(co.counter_time-co.curShaketime) * math.Pi / 2.5
-		z := 1 + float32(co.curShaketime)*co.counter_mult*float32(math.Cos(arg))
+		// Apply shake effect
+		shakeScale := co.counterShake.getScale()
+		shakeOffset := co.counterShake.getOffset()
 
-		co.counter[cv].lay.DrawText((x-length+sys.fightScreen.offsetX)/z, float32(co.pos[1])/z, z*sys.fightScreen.scale, layerno,
-			counter, getFont(f, co.counter[cv].font[0]), co.counter[cv].font[1], co.counter[cv].font[2], co.counter[cv].palfx, co.counter[cv].frgba)
+		drawX := (x - counterShift + sys.fightScreen.offsetX + shakeOffset[0]) / shakeScale
+		drawY := (float32(co.pos[1]) + shakeOffset[1]) / shakeScale
+		finalScale := shakeScale * sys.fightScreen.scale
+
+		co.counter[cv].lay.DrawText(drawX, drawY, finalScale, layerno,
+			counter, getFont(f, co.counter[cv].font[0]), co.counter[cv].font[1], co.counter[cv].font[2],
+			co.counter[cv].palfx, co.counter[cv].frgba)
 	}
 
 	// Top
 	co.top.Draw(x+sys.fightScreen.offsetX, float32(co.pos[1]), layerno, sys.fightScreen.scale)
+}
+
+// This is like a miniature EnvShake applied to a single object
+type ComboShake struct {
+	time      int32
+	ampl      float32
+	scale     float32
+	freq      float32
+	phase     float32
+	dir       float32 // It's an angle but this name is consistent with EnvShake
+	diradd    float32
+	decay     float32
+	curTime   int32
+	curOffset [2]float32
+	curScale  float32
+}
+
+// Uses a reset instead of a clear because we don't want to lose the original parameters
+func (cs *ComboShake) reset() {
+	cs.curTime = 0
+	cs.curOffset = [2]float32{0, 0}
+	cs.curScale = 1
+}
+
+func (cs *ComboShake) restart() {
+	if cs.time <= 0 {
+		cs.reset() // Just in case
+		return
+	}
+	cs.curTime = cs.time
+}
+
+func (cs *ComboShake) update() {
+	if cs.curTime <= 0 {
+		if cs.time > 0 {
+			cs.reset()
+		}
+		return
+	}
+
+	// Handle decay
+	var decay float32 = 1
+	if cs.decay != 0 && cs.time > 0 {
+		t := float32(cs.curTime) / float32(cs.time)
+		decay = float32(math.Pow(float64(t), float64(cs.decay)))
+	}
+
+	elapsed := float32(cs.time - cs.curTime)
+
+	// Calculate offset and cache it
+	// There's no benefit to caching it yet, but it may be useful for future features and keeps the code similar to EnvShake
+	if cs.ampl == 0 {
+		cs.curOffset = [2]float32{0, 0}
+	} else {
+		curAmp := cs.ampl * decay
+		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
+		val := curAmp * float32(math.Cos(float64(phaseRad)))
+
+		currentAngleDeg := cs.dir + cs.diradd*elapsed
+		radAng := Rad(currentAngleDeg)
+
+		x := val * float32(math.Cos(float64(radAng)))
+		y := -val * float32(math.Sin(float64(radAng))) // Negated for counter‑clockwise
+
+		cs.curOffset = [2]float32{x, y}
+	}
+
+	// Calculate scale and cache it
+	if cs.scale == 1 {
+		cs.curScale = 1
+	} else {
+		phaseRad := Rad(cs.phase) + Rad(cs.freq)*elapsed
+		cosVal := float32(math.Cos(float64(phaseRad)))
+		exponent := float32(math.Log(float64(cs.scale))) * decay * cosVal
+		cs.curScale = float32(math.Exp(float64(exponent)))
+	}
+
+	// Step timer only after computing offset and scale
+	cs.curTime--
+}
+
+func (cs *ComboShake) getOffset() [2]float32 {
+	return cs.curOffset
+}
+
+func (cs *ComboShake) getScale() float32 {
+	return cs.curScale
 }
 
 type FSMsg struct {

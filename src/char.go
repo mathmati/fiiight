@@ -640,6 +640,8 @@ type HitDef struct {
 	envshake_phase             float32
 	envshake_mul               float32
 	envshake_dir               float32
+	envshake_diradd            float32
+	envshake_decay             float32
 	mindist                    [3]float32
 	maxdist                    [3]float32
 	snap                       [3]float32
@@ -658,6 +660,8 @@ type HitDef struct {
 	fall_envshake_phase        float32
 	fall_envshake_mul          float32
 	fall_envshake_dir          float32
+	fall_envshake_diradd       float32
+	fall_envshake_decay        float32
 	kill                       bool
 	guard_kill                 bool
 	forcenofall                bool
@@ -766,7 +770,6 @@ func (hd *HitDef) reset(c *Char, proj *Projectile) {
 		envshake_ampl:       -4,
 		envshake_phase:      float32(math.NaN()),
 		envshake_mul:        1.0,
-		envshake_dir:        0.0,
 		mindist:             [...]float32{float32(math.NaN()), float32(math.NaN()), float32(math.NaN())},
 		maxdist:             [...]float32{float32(math.NaN()), float32(math.NaN()), float32(math.NaN())},
 		snap:                [...]float32{float32(math.NaN()), float32(math.NaN()), float32(math.NaN())},
@@ -794,7 +797,6 @@ func (hd *HitDef) reset(c *Char, proj *Projectile) {
 		fall_envshake_ampl:  IErr,
 		fall_envshake_phase: float32(math.NaN()),
 		fall_envshake_mul:   1.0,
-		fall_envshake_dir:   0.0,
 		attack_depth:        [2]float32{c.size.attack.depth[0], c.size.attack.depth[1]},
 		unhittabletime:      [2]int32{IErr, IErr},
 		StandFriction:       float32(math.NaN()),
@@ -1072,6 +1074,8 @@ type GetHitVar struct {
 	fall_envshake_phase float32
 	fall_envshake_mul   float32
 	fall_envshake_dir   float32
+	fall_envshake_diradd float32
+	fall_envshake_decay  float32
 	playerid            int32
 	playerno            int
 	projid              int32
@@ -11374,18 +11378,23 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 				c.juggle = 0
 			}
 		}
+		// Apply PalFX to target
 		if hd.palfx.time > 0 && getter.palfx != nil {
 			getter.palfx.clearWithNeg(true)
 			getter.palfx.PalFXDef = hd.palfx
 		}
+		// Apply EnvShake
 		if hd.envshake_time > 0 {
 			sys.envShake.time = hd.envshake_time
-			sys.envShake.freq = hd.envshake_freq * float32(math.Pi) / 180
-			sys.envShake.ampl = float32(int32(float32(hd.envshake_ampl) * c.localscl))
+			sys.envShake.freq = hd.envshake_freq
 			sys.envShake.phase = hd.envshake_phase
+			sys.envShake.ampl = float32(int32(float32(hd.envshake_ampl) * c.localscl)) // Truncated
 			sys.envShake.mul = hd.envshake_mul
-			sys.envShake.dir = hd.envshake_dir * float32(math.Pi) / 180
+			sys.envShake.dir = hd.envshake_dir
+			sys.envShake.diradd = 0
+			sys.envShake.decay = 1.0
 			sys.envShake.setDefaultPhase()
+			sys.envShake.restart()
 		}
 		// Cornerpush on hit
 		// In Mugen it is only set if the enemy is already in the corner before the hit
