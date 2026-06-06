@@ -1588,7 +1588,13 @@ function start.f_matchPersistence()
 	-- checked only after at least 1 match
 	if matchNo() >= 2 then
 		local gameStats = getGameStats()
-		local roundStats = gameStats.Matches[matchNo()-1].Rounds
+		local matches = (getGameStats().Matches) or {}
+		local idx = #matches
+		if idx <= (start.matchPersistenceStatsIdx or 0) then
+			return start.p[1].numChars
+		end
+		start.matchPersistenceStatsIdx = idx
+		local roundStats = matches[idx].Rounds
 		-- set 'existed' flag (decides if var/fvar should be persistent between matches)
 		if roundStats then
 			for _, round in ipairs(roundStats) do
@@ -1739,7 +1745,10 @@ function start.f_selectMode()
 			end
 		end
 		--external script execution
+		local oldCustomArcadePath = start.customArcadePath
+		start.customArcadePath = main.charparam.arcadepath and path ~= main.luaPath
 		assert(loadfile(path))()
+		start.customArcadePath = oldCustomArcadePath
 		--infinite matches flag detected
 		if main.makeRoster and start.t_roster[matchNo()] ~= nil and start.t_roster[matchNo()][1] == -1 then
 			table.remove(start.t_roster, matchNo())
@@ -1794,6 +1803,7 @@ function start.f_selectReset(hardReset, preserveProgress)
 	esc(false)
 	if not preserveProgress then
 		resetGameStats()
+		start.matchPersistenceStatsIdx = 0
 		setMatchNo(1)
 		if main.elimination then
 			setWinCount(1, 0)
@@ -1908,6 +1918,7 @@ local function makeChallengerResumeSnapshot(pendingFightData, stageNo)
 		availableChars = main.f_tableCopy(main.t_availableChars),
 		pendingFight = main.f_tableCopy(pendingFightData or {}),
 		matchNo = matchNo(),
+		matchPersistenceStatsIdx = start.matchPersistenceStatsIdx or 0,
 		p1ConsecutiveWins = getConsecutiveWins(1),
 		p2ConsecutiveWins = getConsecutiveWins(2),
 		gameStatsJson = getGameStatsJson(),
@@ -2030,6 +2041,7 @@ function start.f_selectChallenger(resume)
 	main.t_availableChars = main.f_tableCopy(resume.availableChars)
 	setGameStatsJson(resume.gameStatsJson)
 	setMatchNo(resume.matchNo)
+	start.matchPersistenceStatsIdx = resume.matchPersistenceStatsIdx or 0
 	setConsecutiveWins(1, resume.p1ConsecutiveWins)
 	setConsecutiveWins(2, resume.p2ConsecutiveWins)
 	start.reset = false
@@ -2254,8 +2266,10 @@ function launchFight(data)
 		updateCommon(common, true)
 		-- Resolve match-scoped params before VS can start background loading.
 		local winscreen = main.f_arg(t.winscreen, main.motif.winscreen)
-		if winscreen and main.makeRoster and start.t_roster[matchNo() + 1] ~= nil then
-			winscreen = false
+		if winscreen and data.winscreen == nil then
+			if start.customArcadePath or (main.makeRoster and start.t_roster[matchNo() + 1] ~= nil) then
+				winscreen = false
+			end
 		end
 		local loadStartParams = main.f_tableCopy(t)
 		loadStartParams.winscreen = winscreen
