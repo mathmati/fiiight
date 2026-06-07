@@ -1621,6 +1621,7 @@ type Explod struct {
 	sprpriority         int32
 	layerno             int32
 	shadow              [3]int32
+	reflection          int32
 	supermovetime       int32
 	pausemovetime       int32
 	anim                *Animation
@@ -1723,6 +1724,7 @@ func (e *Explod) initFromChar(c *Char) *Explod {
 		friction:          [3]float32{1, 1, 1},
 		remappal:          [2]int32{-1, 0},
 		timestamp:         sys.matchTime,
+		reflection:        -1,
 		//aimg:              *newAfterImage(),
 	}
 
@@ -2162,6 +2164,9 @@ func (e *Explod) update() {
 
 	// Determine shadow color
 	sdwclr := e.shadow[0]<<16 | e.shadow[1]&0xff<<8 | e.shadow[2]&0xff
+	if e.reflection < 0 {
+		e.reflection = sdwclr
+	}
 
 	// Add shadow if color is not 0
 	if sdwclr != 0 {
@@ -2181,6 +2186,9 @@ func (e *Explod) update() {
 
 		// Add shadow to list
 		sys.shadowList.add(ss)
+	}
+	if e.reflection != 0 {
+		drawZoff := sys.posZtoYoffset(e.interPos[2], e.localscl)
 
 		// Prepare reflection sprite
 		rs := newReflectionSprite()
@@ -2368,6 +2376,7 @@ type Projectile struct {
 	facing          float32
 	removefacing    float32
 	shadow          [3]int32
+	reflection      int32
 	supermovetime   int32
 	pausemovetime   int32
 	anim            *Animation
@@ -2443,6 +2452,7 @@ func (p *Projectile) initFromChar(c *Char) *Projectile {
 		//aimg:            *newAfterImage(),
 		projection:    Projection_Orthographic,
 		platformFence: true,
+		reflection:      -1,
 	}
 
 	// Backward compatibility
@@ -2881,6 +2891,9 @@ func (p *Projectile) cueDraw() {
 
 	// Determine shadow color
 	sdwclr := p.shadow[0]<<16 | p.shadow[1]&0xff<<8 | p.shadow[2]&0xff
+	if p.reflection < 0 {
+		p.reflection = sdwclr
+	}
 
 	// Add a shadow if color is not 0
 	if sdwclr != 0 {
@@ -2895,6 +2908,9 @@ func (p *Projectile) cueDraw() {
 
 		// Add shadow to list
 		sys.shadowList.add(ss)
+	}
+	if p.reflection != 0 {
+		drawZoff := sys.posZtoYoffset(p.interPos[2], p.localscl)
 
 		// Prepare reflection sprite
 		rs := newReflectionSprite()

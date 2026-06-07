@@ -969,6 +969,10 @@ func (c *CharCompiler) explodSub(is IniSection, sc *StateControllerBase) error {
 		explod_shadow, VT_Int, 3, false); err != nil {
 		return err
 	}
+	if err := c.paramValue(is, sc, "reflection",
+		explod_reflection, VT_Int, 1, false); err != nil {
+		return err
+	}
 	if err := c.paramValue(is, sc, "removeongethit",
 		explod_removeongethit, VT_Bool, 1, false); err != nil {
 		return err
@@ -2361,6 +2365,10 @@ func (c *CharCompiler) projectileSub(is IniSection, sc *StateControllerBase) err
 	}
 	if err := c.paramValue(is, sc, "projshadow",
 		projectile_projshadow, VT_Int, 3, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "projreflection",
+		projectile_projreflection, VT_Int, 1, false); err != nil {
 		return err
 	}
 	if err := c.paramValue(is, sc, "projmisstime",
