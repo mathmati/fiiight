@@ -2452,7 +2452,7 @@ func (p *Projectile) initFromChar(c *Char) *Projectile {
 		//aimg:            *newAfterImage(),
 		projection:    Projection_Orthographic,
 		platformFence: true,
-		reflection:      -1,
+		reflection:    -1,
 	}
 
 	// Backward compatibility
