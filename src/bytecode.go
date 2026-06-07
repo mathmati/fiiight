@@ -6100,6 +6100,7 @@ const (
 	explod_under
 	explod_ontop
 	explod_shadow
+	explod_reflection
 	explod_removeongethit
 	explod_removeonchangestate
 	explod_hidewithbars
@@ -6296,6 +6297,8 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 					e.shadow[2] = exp[2].evalI(c)
 				}
 			}
+		case explod_reflection:
+			e.reflection = exp[0].evalI(c)
 		case explod_removeongethit:
 			e.removeongethit = exp[0].evalB(c)
 		case explod_removeonchangestate:
@@ -6821,6 +6824,11 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 						})
 					}
 				}
+			case explod_reflection:
+				v := exp[0].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.reflection = v
+				})
 			case explod_removeongethit:
 				v := exp[0].evalB(c)
 				eachExpl(func(e *Explod) {
@@ -7895,6 +7903,7 @@ const (
 	projectile_projremove
 	projectile_projremovetime
 	projectile_projshadow
+	projectile_projreflection
 	projectile_projmisstime
 	projectile_projhits
 	projectile_projpriority
@@ -7976,6 +7985,8 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 					p.shadow[2] = exp[2].evalI(c)
 				}
 			}
+		case projectile_projreflection:
+			p.reflection = exp[0].evalI(c)
 		case projectile_projmisstime:
 			p.misstime = exp[0].evalI(c)
 		case projectile_projhits:
@@ -8290,7 +8301,28 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				eachProj(func(p *Projectile) {
 					p.removetime = v1
 				})
-			//case projectile_projshadow:
+			case projectile_projshadow:
+				r := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.shadow[0] = r
+				})
+				if len(exp) > 1 {
+					g := exp[1].evalI(c)
+					eachProj(func(p *Projectile) {
+						p.shadow[1] = g
+					})
+					if len(exp) > 2 {
+						b := exp[2].evalI(c)
+						eachProj(func(p *Projectile) {
+							p.shadow[2] = b
+						})
+					}
+				}
+			case projectile_projreflection:
+				v1 := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.reflection = v1
+				})
 			case projectile_projmisstime:
 				v1 := exp[0].evalI(c)
 				eachProj(func(p *Projectile) {
