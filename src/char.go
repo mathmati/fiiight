@@ -1932,11 +1932,13 @@ func (e *Explod) update() {
 		return
 	}
 
-	paused := false
-	if sys.supertime > 0 {
-		paused = (e.supermovetime >= 0 && e.time >= e.supermovetime) || e.supermovetime < -2
-	} else if sys.pausetime > 0 {
-		paused = (e.pausemovetime >= 0 && e.time >= e.pausemovetime) || e.pausemovetime < -2
+	paused := sys.motif.ch.active && sys.pausetime > 0
+	if !paused {
+		if sys.supertime > 0 {
+			paused = (e.supermovetime >= 0 && e.time >= e.supermovetime) || e.supermovetime < -2
+		} else if sys.pausetime > 0 {
+			paused = (e.pausemovetime >= 0 && e.time >= e.pausemovetime) || e.pausemovetime < -2
+		}
 	}
 
 	act := !paused

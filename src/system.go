@@ -2276,7 +2276,8 @@ func (s *System) updateMusicMaps() {
 		if len(p) == 0 {
 			continue
 		}
-		if newMatchMusic {
+		isSelectableChar := i < MaxSimul*2
+		if newMatchMusic && isSelectableChar {
 			p[0].si().music.ClearSelection()
 		}
 		// Reset music map
@@ -2290,11 +2291,13 @@ func (s *System) updateMusicMaps() {
 		if sys.sel.gameParams != nil {
 			useCharMusic = sys.sel.gameParams.CharParamMusic
 		}
-		// In Versus modes, round/final/life music shouldn't override stage music; victory.music still can.
-		if useCharMusic {
-			s.cgi[i].music.Override(p[0].si().music)
-		} else if v, ok := p[0].si().music[normalizeMusicPrefix("victory")]; ok {
-			s.cgi[i].music.Override(Music{normalizeMusicPrefix("victory"): v})
+		if isSelectableChar {
+			// In Versus modes, round/final/life music shouldn't override stage music; victory.music still can.
+			if useCharMusic {
+				s.cgi[i].music.Override(p[0].si().music)
+			} else if v, ok := p[0].si().music[normalizeMusicPrefix("victory")]; ok {
+				s.cgi[i].music.Override(Music{normalizeMusicPrefix("victory"): v})
+			}
 		}
 		// Override with music with launchFight parameters
 		s.cgi[i].music.Override(sys.sel.music)
