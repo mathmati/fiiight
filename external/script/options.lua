@@ -169,6 +169,7 @@ options.t_itemname = {
 			--modifyGameOption('Config.ZoomActive', true)
 			--modifyGameOption('Config.EscOpensMenu', true)
 			modifyGameOption('Config.VsScreenLoading', false)
+			modifyGameOption('Config.TurnsLoading', false)
 			--modifyGameOption('Config.FirstRun', false)
 			--modifyGameOption('Config.WindowTitle', "Ikemen GO")
 			--modifyGameOption('Config.WindowIcon', {"external/icons/IkemenCylia_256.png", "external/icons/IkemenCylia_96.png", "external/icons/IkemenCylia_48.png"})
@@ -1264,6 +1265,20 @@ options.t_itemname = {
 		end
 		return true
 	end,
+	--Turns Preloading
+	['turnsloading'] = function(t, item, cursorPosY, moveTxt)
+		if getInput(-1, motif.option_info.menu.add.key, motif.option_info.menu.subtract.key, motif.option_info.menu.done.key) then
+			sndPlay(motif.Snd, motif.option_info.cursor.move.snd[1], motif.option_info.cursor.move.snd[2])
+			if gameOption('Config.TurnsLoading') then
+				modifyGameOption('Config.TurnsLoading', false)
+			else
+				modifyGameOption('Config.TurnsLoading', true)
+			end
+			t.items[item].vardisplay = options.f_boolDisplay(gameOption('Config.TurnsLoading'), motif.option_info.menu.valuename.enabled, motif.option_info.menu.valuename.disabled)
+			options.modified = true
+		end
+		return true
+	end,
 	--HelperMax
 	['helpermax'] = function(t, item, cursorPosY, moveTxt)
 		if getInput(-1, motif.option_info.menu.add.key) then
@@ -1509,6 +1524,9 @@ options.t_vardisplay = {
 	end,
 	['vsscreenloading'] = function()
 		return options.f_boolDisplay(gameOption('Config.VsScreenLoading'), motif.option_info.menu.valuename.enabled, motif.option_info.menu.valuename.disabled)
+	end,
+	['turnsloading'] = function()
+		return options.f_boolDisplay(gameOption('Config.TurnsLoading'), motif.option_info.menu.valuename.enabled, motif.option_info.menu.valuename.disabled)
 	end,
 	['bgmvolume'] = function()
 		return gameOption('Sound.BGMVolume') .. '%'

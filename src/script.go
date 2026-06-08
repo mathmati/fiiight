@@ -2978,6 +2978,31 @@ func systemScriptInit(l *lua.LState) {
 					return -1, nil
 				}
 
+				// Build Turns teammate portraits after loading, when Lua order selection is complete.
+				if sys.round == 1 {
+					for side, tm := range sys.tmode {
+						if tm != TM_Turns {
+							continue
+						}
+						sys.selMutex.RLock()
+						teamSel := make([][2]int, len(sys.sel.selected[side]))
+						copy(teamSel, sys.sel.selected[side])
+						sys.selMutex.RUnlock()
+						if len(teamSel) == 0 ||
+							side >= len(sys.fightScreen.faces[TM_Turns]) ||
+							sys.fightScreen.faces[TM_Turns][side] == nil ||
+							sys.fightScreen.names[TM_Turns][side] == nil {
+							continue
+						}
+						teamChars := make([]int, len(teamSel))
+						for i := range teamSel {
+							teamChars[i] = teamSel[i][0]
+						}
+						sys.loader.prepareTurnsFaces(side, sys.fightScreen.faces[TM_Turns][side],
+							sys.fightScreen.names[TM_Turns][side], teamChars, teamSel)
+					}
+				}
+
 				// Apply fight/stage aspect only after loading is complete
 				sys.setGameAspect()
 
@@ -2986,11 +3011,16 @@ func systemScriptInit(l *lua.LState) {
 
 				for i, c := range sys.chars {
 					if len(c) > 0 {
+						// Skip BG-loaded Turns mode chars so CharList bookkeeping doesn't try to replace nonexistent entries on later rounds.
+						if sys.cfg.Config.TurnsLoading && sys.tmode[i&1] == TM_Turns && c[0].teamside == -1 {
+							continue
+						}
 						// Add or replace in charList
 						if sys.round == 1 {
 							sys.charList.add(c[0])
 						} else if c[0].roundsExisted() == 0 {
-							if !sys.charList.replace(c[0], i, 0) {
+							// BG-loaded Turns switching updates CharList inside activateNextTurnsFighters().
+							if !(sys.cfg.Config.TurnsLoading && sys.tmode[i&1] == TM_Turns) && !sys.charList.replace(c[0], i, 0) {
 								panic(fmt.Errorf("failed to replace player: %v", i))
 							}
 						}
@@ -3116,7 +3146,19 @@ func systemScriptInit(l *lua.LState) {
 					}
 				}
 
-				sys.loader.reset()
+				if sys.cfg.Config.TurnsLoading {
+					// The next Turns member is loaded in the background during the previous round.
+					// If the round ended before that load finished, wait here before promotion.
+					if sys.loader.state != LS_NotYet && sys.loader.state != LS_Complete {
+						if err := load(); err != nil {
+							l.RaiseError(err.Error())
+						}
+					}
+					sys.activateNextTurnsFighters()
+				} else {
+					// Legacy Turns behavior: reload the next fighter between rounds.
+					sys.loader.reset()
+				}
 			}
 
 			// If not restarting match
@@ -4793,9 +4835,13 @@ func systemScriptInit(l *lua.LState) {
 		if !sys.cfg.Config.VsScreenLoading {
 			sys.selMutex.RLock()
 			for k, v := range sys.sel.selected {
-				if len(v) < int(sys.numSimul[k]) {
+				expected := int(sys.numSimul[k])
+				if sys.tmode[k] == TM_Turns && sys.cfg.Config.TurnsLoading {
+					expected = int(sys.numTurns[k])
+				}
+				if len(v) < expected {
 					sys.selMutex.RUnlock()
-					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, sys.numSimul[k], len(v))
+					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, expected, len(v))
 				}
 			}
 			sys.selMutex.RUnlock()
