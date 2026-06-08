@@ -3461,6 +3461,7 @@ func (ch *MotifChallenger) step(m *Motif) {
 	sys.setGSF(GSF_timerfreeze)
 	if ch.counter == m.ChallengerInfo.Pause.Time {
 		sys.pausetime = m.ChallengerInfo.Time + m.ChallengerInfo.FadeOut.FadeData.duration()
+		sys.stopAllCharSounds()
 	}
 	if ch.counter == m.ChallengerInfo.Snd.Time {
 		m.Snd.play(m.ChallengerInfo.Snd.Snd, 100, 0, 0, 0, 0)
