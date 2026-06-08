@@ -3,6 +3,7 @@ package main
 import (
 	"arena"
 	"bufio"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -239,6 +240,8 @@ type System struct {
 	chars               [MaxPlayerNo][]*Char
 	charList            CharList
 	cgi                 [MaxPlayerNo]CharGlobalInfo
+	turnsPreloadMember  [2]int // -1 = none; otherwise selected Turns member index to load into side+2
+	selMutex            sync.RWMutex
 	loadMutex           sync.Mutex
 	ignoreMostErrors    bool
 	stringPool          [MaxPlayerNo]StringPool
@@ -716,6 +719,21 @@ func (s *System) leaveMotifAspect() {
 	s.applyFightAspect()
 }
 
+func (s *System) setGameAspect() {
+	sys.applyFightAspect()
+	if sys.stage != nil {
+		sys.stage.localscl = float32(sys.gameWidth) / float32(sys.stage.stageCamera.localcoord[0])
+		sys.stage.stageCamera.localscl = sys.stage.localscl
+	}
+	for _, p := range sys.chars {
+		if len(p) > 0 {
+			p[0].localcoord = float32(p[0].gi().localcoord[0]) / (float32(sys.gameWidth) / 320)
+			p[0].localscl = 320 / p[0].localcoord
+		}
+	}
+	sys.fightScreen.setScale()
+}
+
 func (s *System) eventUpdate() bool {
 	s.esc = false
 	for _, v := range s.shortcutScripts {
@@ -964,12 +982,59 @@ func (s *System) resetRemapInput() {
 
 func (s *System) loaderReset() {
 	s.round, s.wins, s.roundsExisted, s.decisiveRound = 1, [2]int32{}, [2]int32{}, [2]bool{}
+	s.turnsPreloadMember = [2]int{-1, -1}
 	s.loader.reset()
 }
 
 func (s *System) loadStart() {
 	s.loaderReset()
 	s.loader.runTread()
+}
+
+// Drop everything that might have been partially produced by the pre-match async loader.
+func (s *System) dropCanceledLoadData() {
+	for {
+		select {
+		case <-s.mainThreadTask:
+		default:
+			goto drained
+		}
+	}
+drained:
+	s.loadMutex.Lock()
+	defer s.loadMutex.Unlock()
+
+	for prefix, ffx := range s.ffx {
+		if ffx == nil || !ffx.isCharFX {
+			continue
+		}
+		ffx.sff = nil
+		delete(s.ffx, prefix)
+	}
+
+	for i := range s.cgi {
+		s.cgi[i].sff = nil
+		s.cgi[i].palettedata = nil
+		s.cgi[i].snd = nil
+		s.cgi[i].states = nil
+		s.chars[i] = nil
+		s.cgi[i].palno = -1
+	}
+
+	if s.stage != nil {
+		s.stage.destroy()
+		s.stage = nil
+	}
+	s.stageList = make(map[int32]*Stage)
+	s.stageLoop = false
+}
+
+func (s *System) loadCancel() {
+	s.loader.reset()
+	s.dropCanceledLoadData()
+	if s.netConnection != nil {
+		s.netConnection.ResetLoadingPhase()
+	}
 }
 
 func (s *System) synchronize() error {
@@ -1960,6 +2025,10 @@ func (s *System) initPlayerID() {
 		c := sys.chars[i][0]
 
 		if sys.round == 1 || c.roundsExisted() == 0 {
+			// In BG-loaded Turns, promoted fighters already have a valid ID
+			if sys.cfg.Config.TurnsLoading && sys.tmode[i&1] == TM_Turns && c.id >= 0 {
+				return
+			}
 			c.id = sys.newCharId()
 		}
 	}
@@ -3191,6 +3260,7 @@ func (s *System) roundEndDecision() bool {
 	checkPerfect := func(team int) bool {
 		for i := team; i < MaxSimul*2; i += 2 {
 			if len(s.chars[i]) > 0 &&
+				s.chars[i][0].teamside != -1 &&
 				s.chars[i][0].life < s.chars[i][0].lifeMax {
 				return false
 			}
@@ -3206,7 +3276,7 @@ func (s *System) roundEndDecision() bool {
 		for i := team; i < MaxSimul*2; i += 2 {
 			if len(s.chars[i]) > 0 {
 				char := s.chars[i][0]
-				if float32(char.life) > float32(char.lifeMax)*clutchRatio {
+				if char.teamside != -1 && float32(char.life) > float32(char.lifeMax)*clutchRatio {
 					return false
 				}
 			}
@@ -3246,6 +3316,9 @@ func (s *System) roundEndDecision() bool {
 		for i := 0; i < 2; i++ { // Check life percentage of each team
 			for j := i; j < MaxSimul*2; j += 2 {
 				if len(s.chars[j]) > 0 {
+					if s.chars[j][0].teamside == -1 {
+						continue
+					}
 					if s.tmode[i] == TM_Simul || s.tmode[i] == TM_Tag {
 						l[i] += (float32(s.chars[j][0].life) / float32(s.numSimul[i])) / float32(s.chars[j][0].lifeMax)
 					} else {
@@ -3304,7 +3377,7 @@ func (s *System) roundEndDecision() bool {
 	// Update win triggers if finish type was changed
 	if ft != s.finishType {
 		for i, p := range s.chars {
-			if len(p) > 0 && ko[^i&1] {
+			if len(p) > 0 && p[0].teamside != -1 && ko[^i&1] {
 				for _, h := range p {
 					for _, tid := range h.targets {
 						if t := s.playerID(tid); t != nil {
@@ -3648,7 +3721,8 @@ func (s *System) runMatch() (reload bool) {
 		s.allPalFX.enable = false
 		for i, p := range s.chars {
 			if len(p) > 0 {
-				forceDestroy := s.matchOver() || (s.tmode[i&1] == TM_Turns && p[0].life <= 0)
+				forceDestroy := s.matchOver() ||
+					(s.tmode[i&1] == TM_Turns && p[0].teamside != -1 && p[0].life <= 0)
 				s.clearPlayerAssets(i, forceDestroy)
 			}
 		}
@@ -3693,6 +3767,10 @@ func (s *System) runMatch() (reload bool) {
 	// Save round 1 backup separately
 	if s.round == 1 {
 		s.matchBackup = s.roundBackup
+	}
+
+	if s.cfg.Config.TurnsLoading {
+		s.startNextTurnsPreload()
 	}
 
 	// Reset the clock right before entering the loop to ensure we start with a clean timeline
@@ -3990,6 +4068,9 @@ func (s *System) runNextRound() bool {
 				if s.chars[i][0].win() || (!s.chars[i][0].lose() && tm != TM_Turns) {
 					for j := i; j < len(s.chars); j += 2 {
 						if len(s.chars[j]) > 0 {
+							if tm == TM_Turns && j != i {
+								continue
+							}
 							if !s.chars[j][0].win() {
 								s.chars[j][0].life = Max(1, s.cgi[j].data.life)
 							}
@@ -4144,6 +4225,14 @@ func (bk *RoundStartBackup) Restore() {
 			continue
 		}
 
+		// Staged Turns preload can create standby P3/P4 after roundBackup.Save()
+		if len(bk.charBackup[i]) == 0 {
+			sys.clearPlayerAssets(i, true)
+			sys.removePlayerFromCharList(i)
+			sys.chars[i] = nil
+			continue
+		}
+
 		for j, c := range chars {
 			// Find the backup corresponding to this index
 			var bkup *Char
@@ -4245,6 +4334,8 @@ type SelectChar struct {
 	sff           *Sff
 	music         Music
 	scp           *SelectCharParams
+	preloadAnim   string
+	preloadSprite string
 }
 
 func newSelectChar() *SelectChar {
@@ -4268,6 +4359,7 @@ type SelectStage struct {
 	sff             *Sff
 	music           Music
 	ssp             *SelectStageParams
+	preloadSprite   string
 }
 
 func newSelectStage() *SelectStage {
@@ -4294,6 +4386,50 @@ type Select struct {
 	sdefOverwrite      string
 	music              Music
 	gameParams         *GameParams
+	preloadMu          sync.Mutex
+	preloadCond        *sync.Cond
+	preloadWorkerRun   bool
+	preloadOrder       int64
+	charPreload        []PreloadEntry
+	stagePreload       []PreloadEntry
+}
+
+type PreloadState int32
+
+const (
+	PS_Idle PreloadState = iota
+	PS_Queued
+	PS_Loading
+	PS_Ready
+	PS_Error
+)
+
+func (ps PreloadState) String() string {
+	switch ps {
+	case PS_Idle:
+		return "idle"
+	case PS_Queued:
+		return "queued"
+	case PS_Loading:
+		return "loading"
+	case PS_Ready:
+		return "ready"
+	case PS_Error:
+		return "error"
+	}
+	return "idle"
+}
+
+const (
+	PreloadPriorityLow  = 1
+	PreloadPriorityHigh = 2
+)
+
+type PreloadEntry struct {
+	State    PreloadState
+	Priority int
+	Order    int64
+	Err      string
 }
 
 func newSelect() *Select {
@@ -4309,6 +4445,420 @@ func newSelect() *Select {
 		music:              make(Music),
 		gameParams:         newGameParams(),
 	}
+}
+
+func (s *Select) initPreloadSync() {
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if s.preloadCond == nil {
+		s.preloadCond = sync.NewCond(&s.preloadMu)
+	}
+}
+
+func (s *Select) ensurePreloadWorker() {
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	if s.preloadWorkerRun {
+		s.preloadMu.Unlock()
+		return
+	}
+	s.preloadWorkerRun = true
+	s.preloadMu.Unlock()
+	SafeGo(func() {
+		s.preloadWorkerLoop()
+	})
+}
+
+func (s *Select) ensureCharPreloadSlot(ref int) {
+	if ref < 0 {
+		return
+	}
+	for len(s.charPreload) <= ref {
+		s.charPreload = append(s.charPreload, PreloadEntry{})
+	}
+}
+
+func (s *Select) ensureStagePreloadSlot(ref int) {
+	if ref <= 0 {
+		return
+	}
+	idx := ref - 1
+	for len(s.stagePreload) <= idx {
+		s.stagePreload = append(s.stagePreload, PreloadEntry{})
+	}
+}
+
+func (s *Select) QueueCharPreload(ref int, priority int) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return
+	}
+	if ref < 0 || ref >= len(s.charlist) {
+		return
+	}
+	s.initPreloadSync()
+	s.ensurePreloadWorker()
+	s.preloadMu.Lock()
+	defer func() {
+		s.preloadCond.Broadcast()
+		s.preloadMu.Unlock()
+	}()
+	s.ensureCharPreloadSlot(ref)
+	e := &s.charPreload[ref]
+	if e.State == PS_Ready {
+		return
+	}
+	if e.State == PS_Loading {
+		e.Priority = priority
+		return
+	}
+	if e.State == PS_Idle || e.State == PS_Error {
+		e.State = PS_Queued
+	}
+	if e.Priority == priority {
+		return
+	}
+	e.Priority = priority
+	if priority <= PreloadPriorityLow {
+		e.Order = 0
+	} else {
+		s.preloadOrder++
+		e.Order = s.preloadOrder
+	}
+}
+
+func (s *Select) QueueStagePreload(ref int, priority int) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return
+	}
+	if ref <= 0 || ref > len(s.stagelist) {
+		return
+	}
+	s.initPreloadSync()
+	s.ensurePreloadWorker()
+	s.preloadMu.Lock()
+	defer func() {
+		s.preloadCond.Broadcast()
+		s.preloadMu.Unlock()
+	}()
+	s.ensureStagePreloadSlot(ref)
+	e := &s.stagePreload[ref-1]
+	if e.State == PS_Ready {
+		return
+	}
+	if e.State == PS_Loading {
+		e.Priority = priority
+		return
+	}
+	if e.State == PS_Idle || e.State == PS_Error {
+		e.State = PS_Queued
+	}
+	if e.Priority == priority {
+		return
+	}
+	e.Priority = priority
+	if priority <= PreloadPriorityLow {
+		e.Order = 0
+	} else {
+		s.preloadOrder++
+		e.Order = s.preloadOrder
+	}
+}
+
+func (s *Select) CharPreloadStatus(ref int) (PreloadState, string) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return PS_Ready, ""
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if ref < 0 || ref >= len(s.charPreload) {
+		return PS_Idle, ""
+	}
+	return s.charPreload[ref].State, s.charPreload[ref].Err
+}
+
+func (s *Select) StagePreloadStatus(ref int) (PreloadState, string) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return PS_Ready, ""
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if ref <= 0 || ref-1 >= len(s.stagePreload) {
+		return PS_Idle, ""
+	}
+	return s.stagePreload[ref-1].State, s.stagePreload[ref-1].Err
+}
+
+func (s *Select) AllPreloadsReady() bool {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return true
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	for _, e := range s.charPreload {
+		switch e.State {
+		case PS_Queued, PS_Loading:
+			return false
+		}
+	}
+	for _, e := range s.stagePreload {
+		switch e.State {
+		case PS_Queued, PS_Loading:
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Select) preloadWorkerLoop() {
+	s.initPreloadSync()
+	for {
+		s.preloadMu.Lock()
+		for {
+			kind := ""
+			ref := -1
+			bestPriority := -1
+			bestOrder := int64(-1)
+			for i, e := range s.charPreload {
+				if e.State != PS_Queued {
+					continue
+				}
+				if e.Priority > bestPriority || (e.Priority == bestPriority && e.Order > bestOrder) {
+					bestPriority = e.Priority
+					bestOrder = e.Order
+					kind = "char"
+					ref = i
+				}
+			}
+			for i, e := range s.stagePreload {
+				if e.State != PS_Queued {
+					continue
+				}
+				if e.Priority > bestPriority || (e.Priority == bestPriority && e.Order > bestOrder) {
+					bestPriority = e.Priority
+					bestOrder = e.Order
+					kind = "stage"
+					ref = i + 1
+				}
+			}
+			if ref >= 0 {
+				if kind == "char" {
+					s.charPreload[ref].State = PS_Loading
+					s.charPreload[ref].Err = ""
+				} else {
+					s.stagePreload[ref-1].State = PS_Loading
+					s.stagePreload[ref-1].Err = ""
+				}
+				s.preloadMu.Unlock()
+
+				var err error
+				if kind == "char" {
+					err = s.preloadCharAssets(ref)
+				} else {
+					err = s.preloadStageAssets(ref)
+				}
+
+				s.preloadMu.Lock()
+				if kind == "char" {
+					if err != nil {
+						s.charPreload[ref].State = PS_Error
+						s.charPreload[ref].Err = err.Error()
+					} else {
+						s.charPreload[ref].State = PS_Ready
+						s.charPreload[ref].Err = ""
+					}
+				} else {
+					if err != nil {
+						s.stagePreload[ref-1].State = PS_Error
+						s.stagePreload[ref-1].Err = err.Error()
+					} else {
+						s.stagePreload[ref-1].State = PS_Ready
+						s.stagePreload[ref-1].Err = ""
+					}
+				}
+				s.preloadCond.Broadcast()
+				break
+			}
+			s.preloadCond.Wait()
+		}
+		s.preloadMu.Unlock()
+	}
+}
+
+func (s *Select) preloadCharAssets(ref int) error {
+	if ref < 0 || ref >= len(s.charlist) {
+		return nil
+	}
+	sc := s.charlist[ref]
+	localAnims := NewPreloadedAnims()
+	listSpr := make(map[[2]uint16]bool)
+	for k := range s.charSpritePreload {
+		listSpr[k] = true
+	}
+	tempSff := newSff()
+
+	if sc.preloadAnim != "" {
+		animPath := sc.preloadAnim
+		if err := LoadFile(&animPath, []string{sc.def}, "", func(filename string) error {
+			str, err := LoadText(filename)
+			if err != nil {
+				return err
+			}
+			lines, lnidx := SplitAndTrim(str, "\n"), 0
+			at := ReadAnimationTable(sc.def, tempSff, &tempSff.palList, lines, &lnidx, false)
+			for vAnim := range s.charAnimPreload {
+				if animation := at.get(vAnim); animation != nil {
+					localAnims.addAnim(animation, vAnim)
+					for _, fr := range animation.frames {
+						if fr.Group < 0 || fr.Number < 0 {
+							continue
+						}
+						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	var localSff *Sff
+	if sc.preloadSprite != "" {
+		spritePath := sc.preloadSprite
+		var selPal []int32
+		if err := LoadFile(&spritePath, []string{sc.def, "", "data/"}, "", func(file string) error {
+			var err error
+			localSff, selPal, err = preloadSff(file, true, listSpr)
+			if err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		localAnims.updateSff(localSff)
+		for k := range s.charSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+		if localSff.header.Version[0] != 1 {
+			defPals := make(map[int32]bool)
+			for _, p := range sc.pal {
+				defPals[p] = true
+			}
+			maxPalSlots := sys.cfg.Config.PaletteMax
+			newPalFiles := make([]string, maxPalSlots)
+			for i, pIdx := range sc.pal {
+				if pIdx >= 1 && int(pIdx) <= maxPalSlots && i < len(sc.pal_files) {
+					newPalFiles[pIdx-1] = sc.pal_files[i]
+				}
+			}
+			newPal := make([]int32, 0, maxPalSlots)
+			newPalFilesOut := make([]string, 0, maxPalSlots)
+			for i := 1; i <= maxPalSlots; i++ {
+				existsInSff := false
+				for _, sIdx := range selPal {
+					if sIdx == int32(i) {
+						existsInSff = true
+						break
+					}
+				}
+				if defPals[int32(i)] || existsInSff {
+					newPal = append(newPal, int32(i))
+					newPalFilesOut = append(newPalFilesOut, newPalFiles[i-1])
+				}
+			}
+			sc.pal = newPal
+			sc.pal_files = newPalFilesOut
+		} else if len(sc.pal) == 0 {
+			sc.pal = selPal
+		}
+	} else {
+		localSff = newSff()
+		localAnims.updateSff(localSff)
+		for k := range s.charSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+	}
+
+	s.preloadMu.Lock()
+	dst := &s.charlist[ref]
+	dst.sff = localSff
+	dst.anims = localAnims
+	dst.pal = sc.pal
+	dst.pal_files = sc.pal_files
+	s.preloadMu.Unlock()
+	return nil
+}
+
+func (s *Select) preloadStageAssets(ref int) error {
+	if ref <= 0 || ref > len(s.stagelist) {
+		return nil
+	}
+	ss := s.stagelist[ref-1]
+	lines := []string{}
+	defPath := ss.def
+	if err := LoadFile(&defPath, nil, "", func(file string) error {
+		str, err := LoadText(file)
+		if err != nil {
+			return err
+		}
+		lines = SplitAndTrim(str, "\n")
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	localAnims := NewPreloadedAnims()
+	listSpr := make(map[[2]uint16]bool)
+	for k := range s.stageSpritePreload {
+		listSpr[k] = true
+	}
+
+	tempSff := newSff()
+	atidx := 0
+	at := ReadAnimationTable(ss.def, tempSff, &tempSff.palList, lines, &atidx, false)
+	for v := range s.stageAnimPreload {
+		if anim := at.get(v); anim != nil {
+			localAnims.addAnim(anim, v)
+			for _, fr := range anim.frames {
+				if fr.Group >= 0 && fr.Number >= 0 {
+					listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
+				}
+			}
+		}
+	}
+
+	var localSff *Sff
+	if ss.preloadSprite != "" {
+		spritePath := ss.preloadSprite
+		if err := LoadFile(&spritePath, []string{ss.def, "", "data/"}, "", func(file string) error {
+			var err error
+			localSff, _, err = preloadSff(file, false, listSpr)
+			if err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		localAnims.updateSff(localSff)
+		for k := range s.stageSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+	} else {
+		localSff = newSff()
+		localAnims.updateSff(localSff)
+	}
+
+	s.preloadMu.Lock()
+	dst := &s.stagelist[ref-1]
+	dst.sff = localSff
+	dst.anims = localAnims
+	s.preloadMu.Unlock()
+	return nil
 }
 
 func (s *Select) GetCharNo(i int) int {
@@ -4355,7 +4905,11 @@ func (s *Select) ValidatePalette(charRef, requested int) int {
 	return int(sc.pal[0])
 }
 
-func (s *Select) SelectStage(n int) { s.selectedStageNo = n }
+func (s *Select) SelectStage(n int) {
+	sys.selMutex.Lock()
+	s.selectedStageNo = n
+	sys.selMutex.Unlock()
+}
 
 func (s *Select) GetStage(n int) *SelectStage {
 	if len(s.stagelist) == 0 {
@@ -4583,12 +5137,6 @@ func (s *Select) AddChar(def string) *SelectChar {
 		}
 	}
 
-	listSpr := make(map[[2]uint16]bool)
-	for k := range s.charSpritePreload {
-		listSpr[k] = true
-	}
-
-	tempSff := newSff()
 	LoadFile(&cns_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 		str, err := LoadText(filename)
 		if err != nil {
@@ -4613,31 +5161,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 
 	// preload animations
 	if len(anim_orig) > 0 {
-		err := LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
-			str, err := LoadText(filename) // LoadText is zip-aware
-			if err != nil {
-				return err
-			}
-			lines, lnidx := SplitAndTrim(str, "\n"), 0
-			// We disable logging here or else preloading will print the errors of all characters in the select screen
-			at := ReadAnimationTable(sc.def, tempSff, &tempSff.palList, lines, &lnidx, false)
-			for v_anim := range s.charAnimPreload {
-				if animation := at.get(v_anim); animation != nil {
-					sc.anims.addAnim(animation, v_anim)
-					for _, fr := range animation.frames {
-						if fr.Group < 0 || fr.Number < 0 {
-							continue
-						}
-						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
-					}
-				}
-			}
-			return nil
-		})
-		// Crash if we expected an AIR file but didn't find any
-		if err != nil {
-			panic(fmt.Sprintf("Cannot open air file for character %s: %v", def, err))
-		}
+		sc.preloadAnim = anim_orig
 	}
 
 	// Try to use the "_preload.sff" file if available
@@ -4649,63 +5173,17 @@ func (s *Select) AddChar(def string) *SelectChar {
 
 	// preload portion of sff file
 	if len(fp) > 0 {
-		err := LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
-			var selPal []int32
-			var err_sff error
-			sc.sff, selPal, err_sff = preloadSff(file, true, listSpr)
-			if err_sff != nil {
-				return fmt.Errorf("failed to preload SFF %s for %s: %w", file, sc.def, err_sff)
-			}
-			sc.anims.updateSff(sc.sff)
-			for k_spr := range s.charSpritePreload {
-				sc.anims.addSprite(sc.sff, k_spr[0], k_spr[1])
-			}
-			// Synchronize SFFv2 internal palettes with DEF declarations
-			if sc.sff.header.Version[0] != 1 {
-				defPals := make(map[int32]bool)
-				for _, p := range sc.pal {
-					defPals[p] = true
-				}
-				// Map DEF palette files to their intended slots
-				maxPalSlots := sys.cfg.Config.PaletteMax
-				newPalFiles := make([]string, maxPalSlots)
-				for i, pIdx := range sc.pal {
-					if pIdx >= 1 && int(pIdx) <= maxPalSlots {
-						newPalFiles[pIdx-1] = sc.pal_files[i]
-					}
-				}
-				// Rebuild sc.pal and sc.pal_files in sequential order
-				sc.pal = nil
-				sc.pal_files = nil
-				for i := 1; i <= maxPalSlots; i++ {
-					existsInSff := false
-					for _, sIdx := range selPal {
-						if sIdx == int32(i) {
-							existsInSff = true
-							break
-						}
-					}
-					// Include palette if it exists in either the SFFv2 or the DEF
-					if defPals[int32(i)] || existsInSff {
-						sc.pal = append(sc.pal, int32(i))
-						sc.pal_files = append(sc.pal_files, newPalFiles[i-1])
-					}
-				}
-			} else if len(sc.pal) == 0 {
-				sc.pal = selPal
-			}
-			return nil
-		})
-		// Crash if we expected a SFF file but didn't find any
-		if err != nil {
-			panic(fmt.Sprintf("Cannot open sprite file for character %s: %v", def, err))
-		}
-	} else {
-		// If we deliberately lack a SFF, then make a dummy one
+		sc.preloadSprite = fp
+	}
+	if sys.cfg.Config.BootLoadingMode > 0 {
 		sc.sff = newSff()
 		sc.anims.updateSff(sc.sff)
 		for k := range s.charSpritePreload {
 			sc.anims.addSprite(sc.sff, k[0], k[1])
+		}
+	} else {
+		if err := s.preloadCharAssets(len(s.charlist) - 1); err != nil {
+			panic(fmt.Errorf("failed to preload %v: %v", sc.def, err))
 		}
 	}
 
@@ -4875,38 +5353,20 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 			}
 		}
 	}
-	if len(s.stageSpritePreload) > 0 || len(s.stageAnimPreload) > 0 {
-		listSpr := make(map[[2]uint16]bool)
+	if spr != "" {
+		ss.preloadSprite = spr
+	}
+	if sys.cfg.Config.BootLoadingMode > 0 {
+		ss.sff = newSff()
+		ss.anims.updateSff(ss.sff)
 		for k := range s.stageSpritePreload {
-			listSpr[[...]uint16{k[0], k[1]}] = true
+			ss.anims.addSprite(ss.sff, k[0], k[1])
 		}
-		sff := newSff()
-		// preload animations
-		atidx := 0
-		at := ReadAnimationTable(finalDefPath, sff, &sff.palList, lines, &atidx, false)
-		for v := range s.stageAnimPreload {
-			if anim := at.get(v); anim != nil {
-				ss.anims.addAnim(anim, v)
-				for _, fr := range anim.frames {
-					if fr.Group >= 0 && fr.Number >= 0 {
-						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
-					}
-				}
-			}
+		s.ensureStagePreloadSlot(len(s.stagelist))
+	} else {
+		if err := s.preloadStageAssets(len(s.stagelist)); err != nil {
+			panic(fmt.Errorf("failed to preload %v: %v", def, err))
 		}
-		// preload portion of sff file
-		LoadFile(&spr, []string{finalDefPath, "", "data/"}, "", func(file string) error {
-			var err error
-			ss.sff, _, err = preloadSff(file, false, listSpr)
-			if err != nil {
-				panic(fmt.Errorf("failed to load %v: %v\nerror preloading %v", file, err, def))
-			}
-			ss.anims.updateSff(ss.sff)
-			for k := range s.stageSpritePreload {
-				ss.anims.addSprite(ss.sff, k[0], k[1])
-			}
-			return nil
-		})
 	}
 	return ss, nil
 }
@@ -4924,24 +5384,25 @@ func (s *Select) AddSelectedChar(tn, cn, pl int) bool {
 		n = int(Rand(0, int32(len(s.charlist))-1))
 		pl = int(Rand(1, int32(sys.cfg.Config.PaletteMax)))
 	}
-	sys.loadMutex.Lock()
+	sys.selMutex.Lock()
 	s.selected[tn] = append(s.selected[tn], [...]int{n, pl})
 	if s.gameParams == nil {
 		s.gameParams = newGameParams()
 	}
 	// ensure per-member override slot exists (needed for existed flag / persistence)
-	_ = s.gameParams.ensureOverride(tn, len(s.selected[tn])-1)
-	sys.loadMutex.Unlock()
+	dst := len(s.selected[tn]) - 1
+	_ = s.gameParams.ensureOverride(tn, dst)
+	sys.selMutex.Unlock()
 	return true
 }
 
 func (s *Select) ClearSelected() {
-	sys.loadMutex.Lock()
+	sys.selMutex.Lock()
 	s.selected = [2][][2]int{}
-	sys.loadMutex.Unlock()
 	s.selectedStageNo = -1
 	s.music = make(Music)
 	s.gameParams = newGameParams()
+	sys.selMutex.Unlock()
 }
 
 type LoaderState int32
@@ -4954,14 +5415,38 @@ const (
 	LS_Cancel
 )
 
+// Returned by heavy loaders (notably SFF parsing) to signal cooperative cancellation.
+var ErrLoadingCanceled = errors.New("loading canceled")
+
 type Loader struct {
-	state    LoaderState
-	loadExit chan LoaderState
-	err      error
+	state      LoaderState
+	loadExit   chan LoaderState
+	err        error
+	cancelCh   chan struct{}
+	cancelOnce sync.Once
 }
 
 func newLoader() *Loader {
 	return &Loader{state: LS_NotYet, loadExit: make(chan LoaderState, 1)}
+}
+
+func (l *Loader) requestCancel() {
+	if l.cancelCh == nil {
+		return
+	}
+	l.cancelOnce.Do(func() { close(l.cancelCh) })
+}
+
+func (l *Loader) cancelRequested() bool {
+	if l.cancelCh == nil {
+		return false
+	}
+	select {
+	case <-l.cancelCh:
+		return true
+	default:
+		return false
+	}
 }
 
 /*
@@ -4974,25 +5459,263 @@ func (l *Loader) loadAttachedChar(pn int) int {
 }
 */
 
+func (s *System) turnsPreloadActive() bool {
+	return s.cfg.Config.TurnsLoading && (s.turnsPreloadMember[0] >= 0 || s.turnsPreloadMember[1] >= 0)
+}
+
+func (s *System) startNextTurnsPreload() {
+	if !s.cfg.Config.TurnsLoading || s.loader.state == LS_Loading || s.loader.state == LS_Error {
+		return
+	}
+	next := [2]int{-1, -1}
+	s.selMutex.RLock()
+	for team := 0; team < 2; team++ {
+		if s.tmode[team] != TM_Turns {
+			continue
+		}
+		member := int(s.wins[team^1]) + 1
+		if member <= 0 || member >= int(s.numTurns[team]) || member >= len(s.sel.selected[team]) {
+			continue
+		}
+		pn := team + 2 // one hidden standby slot per Turns side
+		if len(s.chars[pn]) > 0 && s.chars[pn][0] != nil &&
+			s.chars[pn][0].memberNo == member &&
+			s.chars[pn][0].selectNo == s.sel.selected[team][member][0] {
+			continue
+		}
+		next[team] = member
+	}
+	s.selMutex.RUnlock()
+	if next == [2]int{-1, -1} {
+		s.turnsPreloadMember = next
+		return
+	}
+	s.turnsPreloadMember = next
+	if s.loader.state == LS_Complete || s.loader.state == LS_Cancel {
+		select {
+		case <-s.loader.loadExit:
+		default:
+		}
+		s.loader.state = LS_NotYet
+		s.loader.err = nil
+		s.loader.cancelCh = nil
+		s.loader.cancelOnce = sync.Once{}
+	}
+	if s.loader.state == LS_NotYet {
+		s.loader.runTread()
+	}
+}
+
+// Rewrite slot-indexed fields inside chars when a preloaded Turns member is promoted into P1/P2.
+func (s *System) remapCharSlotRefs(chars []*Char, oldSlot, newSlot int) {
+	oldCPU := oldSlot ^ -1
+	newCPU := newSlot ^ -1
+	for _, ch := range chars {
+		if ch == nil {
+			continue
+		}
+		ch.playerNo = newSlot
+		ch.ss.sb.playerNo = newSlot
+		if ch.controller == oldSlot {
+			ch.controller = newSlot
+		} else if ch.controller == oldCPU {
+			ch.controller = newCPU
+		}
+		if ch.animPN == oldSlot {
+			ch.animPN = newSlot
+		}
+		if ch.spritePN == oldSlot {
+			ch.spritePN = newSlot
+		}
+		// Commands are slot-indexed.
+		if oldSlot >= 0 && newSlot >= 0 && oldSlot < len(ch.cmd) && newSlot < len(ch.cmd) {
+			ch.cmd[oldSlot], ch.cmd[newSlot] = ch.cmd[newSlot], ch.cmd[oldSlot]
+		}
+	}
+}
+
+func (s *System) rebindCgiStateOwners(pn int) {
+	if pn < 0 || pn >= len(s.cgi) || s.cgi[pn].states == nil {
+		return
+	}
+	keys := make([]int32, 0, len(s.cgi[pn].states))
+	for k := range s.cgi[pn].states {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		sb := s.cgi[pn].states[k]
+		if sb.playerNo != pn {
+			sb.playerNo = pn
+			s.cgi[pn].states[k] = sb
+		}
+	}
+}
+
+func (s *System) removePlayerFromCharList(pn int) {
+	for {
+		removed := false
+		for _, c := range s.charList.creationOrder {
+			if c != nil && c.playerNo == pn {
+				s.charList.delete(c)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			return
+		}
+	}
+}
+
+func (s *System) setBGTurnsSlotState(chars []*Char, slot int, active bool) {
+	team := slot & 1
+	for _, ch := range chars {
+		if ch == nil {
+			continue
+		}
+		if active {
+			ch.teamside = team
+			ch.unsetSCF(SCF_disabled)
+			ch.unsetSCF(SCF_standby)
+			if ch.helperIndex == 0 {
+				ch.controller = slot
+				if s.aiLevel[slot] != 0 {
+					ch.controller ^= -1
+				}
+				// Defensive: the real round initialization will run next, but
+				// never let a promoted preloaded fighter enter as already dead.
+				if ch.life <= 0 {
+					ch.life = Max(1, ch.lifeMax)
+					ch.redLife = ch.life
+				}
+			}
+		} else {
+			ch.teamside = -1
+			ch.setSCF(SCF_disabled)
+			ch.setSCF(SCF_standby)
+			ch.setCtrl(false)
+			if ch.helperIndex == 0 {
+				ch.controller = slot
+			}
+		}
+	}
+}
+
+// Promote the next preloaded Turns member into the active P1/P2 slot after a KO.
+func (s *System) activateNextTurnsFighters() {
+	for team := 0; team < 2; team++ {
+		if s.tmode[team] != TM_Turns || !s.effectiveLoss[team] {
+			continue
+		}
+		nextMember := int(s.wins[team^1])
+		if nextMember < 0 || nextMember >= int(s.numTurns[team]) {
+			continue
+		}
+		dst := team
+		src := team + 2
+		if src < 0 || src >= MaxSimul*2 {
+			continue
+		}
+		if len(s.chars[src]) == 0 || s.chars[src][0] == nil ||
+			s.chars[src][0].memberNo != nextMember {
+			continue
+		}
+		s.removePlayerFromCharList(dst)
+		s.removePlayerFromCharList(src)
+		oldDst, oldSrc := dst, src
+		s.chars[dst], s.chars[src] = s.chars[src], s.chars[dst]
+		s.cgi[dst], s.cgi[src] = s.cgi[src], s.cgi[dst]
+		s.stringPool[dst], s.stringPool[src] = s.stringPool[src], s.stringPool[dst]
+		s.remapCharSlotRefs(s.chars[dst], oldSrc, dst)
+		s.remapCharSlotRefs(s.chars[src], oldDst, src)
+		s.rebindCgiStateOwners(dst)
+		s.rebindCgiStateOwners(src)
+		s.workingChar = nil
+		s.workingState = nil
+		s.setBGTurnsSlotState(s.chars[dst], dst, true)
+		s.setBGTurnsSlotState(s.chars[src], src, false)
+		if s.chars[dst][0].id < 0 {
+			s.chars[dst][0].id = s.newCharId()
+		}
+		for _, ch := range s.chars[dst] {
+			if ch != nil {
+				s.charList.add(ch)
+			}
+		}
+		s.charList.enemyNearChanged = true
+	}
+}
+
 func (l *Loader) loadCharacter(pn int, attached bool) int {
-	if !attached && sys.roundsExisted[pn&1] > 0 {
-		return 1
+	// Quick abort between expensive steps.
+	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+		return 0
+	}
+
+	sys.selMutex.RLock()
+	team := pn & 1
+	tm := sys.tmode[team]
+	nSim := sys.numSimul[team]
+	nTurns := sys.numTurns[team]
+	teamSel := make([][2]int, len(sys.sel.selected[team]))
+	copy(teamSel, sys.sel.selected[team])
+	sys.selMutex.RUnlock()
+	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+		return 0
 	}
 	if attached && sys.round != 1 {
 		return 1
 	}
 
-	sys.loadMutex.Lock()
-	defer sys.loadMutex.Unlock()
-
 	// Get number of selected characters in team
 	memberNo := pn >> 1
-	nsel := len(sys.sel.selected[pn&1])
+	nsel := len(teamSel)
+
+	if !attached && tm == TM_Turns && sys.cfg.Config.TurnsLoading {
+		if sys.turnsPreloadActive() {
+			// During the match only the fixed hidden standby slot is eligible.
+			// Active P1/P2 must not be touched by the background loader.
+			if pn < 2 || pn != team+2 {
+				return 1
+			}
+			memberNo = sys.turnsPreloadMember[team]
+			if memberNo < 0 {
+				return 1
+			}
+		} else if pn >= 2 {
+			// Initial pre-match load: only the first Turns member is loaded.
+			// Clear any stale resident char from previous matches/rounds.
+			sys.chars[pn] = nil
+			sys.cgi[pn].states = nil
+			sys.cgi[pn].palettedata = nil
+			sys.cgi[pn].hitPauseToggleFlagCount = 0
+			return 1
+		}
+		if memberNo >= nsel {
+			return 0
+		}
+		if sys.turnsPreloadActive() &&
+			len(sys.chars[pn]) > 0 &&
+			sys.chars[pn][0] != nil &&
+			sys.chars[pn][0].memberNo == memberNo &&
+			sys.chars[pn][0].selectNo == teamSel[memberNo][0] {
+			return 1
+		}
+	} else if !attached && sys.roundsExisted[team] > 0 {
+		return 1
+	}
 
 	// Check if player number is acceptable for selected team mode
 	if !attached {
-		if sys.tmode[pn&1] == TM_Simul || sys.tmode[pn&1] == TM_Tag {
-			if memberNo >= int(sys.numSimul[pn&1]) {
+		// BG Turns uses a staged standby slot instead of loading the whole team.
+		if tm == TM_Turns && sys.cfg.Config.TurnsLoading {
+			if memberNo >= int(nTurns) || pn >= 4 {
+				sys.cgi[pn].states = nil
+				sys.chars[pn] = nil
+				return 1
+			}
+		} else if tm == TM_Simul || tm == TM_Tag {
+			if memberNo >= int(nSim) {
 				sys.cgi[pn].states = nil
 				sys.chars[pn] = nil
 				return 1
@@ -5001,11 +5724,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 			return 0
 		}
 
-		if sys.tmode[pn&1] == TM_Turns && nsel < int(sys.numTurns[pn&1]) {
+		if tm == TM_Turns && !sys.cfg.Config.TurnsLoading && nsel < int(nTurns) {
 			return 0
 		}
 
-		if sys.tmode[pn&1] == TM_Turns {
+		if tm == TM_Turns && !sys.cfg.Config.TurnsLoading {
 			off := int32(0)
 			if sys.sel.gameParams != nil {
 				off = sys.sel.gameParams.TurnsOffset[pn&1]
@@ -5018,11 +5741,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 			if int(off) > nsel {
 				off = int32(nsel)
 			}
-			if sys.numTurns[pn&1] < 0 {
-				sys.numTurns[pn&1] = 0
+			if nTurns < 0 {
+				nTurns = 0
 			}
-			if int(off)+int(sys.numTurns[pn&1]) > nsel {
-				sys.numTurns[pn&1] = int32(nsel) - off
+			if int(off)+int(nTurns) > nsel {
+				nTurns = int32(nsel) - off
 			}
 			memberNo = int(off) + int(sys.wins[^pn&1])
 		}
@@ -5034,7 +5757,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	teamChars := make([]int, nsel)
 	for i := range teamChars {
-		teamChars[i] = sys.sel.selected[pn&1][i][0]
+		teamChars[i] = teamSel[i][0]
 	}
 
 	// Prepare loading time clipboard message
@@ -5063,13 +5786,16 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		atcpn := pn - MaxSimul*2
 		cdef = sys.stageList[0].attachedchardef[atcpn]
 	} else {
-		if sys.tmode[pn&1] == TM_Turns {
+		if tm == TM_Turns {
 			cdefOWnumber = memberNo*2 + pn&1
 		} else {
 			cdefOWnumber = pn
 		}
-		if sys.sel.cdefOverwrite[cdefOWnumber] != "" {
-			cdef = sys.sel.cdefOverwrite[cdefOWnumber]
+		sys.selMutex.RLock()
+		cdefOW := sys.sel.cdefOverwrite[cdefOWnumber]
+		sys.selMutex.RUnlock()
+		if cdefOW != "" {
+			cdef = cdefOW
 		} else {
 			cdef = sys.sel.charlist[teamChars[memberNo]].def
 		}
@@ -5144,17 +5870,28 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		p.controller = pn
 	} else {
 		p.memberNo = memberNo
-		p.selectNo = sys.sel.selected[pn&1][memberNo][0]
+		p.selectNo = teamSel[memberNo][0]
 		p.teamside = p.playerNo & 1
 	}
 
 	// Commit character to system
 	sys.chars[pn] = make([]*Char, 1)
 	sys.chars[pn][0] = p
+	if !attached && tm == TM_Turns && sys.cfg.Config.TurnsLoading {
+		sys.setBGTurnsSlotState(sys.chars[pn], pn, pn < 2 && !sys.turnsPreloadActive())
+	}
 
 	// Load character
 	if !sameChar {
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			return 0
+		}
 		if l.err = p.load(cdef); l.err != nil {
+			if errors.Is(l.err, ErrLoadingCanceled) {
+				sys.chars[pn] = nil
+				l.state = LS_Cancel
+				return 0
+			}
 			sys.chars[pn] = nil
 			if attached {
 				tstr = fmt.Sprintf("WARNING: Failed to load new attached char: %v", cdef)
@@ -5162,6 +5899,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 				tstr = fmt.Sprintf("WARNING: Failed to load new char: %v", cdef)
 			}
 			return -1
+		}
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			sys.chars[pn] = nil
+			l.state = LS_Cancel
+			return 0
 		}
 
 		// Compile character states
@@ -5182,22 +5924,13 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		selectPalno = pal
 	} else if !attached {
 		// Get palette number from select screen choice
-		selectPalno = sys.sel.selected[pn&1][memberNo][1]
+		selectPalno = teamSel[memberNo][1]
 	}
 	sys.cgi[pn].palno = int32(selectPalno)
 
 	// Apply per-launch map overrides prepared from Lua/loadStart.
 	if !attached {
 		p.applyMapOverrides()
-	}
-
-	// Prepare fight screen portraits and names for Turns mode
-	if !attached {
-		if pn < len(sys.fightScreen.faces[sys.tmode[pn&1]]) && sys.tmode[pn&1] == TM_Turns && sys.round == 1 {
-			fa := sys.fightScreen.faces[sys.tmode[pn&1]][pn]
-			nm := sys.fightScreen.names[sys.tmode[pn&1]][pn]
-			l.prepareTurnsFaces(pn, fa, nm, teamChars)
-		}
 	}
 
 	// Flag "existed" just in case
@@ -5207,7 +5940,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	return 1
 }
 
-func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenName, teamChars []int) {
+func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenName, teamChars []int, teamSel [][2]int) {
 	// Reset face and name KO's
 	off := int32(0)
 	if sys.sel.gameParams != nil {
@@ -5260,7 +5993,7 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 			// Check if palettes are already loaded
 			// They won't be unless the select screen used "applypal" (or if the character was already used before maybe)
 			// https://github.com/ikemen-engine/Ikemen-GO/issues/3300
-			palIdx := sys.sel.selected[pn&1][i][1]
+			palIdx := teamSel[i][1]
 			_, hasTarget := sc.sff.palList.PalTable[[...]uint16{1, uint16(palIdx)}]
 			_, has11 := sc.sff.palList.PalTable[[...]uint16{1, 1}]
 
@@ -5307,6 +6040,10 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 
 func (l *Loader) loadStage() bool {
 	if sys.round == 1 {
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return false
+		}
 		var tstr string
 		tnow := time.Now()
 		defer func() {
@@ -5326,15 +6063,21 @@ func (l *Loader) loadStage() bool {
 				}
 			}
 		}()
+		// Snapshot stage selection quickly (avoid races with Lua).
+		sys.selMutex.RLock()
+		stageNo := sys.sel.selectedStageNo
+		sdefOW := sys.sel.sdefOverwrite
+		sys.selMutex.RUnlock()
+
 		var def string
-		if sys.sel.selectedStageNo == 0 {
+		if stageNo == 0 {
 			randomstageno := Rand(0, int32(len(sys.sel.stagelist))-1)
 			def = sys.sel.stagelist[randomstageno].def
 		} else {
-			def = sys.sel.stagelist[sys.sel.selectedStageNo-1].def
+			def = sys.sel.stagelist[stageNo-1].def
 		}
-		if sys.sel.sdefOverwrite != "" {
-			def = sys.sel.sdefOverwrite
+		if sdefOW != "" {
+			def = sdefOW
 		}
 		if sys.stage != nil && sys.stage.def == def && sys.stage.mainstage && !sys.stage.reload {
 			tstr = fmt.Sprintf("Cached stage loaded: %v", def)
@@ -5366,34 +6109,16 @@ func (l *Loader) load() {
 		l.loadExit <- l.state
 	}()
 
-	// Update aspect ratio
-	sys.applyFightAspect()
-
-	// Update cached stage scaling
-	// In case FightAspect option was changed between matches
-	if sys.stage != nil {
-		sys.stage.localscl = float32(sys.gameWidth) / float32(sys.stage.stageCamera.localcoord[0])
-		sys.stage.stageCamera.localscl = sys.stage.localscl
-	}
-
-	// Update cached character scaling
-	for _, p := range sys.chars {
-		if len(p) > 0 {
-			p[0].localcoord = float32(p[0].gi().localcoord[0]) / (float32(sys.gameWidth) / 320)
-			p[0].localscl = 320 / p[0].localcoord
-		}
-	}
-
-	// Update fight screen scale
-	sys.fightScreen.setScale()
-	//sys.motif.setMotifScale()
+	stagedTurns := sys.turnsPreloadActive()
 
 	// Load any config-driven Common FX not already cached. External modules may
 	// append to Common.Fx before a match; once loaded, non-char FX are kept.
-	if err := loadCommonFightFx(sys.fightScreen.def, false); err != nil {
-		l.err = err
-		l.state = LS_Error
-		return
+	if !stagedTurns {
+		if err := loadCommonFightFx(sys.fightScreen.def, false); err != nil {
+			l.err = err
+			l.state = LS_Error
+			return
+		}
 	}
 
 	/*
@@ -5408,13 +6133,28 @@ func (l *Loader) load() {
 					removeSFFCache(ffx.sff.filename)
 				}
 				delete(sys.ffx, prefix)
-				//LogMessage("Unloaded CommonFX: %s (prefix: %s)", ffx.fileName, prefix)
 			}
 		}
 		sys.loadMutex.Unlock()
 	*/
 
-	charDone, stageDone := make([]bool, len(sys.chars)), false
+	playerSlotsEnd := len(sys.chars) - MaxAttachedChar
+	charDone, stageDone := make([]bool, len(sys.chars)), stagedTurns
+
+	if stagedTurns {
+		// In-match Turns preload must not touch active gameplay slots or the other side's normal slots. It only fills one standby slot per Turns side: P3 for side 1, P4 for side 2.
+		for i := range charDone {
+			charDone[i] = true
+		}
+		for team, member := range sys.turnsPreloadMember {
+			if member >= 0 {
+				pn := team + 2
+				if pn >= 0 && pn < playerSlotsEnd {
+					charDone[pn] = false
+				}
+			}
+		}
+	}
 
 	// Check if all chars are loaded
 	allCharDone := func() bool {
@@ -5427,9 +6167,21 @@ func (l *Loader) load() {
 	}
 
 	for !stageDone || !allCharDone() {
+		// Fast exit on cancel without waiting for the whole load to complete.
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return
+		}
 		// Load stage
-		if !stageDone && sys.sel.selectedStageNo >= 0 {
+		sys.selMutex.RLock()
+		stageNo := sys.sel.selectedStageNo
+		sys.selMutex.RUnlock()
+		if !stageDone && stageNo >= 0 {
 			if !l.loadStage() {
+				if l.state == LS_Cancel || l.cancelRequested() {
+					l.state = LS_Cancel
+					return
+				}
 				l.state = LS_Error
 				return
 			}
@@ -5438,12 +6190,31 @@ func (l *Loader) load() {
 		// Load characters that aren't already loaded
 		for i, b := range charDone {
 			if !b {
+				if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+					l.state = LS_Cancel
+					return
+				}
+				if stagedTurns && i >= playerSlotsEnd {
+					charDone[i] = true
+					continue
+				}
 				result := -1
-				if i < len(sys.chars)-MaxAttachedChar ||
-					len(sys.stageList[0].attachedchardef) <= i-MaxSimul*2 {
-					result = l.loadCharacter(i, false)
-				} else {
+				// Attached stage chars depend on the loaded stage definition.
+				if i >= playerSlotsEnd {
+					if !stageDone || sys.stageList[0] == nil {
+						continue
+					}
+					atcpn := i - MaxSimul*2
+					if atcpn < 0 || atcpn >= len(sys.stageList[0].attachedchardef) || sys.stageList[0].attachedchardef[atcpn] == "" {
+						sys.chars[i] = nil
+						sys.cgi[i].states = nil
+						sys.cgi[i].hitPauseToggleFlagCount = 0
+						charDone[i] = true
+						continue
+					}
 					result = l.loadCharacter(i, true)
+				} else {
+					result = l.loadCharacter(i, false)
 				}
 				if result > 0 {
 					charDone[i] = true
@@ -5454,9 +6225,15 @@ func (l *Loader) load() {
 			}
 		}
 		for i := 0; i < 2; i++ {
-			if !charDone[i+2] && len(sys.sel.selected[i]) > 0 &&
-				sys.tmode[i] != TM_Simul && sys.tmode[i] != TM_Tag {
-				for j := i + 2; j < len(sys.chars); j += 2 {
+			// Snapshot selection + team mode under selMutex.
+			sys.selMutex.RLock()
+			selLen := len(sys.sel.selected[i])
+			tm := sys.tmode[i]
+			sys.selMutex.RUnlock()
+			if !charDone[i+2] && selLen > 0 &&
+				tm != TM_Simul && tm != TM_Tag &&
+				!(tm == TM_Turns && sys.cfg.Config.TurnsLoading) {
+				for j := i + 2; j < playerSlotsEnd; j += 2 {
 					if !charDone[j] {
 						sys.chars[j] = nil
 						sys.cgi[j].states = nil
@@ -5465,6 +6242,10 @@ func (l *Loader) load() {
 					}
 				}
 			}
+		}
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return
 		}
 		time.Sleep(10 * time.Millisecond)
 		if sys.gameEnd {
@@ -5482,13 +6263,18 @@ func (l *Loader) load() {
 
 func (l *Loader) reset() {
 	if l.state != LS_NotYet {
+		// Ensure the loader goroutine gets a cooperative cancel signal.
+		l.requestCancel()
 		l.state = LS_Cancel
 		<-l.loadExit
 		l.state = LS_NotYet
 	}
 	l.err = nil
+	l.cancelCh = nil
+	l.cancelOnce = sync.Once{}
 	for i := range sys.cgi {
-		if sys.roundsExisted[i&1] == 0 {
+		keepPreloadedTurnsPal := sys.cfg.Config.TurnsLoading && sys.round > 1 && sys.tmode[i&1] == TM_Turns
+		if sys.roundsExisted[i&1] == 0 && !keepPreloadedTurnsPal {
 			sys.cgi[i].palno = -1
 		}
 	}
@@ -5498,6 +6284,9 @@ func (l *Loader) runTread() bool {
 	if l.state != LS_NotYet {
 		return false
 	}
+	// Fresh cancel signal for this run.
+	l.cancelCh = make(chan struct{})
+	l.cancelOnce = sync.Once{}
 	l.state = LS_Loading
 	SafeGo(func() {
 		l.load()

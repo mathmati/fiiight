@@ -648,6 +648,293 @@ main.t_stageDef = {['random'] = 0}
 main.t_charDef = {}
 main.t_selChars = {}
 main.t_selStages = {}
+main.preload = {
+	lowQueued = false,
+	charState = {},
+	stageState = {},
+	charHighlight = {},
+}
+
+function main.f_waitForPreloads(force)
+	if not preloading() then
+		return
+	end
+	if gameOption('Config.BootLoadingMode') ~= 1 and not force then
+		return
+	end
+	local path = motif.title_info.loading.storyboard
+	if path ~= '' and loadStoryboard(path) ~= nil then
+		while preloading() do
+			if not runStoryboard() or storyboardCanceled() then
+				break
+			end
+			main.f_preloadTick(2)
+			refresh()
+		end
+	end
+	while preloading() do
+		clearColor(0, 0, 0)
+		main.f_animPosDraw(motif.title_info.loading.wait.AnimData)
+		textImgDraw(motif.title_info.loading.wait.TextSpriteData)
+		main.f_preloadTick(2)
+		refresh()
+	end
+end
+
+function main.f_syncCharPaletteData(ref)
+	if ref == nil then return false end
+	local t_info = getCharInfo(ref)
+	if t_info == nil then return false end
+	local changed = false
+	for row, ch in ipairs(main.t_selChars) do
+		if ch.playable and ch.char_ref == ref then
+			local oldPalCount = ch.pal and #ch.pal or 0
+			local oldDefaultCount = ch.pal_defaults and #ch.pal_defaults or 0
+			ch.pal = t_info.pal
+			ch.pal_defaults = t_info.pal_defaults
+			ch.pal_keymap = t_info.pal_keymap
+			if oldPalCount ~= #ch.pal or oldDefaultCount ~= #ch.pal_defaults then
+				changed = true
+			end
+		end
+	end
+	if changed and start ~= nil and start.p ~= nil then
+		for side = 1, 2 do
+			if start.p[side] ~= nil and start.p[side].t_selTemp ~= nil then
+				for _, st in ipairs(start.p[side].t_selTemp) do
+					if st ~= nil and st.ref == ref then
+						-- Force palette menu to rebuild using the refreshed palette list.
+						st.validPals = nil
+						st.validPalsCharRef = nil
+						st.currentIdx = nil
+					end
+				end
+			end
+		end
+	end
+	return changed
+end
+
+function main.f_preloadSetCharHighlight(player, ref)
+	if gameOption('Config.BootLoadingMode') == 0 then
+		return
+	end
+	if player == nil then return end
+	local old = main.preload.charHighlight[player]
+	if old == ref then
+		return
+	end
+	main.preload.charHighlight[player] = ref
+	if old ~= nil then
+		local stillHighlighted = false
+		for _, v in pairs(main.preload.charHighlight) do
+			if v == old then
+				stillHighlighted = true
+				break
+			end
+		end
+		if not stillHighlighted then
+			queueCharPreload(old, 1)
+		end
+	end
+	if ref ~= nil then
+		queueCharPreload(ref, 2)
+		if getCharPreloadStatus(ref) == 'ready' then
+			main.f_syncCharPaletteData(ref)
+			main.f_materializeCharByRef(ref)
+		end
+	end
+end
+
+function main.f_materializeCharCell(row)
+	local ch = main.t_selChars[row]
+	if ch == nil or ch.playable ~= true or ch.char_ref == nil or ch.cell_data_ready then
+		return ch and ch.cell_data_ready or false
+	end
+	local params = motif.select_info.portrait
+	for _, v in pairs({{params.anim, -1}, params.spr}) do
+		if v[1] ~= -1 then
+			local a = animGetPreloadedCharData(ch.char_ref, v[1], v[2])
+			if a then
+				animSetLocalcoord(a, motif.info.localcoord[1], motif.info.localcoord[2])
+				animSetLayerno(a, params.layerno)
+				animSetPos(a, 0, 0)
+				animSetScale(
+					a,
+					params.scale[1] * ch.portraitscale * motif.info.localcoord[1] / ch.localcoord,
+					params.scale[2] * ch.portraitscale * motif.info.localcoord[1] / ch.localcoord
+				)
+				animSetFacing(a, params.facing)
+				animSetXShear(a, params.xshear)
+				animSetAngle(a, params.angle)
+				animSetXAngle(a, params.xangle)
+				animSetYAngle(a, params.yangle)
+				animSetProjection(a, params.projection)
+				animSetFocalLength(a, params.focallength)
+				animSetWindow(a, params.window[1], params.window[2], params.window[3], params.window[4])
+				animUpdate(a)
+				ch.cell_data = a
+				ch.cell_data_ready = true
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function main.f_materializeStagePortrait(stageNo)
+	local st = main.t_selStages[stageNo]
+	if st == nil or st.anim_data_ready then
+		return st and st.anim_data_ready or false
+	end
+	local function f_makeStageAnim(params, fieldName)
+		for _, v in pairs({{params.anim, -1}, params.spr}) do
+			if #v > 0 and v[1] ~= -1 then
+				local a = animGetPreloadedStageData(stageNo, v[1], v[2])
+				if a then
+					animSetLocalcoord(a, motif.info.localcoord[1], motif.info.localcoord[2])
+					animSetLayerno(a, params.layerno)
+					animSetPos(a, 0, 0)
+					animSetScale(
+						a,
+						params.scale[1] * st.portraitscale * motif.info.localcoord[1] / st.localcoord,
+						params.scale[2] * st.portraitscale * motif.info.localcoord[1] / st.localcoord
+					)
+					animSetFacing(a, params.facing)
+					animSetXShear(a, params.xshear)
+					animSetAngle(a, params.angle)
+					animSetXAngle(a, params.xangle)
+					animSetYAngle(a, params.yangle)
+					animSetProjection(a, params.projection)
+					animSetFocalLength(a, params.focallength)
+					local wnd = params.window
+					if wnd == nil or #wnd < 4 then
+						wnd = {0, 0, motif.info.localcoord[1], motif.info.localcoord[2]}
+					end
+					animSetWindow(a, wnd[1], wnd[2], wnd[3], wnd[4])
+					animUpdate(a)
+					st[fieldName] = a
+					return true
+				end
+			end
+		end
+		return false
+	end
+	local ok1 = f_makeStageAnim(motif.select_info.stage.portrait, "anim_data")
+	local ok2 = f_makeStageAnim(motif.vs_screen.stage.portrait, "vs_anim_data")
+	st.anim_data_ready = ok1 or ok2
+	return st.anim_data_ready
+end
+
+function main.f_preloadTick(limit)
+	if gameOption('Config.BootLoadingMode') == 0 then
+		return
+	end
+	limit = limit or 4
+	local n = 0
+
+	for row, ch in ipairs(main.t_selChars) do
+		if n >= limit then break end
+		if ch.playable and ch.char_ref ~= nil and not ch.cell_data_ready then
+			local state, err = getCharPreloadStatus(ch.char_ref)
+			local prev = main.preload.charState[ch.char_ref]
+			if state ~= prev then
+				main.preload.charState[ch.char_ref] = state
+				if state == 'ready' then
+					--print("Char preload ready ref=" .. tostring(ch.char_ref) .. " row=" .. tostring(row))
+					main.f_syncCharPaletteData(ch.char_ref)
+				elseif state == 'error' then
+					print("Char preload error ref=" .. tostring(ch.char_ref) .. " row=" .. tostring(row) .. ": " .. tostring(err))
+				end
+			end
+			if state == 'ready' then
+				if main.f_materializeCharCell(row) then
+					start.needUpdateDrawList = true
+					n = n + 1
+				end
+			end
+		end
+	end
+	for stageNo, st in ipairs(main.t_selStages) do
+		if n >= limit then break end
+		if not st.anim_data_ready then
+			local state, err = getStagePreloadStatus(stageNo)
+			local prev = main.preload.stageState[stageNo]
+			if state ~= prev then
+				main.preload.stageState[stageNo] = state
+				if state == 'ready' then
+					--print("Stage preload ready stage=" .. tostring(stageNo))
+				elseif state == 'error' then
+					print("Stage preload error stage=" .. tostring(stageNo) .. ": " .. tostring(err))
+				end
+			end
+			if state == 'ready' then
+				if main.f_materializeStagePortrait(stageNo) then
+					start.needUpdateDrawList = true
+					n = n + 1
+				end
+			end
+		end
+	end
+end
+
+function main.f_queueAllPreloadsLow()
+	if gameOption('Config.BootLoadingMode') == 0 then
+		return
+	end
+	if main.preload.lowQueued then
+		return
+	end
+	main.preload.lowQueued = true
+	for _, ch in ipairs(main.t_selChars) do
+		if ch.playable and ch.char_ref ~= nil then
+			queueCharPreload(ch.char_ref, 1)
+		end
+	end
+	for stageNo = 1, #main.t_selStages do
+		queueStagePreload(stageNo, 1)
+	end
+end
+
+function main.f_materializeCharByRef(ref)
+	if ref == nil then return false end
+	local ok = false
+	for row, ch in ipairs(main.t_selChars) do
+		if ch.playable and ch.char_ref == ref and not ch.cell_data_ready then
+			main.f_syncCharPaletteData(ref)
+			if main.f_materializeCharCell(row) then
+				start.needUpdateDrawList = true
+				ok = true
+			end
+		end
+	end
+	return ok
+end
+
+function main.f_preloadBoostChar(ref)
+	if gameOption('Config.BootLoadingMode') == 0 then
+		return
+	end
+	if ref == nil then return end
+	queueCharPreload(ref, 2)
+	if getCharPreloadStatus(ref) == 'ready' then
+		main.f_syncCharPaletteData(ref)
+		main.f_materializeCharByRef(ref)
+	end
+end
+
+function main.f_preloadBoostStage(stageNo)
+	if gameOption('Config.BootLoadingMode') == 0 then
+		return
+	end
+	if stageNo == nil or stageNo <= 0 then return end
+	queueStagePreload(stageNo, 2)
+	if getStagePreloadStatus(stageNo) == 'ready' then
+		if main.f_materializeStagePortrait(stageNo) then
+			start.needUpdateDrawList = true
+		end
+	end
+end
 
 --;===========================================================
 --; COMMAND LINE QUICK VS
@@ -916,6 +1203,8 @@ function main.f_warning(text, sec, background, overlay, titleData, textData, can
 		textImgDraw(textData)
 		--draw layerno = 1 backgrounds
 		bgDraw(background.BGDef, 1)
+		--tick preload
+		main.f_preloadTick(2)
 		--end loop
 		refresh()
 	end
@@ -956,6 +1245,8 @@ function main.f_drawInput(textData, text, sec, background, overlay, defaultInput
 		textImgDraw(textData)
 		--draw layerno = 1 backgrounds
 		bgDraw(background.BGDef, 1)
+		--tick preload
+		main.f_preloadTick(2)
 		--end loop
 		refresh()
 	end
@@ -1101,39 +1392,11 @@ function main.f_addChar(line, playable, loading, slot)
 			main.t_unlockLua.chars[row] = unlock
 		end
 		--cell data
-		local params = motif.select_info.portrait
-		for _, v in pairs({{params.anim, -1}, params.spr}) do
-			if v[1] ~= -1 then
-				local a = animGetPreloadedCharData(main.t_selChars[row].char_ref, v[1], v[2])
-				if a then
-					animSetLocalcoord(a, motif.info.localcoord[1], motif.info.localcoord[2])
-					animSetLayerno(a, params.layerno)
-					--animSetVelocity(a, params.velocity[1], params.velocity[2])
-					--animSetMaxDist(a, params.maxdist[1], params.maxdist[2])
-					--animSetAccel(a, params.accel[1], params.accel[2])
-					--animSetFriction(a, params.friction[1], params.friction[2])
-					animSetPos(a, 0, 0)
-					animSetScale(
-						a,
-						params.scale[1] * main.t_selChars[row].portraitscale * motif.info.localcoord[1] / main.t_selChars[row].localcoord,
-						params.scale[2] * main.t_selChars[row].portraitscale * motif.info.localcoord[1] / main.t_selChars[row].localcoord
-					)
-					animSetFacing(a, params.facing)
-					animSetXShear(a, params.xshear)
-					animSetAngle(a, params.angle)
-					animSetXAngle(a, params.xangle)
-					animSetYAngle(a, params.yangle)
-					animSetProjection(a, params.projection)
-					animSetFocalLength(a, params.focallength)
-					animSetWindow(a, params.window[1], params.window[2], params.window[3], params.window[4])
-					animUpdate(a)
-					main.t_selChars[row].cell_data = a
-					break
-				end
-			end
-		end
-		if main.t_selChars[row].cell_data == nil then
-			main.t_selChars[row].cell_data = animNew(nil, '-1,0, 0,0, -1')
+		main.t_selChars[row].cell_data = animNew(nil, '-1,0, 0,0, -1')
+		main.t_selChars[row].cell_data_ready = false
+		if gameOption('Config.BootLoadingMode') == 0 then
+			main.f_syncCharPaletteData(main.t_selChars[row].char_ref)
+			main.f_materializeCharCell(row)
 		end
 	end
 	--slots
@@ -1194,56 +1457,14 @@ function main.f_addStage(file, hidden, line)
 		end
 	end
 	--anim data
-	local function f_makeStageAnim(stageNo, params, fieldName)
-		for _, v in pairs({{params.anim, -1}, params.spr}) do
-			if #v > 0 and v[1] ~= -1 then
-				local a = animGetPreloadedStageData(stageNo, v[1], v[2])
-				if a then
-					animSetLocalcoord(a, motif.info.localcoord[1], motif.info.localcoord[2])
-					animSetLayerno(a, params.layerno)
-					--animSetVelocity(a, params.velocity[1], params.velocity[2])
-					--animSetMaxDist(a, params.maxdist[1], params.maxdist[2])
-					--animSetAccel(a, params.accel[1], params.accel[2])
-					--animSetFriction(a, params.friction[1], params.friction[2])
-					animSetPos(a, 0, 0)
-					animSetScale(
-						a,
-						params.scale[1] * main.t_selStages[stageNo].portraitscale * motif.info.localcoord[1] / t_info.localcoord,
-						params.scale[2] * main.t_selStages[stageNo].portraitscale * motif.info.localcoord[1] / t_info.localcoord
-					)
-					animSetFacing(a, params.facing)
-					animSetXShear(a, params.xshear)
-					animSetAngle(a, params.angle)
-					animSetXAngle(a, params.xangle)
-					animSetYAngle(a, params.yangle)
-					animSetProjection(a, params.projection)
-					animSetFocalLength(a, params.focallength)
-					if params.window == nil or #params.window < 4 then
-						params.window = {0, 0, motif.info.localcoord[1], motif.info.localcoord[2]}
-					end
-					animSetWindow(
-						a,
-						params.window[1],
-						params.window[2],
-						params.window[3],
-						params.window[4]
-					)
-					animUpdate(a)
-					main.t_selStages[stageNo][fieldName] = a
-					break
-				end
-			end
-		end
-	end
-	--select screen anim data
-	f_makeStageAnim(stageNo, motif.select_info.stage.portrait, "anim_data")
-	--vs screen anim data
-	f_makeStageAnim(stageNo, motif.vs_screen.stage.portrait, "vs_anim_data")
 	if hidden ~= nil and hidden ~= 0 then
 		main.t_selStages[stageNo].hidden = hidden
 	end
-	if main.t_selStages[stageNo].anim_data == nil then
-		main.t_selStages[stageNo].anim_data = animNew(nil, '-1,0, 0,0, -1')
+	main.t_selStages[stageNo].anim_data = animNew(nil, '-1,0, 0,0, -1')
+	main.t_selStages[stageNo].vs_anim_data = animNew(nil, '-1,0, 0,0, -1')
+	main.t_selStages[stageNo].anim_data_ready = false
+	if gameOption('Config.BootLoadingMode') == 0 then
+		main.f_materializeStagePortrait(stageNo)
 	end
 	return stageNo
 end
@@ -1505,6 +1726,9 @@ function main.f_updateSelectableStages()
 	end
 end
 main.f_updateSelectableStages()
+if gameOption('Config.BootLoadingMode') > 0 then
+	main.f_queueAllPreloadsLow()
+end
 
 --add default maxmatches values if config is missing in select.def
 if main.t_selOptions.arcademaxmatches == nil then main.t_selOptions.arcademaxmatches = {6, 1, 1, 0, 0, 0, 0, 0, 0, 0} end
@@ -1542,7 +1766,7 @@ end
 function main.f_storyboard(path)
 	local s = loadStoryboard(path)
 	if s == nil then
-		return
+		return false
 	end
 	if gameOption('Debug.DumpLuaTables') then
 		-- get filename without extension from full path
@@ -1554,8 +1778,10 @@ function main.f_storyboard(path)
 		if not runStoryboard() then
 			break
 		end
+		main.f_preloadTick(2)
 		refresh()
 	end
+	return storyboardCanceled()
 end
 
 function main.f_hiscore(mode, place)
@@ -1563,6 +1789,7 @@ function main.f_hiscore(mode, place)
 		if not runHiscore(mode, place) then
 			break
 		end
+		main.f_preloadTick(2)
 		refresh()
 	end
 end
@@ -1976,6 +2203,7 @@ main.t_itemname = {
 	end,
 	--SERVER CONNECT
 	['serverconnect'] = function(t, item)
+		main.f_waitForPreloads(true)
 		local doneSnd = motif[main.group].cursor.done.snd.serverconnect or motif[main.group].cursor.done.snd.default
 		sndPlay(motif.Snd, doneSnd[1], doneSnd[2])
 		hook.run("main.t_itemname", t, item)
@@ -1992,6 +2220,7 @@ main.t_itemname = {
 	end,
 	--SERVER HOST
 	['serverhost'] = function(t, item)
+		main.f_waitForPreloads(true)
 		local doneSnd = motif[main.group].cursor.done.snd.serverhost or motif[main.group].cursor.done.snd.default
 		sndPlay(motif.Snd, doneSnd[1], doneSnd[2])
 		hook.run("main.t_itemname", t, item)
@@ -3097,6 +3326,7 @@ function main.f_attractStart()
 		if fadeOutStarted and not fadeActive() then
 			return getCredits() ~= 0
 		end
+		main.f_preloadTick(2)
 		refresh()
 	end
 end
@@ -3443,6 +3673,7 @@ end
 
 --common menu draw
 function main.f_menuCommonDraw(t, item, cursorPosY, moveTxt, sec, bg, skipClear, opts)
+	main.f_preloadTick(2)
 	local m = sec.menu or sec
 	-- opts:
 	--   offx, offy               : per-call offsets

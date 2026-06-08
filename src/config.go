@@ -113,6 +113,9 @@ type Config struct {
 		TickInterpolation bool     `ini:"TickInterpolation"`
 		ZoomActive        bool     `ini:"ZoomActive" sync:"host"`
 		EscOpensMenu      bool     `ini:"EscOpensMenu" sync:"host"`
+		VsScreenLoading   bool     `ini:"VsScreenLoading" sync:"host"`
+		TurnsLoading      bool     `ini:"TurnsLoading" sync:"host"`
+		BootLoadingMode   int32    `ini:"BootLoadingMode" sync:"host"`
 		FirstRun          bool     `ini:"FirstRun"`
 		WindowTitle       string   `ini:"WindowTitle"`
 		WindowIcon        []string `ini:"WindowIcon"`

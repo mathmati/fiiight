@@ -1490,8 +1490,16 @@ func findActiveSff(filename string) *Sff {
 	return nil
 }
 
+// Deep loaders should be able to abort quickly when pre-match load is canceled.
+func loadingCanceled() bool {
+	return sys.loader.cancelRequested() || sys.gameEnd || sys.loader.state == LS_Cancel
+}
+
 // Loads the full SFF file
 func loadSff(filename string, char bool, isMainThread bool, isActPal bool) (*Sff, error) {
+	if loadingCanceled() {
+		return nil, ErrLoadingCanceled
+	}
 	// Borrow an existing SFF if possible
 	if s := findActiveSff(filename); s != nil {
 		return s, nil
@@ -1524,6 +1532,9 @@ func loadSff(filename string, char bool, isMainThread bool, isActPal bool) (*Sff
 	var prev *Sprite
 	shofs := int64(s.header.FirstSpriteHeaderOffset)
 	for i := 0; i < len(spriteList); i++ {
+		if loadingCanceled() {
+			return nil, ErrLoadingCanceled
+		}
 		f.Seek(shofs, 0)
 		spriteList[i] = newSprite()
 		var xofs, size uint32
@@ -1543,6 +1554,9 @@ func loadSff(filename string, char bool, isMainThread bool, isActPal bool) (*Sff
 		if size == 0 {
 			if int(indexOfPrevious) < i {
 				dst, src := spriteList[i], spriteList[int(indexOfPrevious)]
+				if loadingCanceled() {
+					return nil, ErrLoadingCanceled
+				}
 				// Moved to shareCopy() itself
 				//sys.mainThreadTask <- func() {
 				dst.shareCopy(src)
@@ -1581,8 +1595,14 @@ func loadSff(filename string, char bool, isMainThread bool, isActPal bool) (*Sff
 			shofs += 28
 		}
 		if isMainThread {
+			if loadingCanceled() {
+				return nil, ErrLoadingCanceled
+			}
 			sys.runMainThreadTask()
 		}
+	}
+	if loadingCanceled() {
+		return nil, ErrLoadingCanceled
 	}
 
 	/*
@@ -1904,6 +1924,9 @@ func (s *Sff) loadPalettes(f io.ReadSeeker, lofs uint32) error {
 	uniquePals := make(map[[2]uint16]int)
 
 	for i := 0; i < int(s.header.NumberOfPalettes); i++ {
+		if loadingCanceled() {
+			return ErrLoadingCanceled
+		}
 		f.Seek(int64(s.header.FirstPaletteHeaderOffset)+int64(i*16), 0)
 		var gn [3]uint16
 		if err := read(gn[:]); err != nil {

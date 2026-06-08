@@ -1163,7 +1163,14 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Anim|nil anim A new `Anim` userdata wrapping the preloaded animation,
 		  or `nil` if no matching animation exists.
 		function animGetPreloadedCharData(charRef, group, number, keepLoop) end*/
-		if anim := sys.sel.GetChar(int(numArg(l, 1))).anims.get(int32(numArg(l, 2)), int32(numArg(l, 3))); anim != nil {
+		sys.sel.preloadMu.Lock()
+		ch := sys.sel.GetChar(int(numArg(l, 1)))
+		var anim *Animation
+		if ch != nil {
+			anim = ch.anims.get(int32(numArg(l, 2)), int32(numArg(l, 3)))
+		}
+		sys.sel.preloadMu.Unlock()
+		if anim != nil {
 			a := NewAnim(nil, "")
 			a.anim = anim
 			if !nilArg(l, 4) && !boolArg(l, 4) && a.anim.totaltime == a.anim.looptime {
@@ -1188,7 +1195,14 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Anim|nil anim A new `Anim` userdata wrapping the preloaded animation,
 		  or `nil` if no matching animation exists.
 		function animGetPreloadedStageData(stageRef, group, number, keepLoop) end*/
-		if anim := sys.sel.GetStage(int(numArg(l, 1))).anims.get(int32(numArg(l, 2)), int32(numArg(l, 3))); anim != nil {
+		sys.sel.preloadMu.Lock()
+		st := sys.sel.GetStage(int(numArg(l, 1)))
+		var anim *Animation
+		if st != nil {
+			anim = st.anims.get(int32(numArg(l, 2)), int32(numArg(l, 3)))
+		}
+		sys.sel.preloadMu.Unlock()
+		if anim != nil {
 			a := NewAnim(nil, "")
 			a.anim = anim
 			if !nilArg(l, 4) && !boolArg(l, 4) && a.anim.totaltime == a.anim.looptime {
@@ -2914,6 +2928,13 @@ func systemScriptInit(l *lua.LState) {
 		@treturn int32 winSide Winning side index (`1` or `2`), `0` for draw, `-1` if the game was ended externally.
 		@treturn[opt] int controllerNo 1-based controller index of the challenger player interrupting `arcade` mode.
 		function game() end*/
+		defer func() {
+			if sys.loader.state == LS_Loading {
+				sys.loader.reset()
+			}
+		}()
+		sys.keyString = ""
+		sys.keyInput = KeyUnknown
 		sys.luaDiscardDrawQueue()
 		sys.gameRunning = true
 		sys.motif.fadeIn.reset()
@@ -2971,16 +2992,49 @@ func systemScriptInit(l *lua.LState) {
 					return -1, nil
 				}
 
+				// Build Turns teammate portraits after loading, when Lua order selection is complete.
+				if sys.round == 1 {
+					for side, tm := range sys.tmode {
+						if tm != TM_Turns {
+							continue
+						}
+						sys.selMutex.RLock()
+						teamSel := make([][2]int, len(sys.sel.selected[side]))
+						copy(teamSel, sys.sel.selected[side])
+						sys.selMutex.RUnlock()
+						if len(teamSel) == 0 ||
+							side >= len(sys.fightScreen.faces[TM_Turns]) ||
+							sys.fightScreen.faces[TM_Turns][side] == nil ||
+							sys.fightScreen.names[TM_Turns][side] == nil {
+							continue
+						}
+						teamChars := make([]int, len(teamSel))
+						for i := range teamSel {
+							teamChars[i] = teamSel[i][0]
+						}
+						sys.loader.prepareTurnsFaces(side, sys.fightScreen.faces[TM_Turns][side],
+							sys.fightScreen.names[TM_Turns][side], teamChars, teamSel)
+					}
+				}
+
+				// Apply fight/stage aspect only after loading is complete
+				sys.setGameAspect()
+
 				// Assign round start player ID's
 				sys.initPlayerID()
 
 				for i, c := range sys.chars {
 					if len(c) > 0 {
+						// Skip BG-loaded Turns mode chars so CharList bookkeeping doesn't try to replace nonexistent entries on later rounds.
+						if sys.cfg.Config.TurnsLoading && sys.tmode[i&1] == TM_Turns && c[0].teamside == -1 {
+							continue
+						}
 						// Add or replace in charList
 						if sys.round == 1 {
 							sys.charList.add(c[0])
 						} else if c[0].roundsExisted() == 0 {
-							if !sys.charList.replace(c[0], i, 0) {
+							// BG-loaded Turns switching updates CharList inside activateNextTurnsFighters().
+							if !(sys.cfg.Config.TurnsLoading && sys.tmode[i&1] == TM_Turns) && !sys.charList.replace(c[0], i, 0) {
 								panic(fmt.Errorf("failed to replace player: %v", i))
 							}
 						}
@@ -3106,7 +3160,19 @@ func systemScriptInit(l *lua.LState) {
 					}
 				}
 
-				sys.loader.reset()
+				if sys.cfg.Config.TurnsLoading {
+					// The next Turns member is loaded in the background during the previous round.
+					// If the round ended before that load finished, wait here before promotion.
+					if sys.loader.state != LS_NotYet && sys.loader.state != LS_Complete {
+						if err := load(); err != nil {
+							l.RaiseError(err.Error())
+						}
+					}
+					sys.activateNextTurnsFighters()
+				} else {
+					// Legacy Turns behavior: reload the next fighter between rounds.
+					sys.loader.reset()
+				}
 			}
 
 			// If not restarting match
@@ -3344,6 +3410,18 @@ func systemScriptInit(l *lua.LState) {
 		c := sys.sel.GetChar(int(numArg(l, 1)))
 		l.Push(lua.LString(c.name))
 		return 1
+	})
+	luaRegister(l, "getCharPreloadStatus", func(l *lua.LState) int {
+		/*Query the background preload state of a character slot.
+		@function getCharPreloadStatus
+		@tparam int charRef 0-based character index in the select list.
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
+		@treturn string err Error message (empty string if no error).
+		function getCharPreloadStatus(charRef) end*/
+		state, err := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
+		l.Push(lua.LString(state.String()))
+		l.Push(lua.LString(err))
+		return 2
 	})
 	luaRegister(l, "getCharRandomPalette", func(*lua.LState) int {
 		/*Get a random valid palette number for a character slot.
@@ -3952,6 +4030,18 @@ func systemScriptInit(l *lua.LState) {
 		function getStageNo() end*/
 		l.Push(lua.LNumber(sys.sel.selectedStageNo))
 		return 1
+	})
+	luaRegister(l, "getStagePreloadStatus", func(l *lua.LState) int {
+		/*Query the background preload state of a stage slot.
+		@function getStagePreloadStatus
+		@tparam int stageRef Stage index as used by the select system.
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
+		@treturn string err Error message (empty string if no error).
+		function getStagePreloadStatus(stageRef) end*/
+		state, err := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
+		l.Push(lua.LString(state.String()))
+		l.Push(lua.LString(err))
+		return 2
 	})
 	luaRegister(l, "getStageSelectParams", func(*lua.LState) int {
 		/*Get parsed select parameters for a stage entry.
@@ -4780,30 +4870,52 @@ func systemScriptInit(l *lua.LState) {
 		@function loadStart
 		@tparam[opt] string params Optional comma-separated parameter string (from launchFight and quickvs options)
 		function loadStart(params) end*/
-		if sys.gameMode != "randomtest" {
+		if !sys.cfg.Config.VsScreenLoading {
+			sys.selMutex.RLock()
 			for k, v := range sys.sel.selected {
-				if len(v) < int(sys.numSimul[k]) {
-					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, sys.numSimul[k], len(v))
+				expected := int(sys.numSimul[k])
+				if sys.tmode[k] == TM_Turns && sys.cfg.Config.TurnsLoading {
+					expected = int(sys.numTurns[k])
+				}
+				if len(v) < expected {
+					sys.selMutex.RUnlock()
+					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, expected, len(v))
 				}
 			}
+			sys.selMutex.RUnlock()
 		}
-		if sys.sel.selectedStageNo == -1 {
+		sys.selMutex.RLock()
+		stageNo := sys.sel.selectedStageNo
+		sys.selMutex.RUnlock()
+		if stageNo == -1 {
 			l.RaiseError("\nStage not selected for load\n")
 		}
 		// Always reset per-launch params; they must not leak across matches/modes.
+		sys.selMutex.Lock()
 		if sys.sel.gameParams == nil {
 			sys.sel.gameParams = newGameParamsFromMotif(&sys.motif)
-		} else {
-			sys.sel.gameParams.ResetFromMotif(&sys.motif)
 		}
 		sys.sel.music = make(Music)
+		sys.selMutex.Unlock()
 		if !nilArg(l, 1) {
 			entries := SplitAndTrim(StripComment(strArg(l, 1)), ",")
+			sys.selMutex.Lock()
 			sys.sel.gameParams.AppendParams(entries)
-			// Feed normalized music params to Music.
 			sys.sel.music.AppendParams(sys.sel.gameParams.MusicEntries())
+			sys.selMutex.Unlock()
 		}
 		sys.loadStart()
+		// Reset the pre-match loading rendezvous each time we start a load.
+		if sys.netConnection != nil {
+			sys.netConnection.ResetLoadingPhase()
+		}
+		return 0
+	})
+	luaRegister(l, "loadCancel", func(*lua.LState) int {
+		/*Cancel an in-progress background load, clean up partially loaded assets, and reset the netplay loading handshake.
+		@function loadCancel
+		function loadCancel() end*/
+		sys.loadCancel()
 		return 0
 	})
 	luaRegister(l, "loadState", func(*lua.LState) int {
@@ -4863,6 +4975,14 @@ func systemScriptInit(l *lua.LState) {
 		}
 		sys.debugWC.mapSet(strArg(l, 1), float32(numArg(l, 2)), scType)
 		return 0
+	})
+	luaRegister(l, "storyboardCanceled", func(l *lua.LState) int {
+		/*Check whether the most recent storyboard was canceled by the player.
+		@function storyboardCanceled
+		@treturn boolean canceled `true` if the storyboard was canceled via Esc or cancel key.
+		function storyboardCanceled() end*/
+		l.Push(lua.LBool(sys.storyboard.canceled))
+		return 1
 	})
 	luaRegister(l, "modelNew", func(l *lua.LState) int {
 		/*Load a 3D model (glTF) as a Model object.
@@ -5010,6 +5130,22 @@ func systemScriptInit(l *lua.LState) {
 		@treturn boolean active `true` if netplay is currently active.
 		function netPlay() end*/
 		l.Push(lua.LBool(sys.netplay()))
+		return 1
+	})
+	luaRegister(l, "netLoadingReady", func(l *lua.LState) int {
+		/*Poll the non-blocking netplay loading handshake. Returns `true` when both peers have finished loading, or immediately if not in netplay.
+		@function netLoadingReady
+		@treturn boolean ready `true` if both sides are ready (or no net connection exists).
+		function netLoadingReady() end*/
+		if sys.netConnection == nil {
+			l.Push(lua.LBool(true))
+			return 1
+		}
+		ready, err := sys.netConnection.LoadingReady()
+		if err != nil {
+			l.RaiseError(err.Error())
+		}
+		l.Push(lua.LBool(ready))
 		return 1
 	})
 	luaRegister(l, "panicError", func(*lua.LState) int {
@@ -5345,6 +5481,14 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LBool(sys.postMatchFlg))
 		return 1
 	})
+	luaRegister(l, "preloading", func(l *lua.LState) int {
+		/*Check whether resources are currently being preloaded.
+		@function preloading
+		@treturn boolean `true` if assets are still being preloaded.
+		function preloading() end*/
+		l.Push(lua.LBool(!sys.sel.AllPreloadsReady()))
+		return 1
+	})
 	luaRegister(l, "preloadListChar", func(*lua.LState) int {
 		/*Mark a character sprite or animation for preloading.
 		@function preloadListChar
@@ -5393,6 +5537,34 @@ func systemScriptInit(l *lua.LState) {
 		@tparam string text Text to print.
 		function puts(text) end*/
 		fmt.Println(strArg(l, 1))
+		return 0
+	})
+	luaRegister(l, "queueCharPreload", func(l *lua.LState) int {
+		/*Queue a character for background preloading of portraits and palettes.
+		@function queueCharPreload
+		@tparam int charRef 0-based character index in the select list.
+		@tparam[opt=1] int priority Priority level (`1` = low, `2` = high).
+		function queueCharPreload(charRef, priority) end*/
+		ref := int(numArg(l, 1))
+		priority := PreloadPriorityLow
+		if !nilArg(l, 2) {
+			priority = int(numArg(l, 2))
+		}
+		sys.sel.QueueCharPreload(ref, priority)
+		return 0
+	})
+	luaRegister(l, "queueStagePreload", func(l *lua.LState) int {
+		/*Queue a stage for background preloading of portraits.
+		@function queueStagePreload
+		@tparam int stageRef Stage index as used by the select system.
+		@tparam[opt=1] int priority Priority level (`1` = low, `2` = high).
+		function queueStagePreload(stageRef, priority) end*/
+		ref := int(numArg(l, 1))
+		priority := PreloadPriorityLow
+		if !nilArg(l, 2) {
+			priority = int(numArg(l, 2))
+		}
+		sys.sel.QueueStagePreload(ref, priority)
 		return 0
 	})
 	luaRegister(l, "rectDebug", func(*lua.LState) int {
@@ -5662,6 +5834,17 @@ func systemScriptInit(l *lua.LState) {
 		sys.persistRoundCount = 0
 		return 0
 	})
+	luaRegister(l, "resetGameParams", func(*lua.LState) int {
+		/*Reset per-match game parameters to motif defaults. Called before `loadStart` when background loading feeds params incrementally via `selectChar`.
+		@function resetGameParams
+		function resetGameParams() end*/
+		if sys.sel.gameParams == nil {
+			sys.sel.gameParams = newGameParamsFromMotif(&sys.motif)
+		} else {
+			sys.sel.gameParams.ResetFromMotif(&sys.motif)
+		}
+		return 0
+	})
 	luaRegister(l, "resetKey", func(*lua.LState) int {
 		/*Clear the last captured key and text input.
 		@function resetKey
@@ -5878,17 +6061,18 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LString(SearchFile(strArg(l, 1), dirs)))
 		return 1
 	})
-	luaRegister(l, "selectChar", func(*lua.LState) int {
+	luaRegister(l, "selectChar", func(l *lua.LState) int {
 		/*Add a character to a team's selection.
 		@function selectChar
 		@tparam int teamSide Team side (`1` or `2`).
 		@tparam int charRef 0-based character index in the select list.
 		@tparam int palette Palette number.
+		@tparam[opt] string overrideParams Optional comma-separated override parameters.
 		@treturn int status Selection status:
 		  - `0` – character not added
 		  - `1` – added, team is not yet full
 		  - `2` – added, team is now full
-		function selectChar(teamSide, charRef, palette) end*/
+		function selectChar(teamSide, charRef, palette, overrideParams) end*/
 		cn := int(numArg(l, 2))
 		if cn < 0 || cn >= len(sys.sel.charlist) {
 			l.RaiseError("\nInvalid char ref: %v\n", cn)
@@ -5903,23 +6087,44 @@ func systemScriptInit(l *lua.LState) {
 		}
 		var ret int
 		if sys.sel.AddSelectedChar(tn-1, cn, pl) {
-			switch sys.tmode[tn-1] {
+			if !nilArg(l, 4) {
+				if s, ok := l.Get(4).(lua.LString); ok {
+					str := strings.TrimSpace(string(s))
+					if str != "" {
+						entries := SplitAndTrim(str, ",")
+						sys.selMutex.Lock()
+						if sys.sel.gameParams == nil {
+							sys.sel.gameParams = newGameParamsFromMotif(&sys.motif)
+						}
+						sys.sel.gameParams.AppendParams(entries)
+						sys.selMutex.Unlock()
+					}
+				}
+			}
+			// Snapshot selection-dependent values under selMutex to avoid races with BG loader.
+			sys.selMutex.RLock()
+			tm := sys.tmode[tn-1]
+			selLen := len(sys.sel.selected[tn-1])
+			nSim := sys.numSimul[tn-1]
+			nTurns := sys.numTurns[tn-1]
+			sys.selMutex.RUnlock()
+			switch tm {
 			case TM_Single:
 				ret = 2
 			case TM_Simul:
-				if len(sys.sel.selected[tn-1]) >= int(sys.numSimul[tn-1]) {
+				if selLen >= int(nSim) {
 					ret = 2
 				} else {
 					ret = 1
 				}
 			case TM_Turns:
-				if len(sys.sel.selected[tn-1]) >= int(sys.numTurns[tn-1]) {
+				if selLen >= int(nTurns) {
 					ret = 2
 				} else {
 					ret = 1
 				}
 			case TM_Tag:
-				if len(sys.sel.selected[tn-1]) >= int(sys.numSimul[tn-1]) {
+				if selLen >= int(nSim) {
 					ret = 2
 				} else {
 					ret = 1
@@ -6506,6 +6711,7 @@ func systemScriptInit(l *lua.LState) {
 		if nt < 1 || (tm != TM_Turns && nt > MaxSimul) {
 			l.RaiseError("\nInvalid team size: %v\n", nt)
 		}
+		sys.selMutex.Lock()
 		sys.sel.selected[tn-1] = nil
 		//sys.sel.ocd[tn-1] = nil
 		sys.tmode[tn-1] = tm
@@ -6518,6 +6724,7 @@ func systemScriptInit(l *lua.LState) {
 		if (tm == TM_Simul || tm == TM_Tag) && nt == 1 {
 			sys.tmode[tn-1] = TM_Single
 		}
+		sys.selMutex.Unlock()
 		return 0
 	})
 	luaRegister(l, "setTime", func(*lua.LState) int {

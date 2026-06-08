@@ -5930,9 +5930,13 @@ func (fs *FightScreen) syncTeamOrder(side int) {
 	order := make([]int, 0, MaxSimul)
 	// Collect all the members of this team
 	for pn := side; pn < MaxSimul*2; pn += 2 {
-		if len(sys.chars[pn]) > 0 {
-			order = append(order, pn)
+		if len(sys.chars[pn]) == 0 || sys.chars[pn][0] == nil {
+			continue
 		}
+		if sys.chars[pn][0].teamside != side {
+			continue
+		}
+		order = append(order, pn)
 	}
 	// Sort them by memberNo
 	sort.Slice(order, func(i, j int) bool {
