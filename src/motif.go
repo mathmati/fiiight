@@ -410,9 +410,9 @@ type ItemProperties struct {
 }
 
 type FaceProperties struct {
-	AnimationCharPreloadProperties
+	AnimationCharPreloadProperties `skipinit:"true"`
 	Done struct { // not used by [Victory Screen]
-		AnimationCharPreloadProperties
+		AnimationCharPreloadProperties `skipinit:"true"`
 		Key []string `ini:"key"` // only used by [VS Screen]
 	} `ini:"done"`
 	Random   AnimationProperties `ini:"random"` // only used by [Select Info]
@@ -514,7 +514,7 @@ type PlayerSelectProperties struct {
 			Snd [2]int32 `ini:"snd" default:"-1,0"`
 		} `ini:"value"`
 		Preview struct {
-			AnimationCharPreloadProperties
+			AnimationCharPreloadProperties `skipinit:"true"`
 			Snd [2]int32 `ini:"snd" default:"-1,0"`
 		} `ini:"preview"`
 		Number TextProperties      `ini:"number"`
@@ -596,7 +596,7 @@ type PlayerDialogueProperties struct {
 	Face struct {
 		AnimationProperties
 		Active AnimationProperties `ini:"active"`
-	} `ini:"face"`
+	} `ini:"face" skipinit:"true"`
 	Name TextProperties `ini:"name"`
 	Text struct {
 		TextProperties
@@ -732,7 +732,7 @@ type SelectInfoProperties struct {
 			Snd [2]int32 `ini:"snd" default:"-1,0"`
 		} `ini:"move"`
 		Portrait struct {
-			AnimationStagePreloadProperties
+			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg     AnimationProperties `ini:"bg"`
 			Random AnimationProperties `ini:"random"`
 		} `ini:"portrait"`
@@ -744,7 +744,7 @@ type SelectInfoProperties struct {
 		Key []string `ini:"key"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"cancel"`
-	Portrait AnimationCharPreloadProperties `ini:"portrait"`
+	Portrait AnimationCharPreloadProperties `ini:"portrait" skipinit:"true"`
 	Title    TextMapProperties              `ini:"title"`
 	Record   TextMapProperties              `ini:"record"`
 	TeamMenu struct {
@@ -788,7 +788,7 @@ type VsScreenProperties struct {
 		Pos [2]float32 `ini:"pos"`
 		TextProperties
 		Portrait struct {
-			AnimationStagePreloadProperties
+			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg AnimationProperties `ini:"bg"`
 		} `ini:"portrait"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
@@ -1237,7 +1237,7 @@ type HiscoreInfoProperties struct {
 		Result  ItemProperties `ini:"result"`
 		Name    ItemProperties `ini:"name"`
 		Face    struct {
-			AnimationCharPreloadProperties
+			AnimationCharPreloadProperties `skipinit:"true"`
 			Num     int32               `ini:"num"`
 			Spacing [2]float32          `ini:"spacing"`
 			Bg      AnimationProperties `ini:"bg"`

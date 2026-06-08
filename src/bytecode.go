@@ -842,6 +842,7 @@ const (
 	OC_ex2_explodvar_friction_y
 	OC_ex2_explodvar_friction_z
 	OC_ex2_explodvar_id
+	OC_ex2_explodvar_ignorehitpause
 	OC_ex2_explodvar_layerno
 	OC_ex2_explodvar_pausemovetime
 	OC_ex2_explodvar_pos_x
@@ -3816,6 +3817,8 @@ func (be BytecodeExp) run_ex2(c *Char, i *int, oc *Char) {
 	case OC_ex2_explodvar_layerno:
 		fallthrough
 	case OC_ex2_explodvar_id:
+		fallthrough
+	case OC_ex2_explodvar_ignorehitpause:
 		fallthrough
 	case OC_ex2_explodvar_bindid:
 		fallthrough

@@ -2459,6 +2459,8 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 			}
 		case "id":
 			opc = OC_ex2_explodvar_id
+		case "ignorehitpause":
+			opc = OC_ex2_explodvar_ignorehitpause
 		case "layerno":
 			opc = OC_ex2_explodvar_layerno
 		case "pausemovetime":
