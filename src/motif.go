@@ -72,9 +72,6 @@ type FontProperties struct {
 type FilesProperties struct {
 	Spr     string `ini:"spr" lookup:"def,,data/"`
 	Snd     string `ini:"snd" lookup:"def,,data/"`
-	Loading struct {
-		Storyboard string `ini:"storyboard" lookup:"def,,data/"`
-	} `ini:"loading"`
 	Logo struct {
 		Storyboard string `ini:"storyboard" lookup:"def,,data/"`
 	} `ini:"logo"`
@@ -792,6 +789,12 @@ type VsScreenProperties struct {
 		} `ini:"portrait"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"stage"`
+	Loading struct {
+		AnimationTextProperties
+		Done       AnimationTextProperties `ini:"done"`
+		Wait       AnimationTextProperties `ini:"wait"`
+		Storyboard string                  `ini:"storyboard" lookup:"def,,data/"`
+	} `ini:"loading"`
 }
 
 type DemoModeProperties struct {
@@ -2216,6 +2219,7 @@ func (m *Motif) overrideParams() {
 		{SrcSec: "Select Info", SrcPrefix: "stage.", DstSec: "Select Info", DstPrefix: "stage.active2."},
 		{SrcSec: "Select Info", SrcPrefix: "stage.", DstSec: "Select Info", DstPrefix: "stage.done."},
 		// [VS Screen]
+		{SrcSec: "Title Info", SrcPrefix: "loading.", DstSec: "VS Screen", DstPrefix: "loading.wait."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p1.done."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.face2.", DstSec: "VS Screen", DstPrefix: "p1.face2.done."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p2.done."},

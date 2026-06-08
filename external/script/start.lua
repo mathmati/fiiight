@@ -2096,6 +2096,7 @@ function launchFight(data)
 		t.ai = data.ai or nil
 		t.vsscreen = main.f_arg(data.vsscreen, main.motif.vsscreen)
 		t.victoryscreen = main.f_arg(data.victoryscreen, main.motif.victoryscreen)
+		t.winscreen = main.f_arg(data.winscreen, main.motif.winscreen)
 		--t.frames = data.frames or fightScreenVar("time.framespercount")
 		t.roundtime = data.time or nil
 		t.lua = data.lua or ''
@@ -2219,12 +2220,7 @@ function launchFight(data)
 			return true --continue lua code execution
 		end
 	end
-	--TODO: fix gameOption('Config.BackgroundLoading') setting
-	--if gameOption('Config.BackgroundLoading') then
-	--	selectStart()
-	--else
-		clearSelected()
-	--end
+	clearSelected()
 	local ok = false
 	local loopCount = 0
 	while true do
@@ -2239,11 +2235,6 @@ function launchFight(data)
 			-- Snapshot before game() runs. If a challenger interrupts the fight, this is the last clean arcade state.
 			challengerResume = makeChallengerResumeSnapshot(data, t.stageNo)
 		end
-		if not start.f_selectVersus(t.vsscreen, t.orderselect) then break end
-		local winscreen = main.motif.winscreen
-		if winscreen and main.makeRoster and start.t_roster[matchNo() + 1] ~= nil then
-			winscreen = false
-		end
 		local common = {lua = {}}
 		if t.lua ~= '' then
 			table.insert(common.lua, t.lua)
@@ -2251,12 +2242,21 @@ function launchFight(data)
 		-- Hooks may mutate "common" in place before loading starts.
 		hook.run("launchFight", common, t, data)
 		updateCommon(common, true)
-		start.f_selectLoading{
-			musicParams = t.musicParams,
-			continue = t.continue,
-			victoryscreen = t.victoryscreen,
-			winscreen = winscreen,
-		}
+		-- Resolve match-scoped params before VS can start background loading.
+		local winscreen = main.f_arg(t.winscreen, main.motif.winscreen)
+		if winscreen and main.makeRoster and start.t_roster[matchNo() + 1] ~= nil then
+			winscreen = false
+		end
+		local loadStartParams = main.f_tableCopy(t)
+		loadStartParams.winscreen = winscreen
+
+		if not start.f_selectVersus(t.vsscreen, t.orderselect, loadStartParams) then break end
+		-- If VS started background loading, do not restart the loader here.
+		if gameOption('Config.VsScreenLoading') and start.bgLoadStarted then
+			clearAllSound()
+		elseif not start.f_selectLoading(loadStartParams) then
+			break
+		end
 		start.f_game(common)
 		clearColor(motif.selectbgdef.bgclearcolor[1], motif.selectbgdef.bgclearcolor[2], motif.selectbgdef.bgclearcolor[3])
 		if start.exit or start.characterchange then
@@ -3577,8 +3577,83 @@ end
 --;===========================================================
 --; VERSUS SCREEN / ORDER SELECTION
 --;===========================================================
-function start.f_selectVersus(active, t_orderSelect)
+-- Build params for loadStart()
+function start.f_buildLoadStartParams(arg, doSelectMissing, t_orderRemap)
+	local parts = {}
+	local t = {}
+	local musicParams = arg
+	if type(arg) == "table" then
+		t = arg
+		musicParams = t.musicParams
+	end
+	if musicParams and musicParams ~= "" then
+		parts[#parts + 1] = musicParams
+	end
+	local function addParam(k, v)
+		if v == nil or v == "" then
+			return
+		end
+		parts[#parts + 1] = k .. "=" .. tostring(v)
+	end
+	addParam("continue", t.continue)
+	addParam("quickcontinue", t.quickcontinue)
+	addParam("order", t.order)
+	addParam("stage", t.stage)
+	addParam("ai", t.ai)
+	addParam("time", t.roundtime or t.time)
+	addParam("vsscreen", t.vsscreen)
+	addParam("victoryscreen", t.victoryscreen)
+	addParam("winscreen", t.winscreen)
+	addParam("lua", t.lua)
+	addParam("charparam.ai", main.charparam.ai)
+	addParam("charparam.arcadepath", main.charparam.arcadepath)
+	addParam("charparam.music", main.charparam.music)
+	addParam("charparam.rounds", main.charparam.rounds)
+	addParam("charparam.single", main.charparam.single)
+	addParam("charparam.stage", main.charparam.stage)
+	addParam("charparam.time", main.charparam.time)
+	addParam("p1.turnsoffset", start.p[1].turnsOffset or 0)
+	addParam("p2.turnsoffset", start.p[2].turnsOffset or 0)
+	addParam("persistlife", main.persistLife)
+	addParam("persistmusic", main.persistMusic)
+	addParam("persistrounds", main.persistRounds)
+	addParam("rankingcondition", main.rankingCondition)
+	return table.concat(parts, ", ")
+end
+
+-- Build per-member override params for selectChar().
+function start.f_buildOverrideParams(side, member, v)
+	local parts = {}
+	local function addParam(field, val)
+		if val == nil then return end
+		parts[#parts + 1] = string.format("p%d.%d.%s=%s", side, member, field, tostring(val))
+	end
+	hook.run("start.f_selectLoading.member", v)
+	addParam("life", v.life)
+	addParam("lifemax", v.lifeMax)
+	addParam("power", v.power)
+	addParam("dizzypoints", v.dizzyPoints)
+	addParam("guardpoints", v.guardPoints)
+	addParam("existed", v.existed)
+	if type(v.maps) == "table" then
+		for mapName, mapValue in pairs(v.maps) do
+			if type(mapName) == "string" and mapValue ~= nil then
+				local key = mapName
+				if key:sub(1, 4):lower() == "map." then
+					key = key:sub(5)
+				end
+				if key ~= "" then
+					addParam("map." .. key, mapValue)
+				end
+			end
+		end
+	end
+	return table.concat(parts, ", ")
+end
+
+function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 	start.t_orderRemap = {{}, {}}
+	start.bgLoadStarted = false
 	for side = 1, 2 do
 		-- populate order remap table with default values
 		for i = 1, #start.p[side].t_selected do
@@ -3593,9 +3668,10 @@ function start.f_selectVersus(active, t_orderSelect)
 				t_orderSelect[side] = false
 			end
 		end
-		-- reset loading flags
+		-- reset order-confirm flags and selection flags
 		for _, v in ipairs(start.p[side].t_selected) do
 			v.loading = false
+			v.selected = false
 		end
 	end
 	-- skip versus screen if vs screen is disabled or p2 side char has vsscreen select.def flag set to 0
@@ -3618,22 +3694,59 @@ function start.f_selectVersus(active, t_orderSelect)
 	start.f_resetTempData(motif.vs_screen, '')
 	start.f_playWave(getStageNo(), 'stage', motif.vs_screen.stage.snd[1], motif.vs_screen.stage.snd[2])
 	local counter = 0 - motif.vs_screen.fadein.time
+	local bgLoading = gameOption('Config.VsScreenLoading')
 	local done = (not t_orderSelect[1] and not t_orderSelect[2]) -- both sides having order disabled
-		or (not t_orderSelect[1] and main.cpuSide[2]) -- left side with disabled order, right side controlled by CPU
-		or (not t_orderSelect[2] and main.cpuSide[1]) -- right side with disabled order, left side controlled by CPU
-		or (main.cpuSide[1] and main.cpuSide[2]) -- both sides controlled by CPU
 	local timerActive = not done
 	local timerCount = 0
 	local escFlag = false
 	local doneKeyReady = done
 	local t_order = {{}, {}}
+	local cpuOrderFinalized = {false, false}
 	local t_icon = {false, false}
 	local selStageNo = getStageNo()
+	local loadStarted = false
+	local netReady = false
+	local readyToLeave = not bgLoading
+	local wantSkip = false
+	local wantDone = false
+
+	-- Background loading: start async loader immediately.
+	if bgLoading then
+		local params = start.f_buildLoadStartParams(loadStartArg, false, start.t_orderRemap)
+		if gameOption('Debug.DumpLuaTables') then main.f_printTable(params, "debug/loadStartParams.txt") end
+		resetGameParams()
+		loadStart(params)
+		loadStarted = true
+		start.bgLoadStarted = true
+		-- Sides without order select: select everyone immediately so loading can begin.
+		for side = 1, 2 do
+			if not t_orderSelect[side] then
+				for member, v in ipairs(start.p[side].t_selected) do
+					if not v.selected then
+						selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, member, v))
+						v.selected = true
+					end
+					v.loading = true
+					t_order[side][#t_order[side] + 1] = member
+				end
+				t_icon[side] = nil
+			end
+		end
+	end
+
 	local function finishOrderSelection(side)
 		for member, v in ipairs(start.p[side].t_selected) do
 			if not v.loading then
-				table.insert(t_order[side], member)
-				selectChar(side, v.ref, v.pal)
+				t_order[side][#t_order[side] + 1] = member
+				local slot = #t_order[side]
+				if not v.selected then
+					if bgLoading then
+						selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, slot, v))
+					else
+						selectChar(side, v.ref, v.pal)
+					end
+					v.selected = true
+				end
 				v.loading = true
 			end
 		end
@@ -3643,6 +3756,26 @@ function start.f_selectVersus(active, t_orderSelect)
 	end
 	while true do
 		local snd = false
+		-- CPU order select: randomize first, then selectChar() using randomized slot order
+		for side = 1, 2 do
+			if main.cpuSide[side] and t_orderSelect[side] and not cpuOrderFinalized[side] then
+				t_order[side] = {}
+				for i = 1, #start.p[side].t_selected do
+					t_order[side][i] = i
+				end
+				main.f_tableShuffle(t_order[side])
+				for slot, idx in ipairs(t_order[side]) do
+					local v = start.p[side].t_selected[idx]
+					if bgLoading and not v.selected then
+						selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, slot, v))
+						v.selected = true
+					end
+					v.loading = true
+				end
+				t_icon[side] = nil
+				cpuOrderFinalized[side] = true
+			end
+		end
 		-- for each team side member
 		for side = 1, 2 do
 			if not done and t_orderSelect[side] and not main.cpuSide[side] and getInput(side, motif.vs_screen.skip.key) then
@@ -3657,33 +3790,51 @@ function start.f_selectVersus(active, t_orderSelect)
 				local pCfg = f_getMotifP(motif.vs_screen, pn, side)
 				-- until loading flag is set
 				if not v.loading then
-					-- if not valid for order selection or CPU or doesn't have key for this member assigned, or order timer run out
-					if not t_orderSelect[side] or main.cpuSide[side] or (#pCfg.key == 0 and #t_order[side] == k - 1) or timerCount == -1 then
-						table.insert(t_order[side], k)
-						-- if it's the last unordered team member
-						if #start.p[side].t_selected == #t_order[side] then
-							-- randomize CPU side team order (if valid for order selection)
-							if main.cpuSide[side] and t_orderSelect[side] then
-								main.f_tableShuffle(t_order[side])
-							end
-							-- confirm char selection (starts loading immediately if gameOption('Config.BackgroundLoading') is true)
-							for _, member in ipairs(t_order[side]) do
-								if not start.p[side].t_selected[member].loading then
-									selectChar(side, start.p[side].t_selected[member].ref, start.p[side].t_selected[member].pal)
-									start.p[side].t_selected[member].loading = true
+					-- Timeout: append all remaining members in default order and confirm them.
+					if timerCount == -1 then
+						for kk, vv in ipairs(start.p[side].t_selected) do
+							if not vv.loading then
+								t_order[side][#t_order[side] + 1] = kk
+								local slot = #t_order[side]
+								if not vv.selected then
+									if bgLoading then
+										selectChar(side, vv.ref, vv.pal, start.f_buildOverrideParams(side, slot, vv))
+									else
+										selectChar(side, vv.ref, vv.pal)
+									end
+									vv.selected = true
 								end
-							end
-							t_icon[side] = nil
-							-- play sound if timer run out
-							if not snd and timerCount == -1 then
-								sndPlay(motif.Snd, motif.vs_screen['p' .. side].value.snd[1], motif.vs_screen['p' .. side].value.snd[2])
-								snd = true
+								vv.loading = true
 							end
 						end
+						t_icon[side] = nil
+						if not snd then
+							sndPlay(motif.Snd, motif.vs_screen['p' .. side].value.snd[1], motif.vs_screen['p' .. side].value.snd[2])
+							snd = true
+						end
+					-- CPU / no-key / auto-confirm path
+					elseif not t_orderSelect[side] or main.cpuSide[side] or (#pCfg.key == 0 and #t_order[side] == k - 1) then
+						t_order[side][#t_order[side] + 1] = k
+						local slot = #t_order[side]
+						if bgLoading and not v.selected then
+							selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, slot, v))
+							v.selected = true
+						end
+						v.loading = true
+						if #start.p[side].t_selected == #t_order[side] then
+							t_icon[side] = nil
+						end
 					elseif getInput(side, pCfg.key) or (#start.p[side].t_selected == #t_order[side] + 1) then
-						table.insert(t_order[side], k)
-						-- confirm char selection (starts loading immediately if gameOption('Config.BackgroundLoading') is true)
-						selectChar(side, v.ref, v.pal)
+						t_order[side][#t_order[side] + 1] = k
+						local slot = #t_order[side]
+						if bgLoading and not v.selected then
+							selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, slot, v))
+							v.selected = true
+						end
+						if not bgLoading and not v.selected then
+							selectChar(side, v.ref, v.pal)
+							v.selected = true
+						end
 						v.loading = true
 						-- if it's the last unordered team member
 						if #start.p[side].t_selected == #t_order[side] then
@@ -3802,6 +3953,22 @@ function start.f_selectVersus(active, t_orderSelect)
 		if not done and motif.vs_screen.timer.count ~= -1 and timerActive and counter >= 0 then
 			timerCount, timerActive = main.f_drawTimer(timerCount, motif.vs_screen.timer)
 		end
+		-- Background loading status
+		readyToLeave = not bgLoading
+		if bgLoading and loadStarted then
+			local localDone = not loading()
+			if localDone and not netReady then
+				netReady = netLoadingReady()
+			end
+			readyToLeave = localDone and netReady
+			if not readyToLeave then
+				main.f_animPosDraw(motif.vs_screen.loading.AnimData)
+				textImgDraw(motif.vs_screen.loading.TextSpriteData)
+			else
+				main.f_animPosDraw(motif.vs_screen.loading.done.AnimData)
+				textImgDraw(motif.vs_screen.loading.done.TextSpriteData)
+			end
+		end
 		--draw layerno = 1 backgrounds
 		bgDraw(motif.versusbgdef.BGDef, 1)
 		-- hook
@@ -3812,19 +3979,33 @@ function start.f_selectVersus(active, t_orderSelect)
 		end
 		--draw fadein / fadeout
 		for side = 1, 2 do
+			-- Latch skip/done while background loading is still in progress.
+			if bgLoading and loadStarted and not readyToLeave then
+				if not main.cpuSide[side] and getInput(side, motif.vs_screen.skip.key) then
+					wantSkip = true
+				end
+				if done and doneKeyReady and getInput(side, motif.vs_screen.done.key) then
+					wantDone = true
+				end
+			end
 			if not fadeOutStarted and (
-				-- Wait for order select to finish before vs_screen.time can end the screen.
-				(counter >= motif.vs_screen.time and (not (t_orderSelect[1] or t_orderSelect[2]) or done))
-				or (done and doneKeyReady and getInput(side, motif.vs_screen.done.key))
-				) then
+				(counter >= motif.vs_screen.time and (not (t_orderSelect[1] or t_orderSelect[2]) or done) and readyToLeave)
+				or (readyToLeave and (not main.cpuSide[side] and (getInput(side, motif.vs_screen.skip.key) or wantSkip)))
+				or (readyToLeave and (done and doneKeyReady and (getInput(side, motif.vs_screen.done.key) or wantDone)))) then
 				fadeOutInit(motif.vs_screen.fadeout.FadeData)
 				fadeOutStarted = true
+				wantSkip = false
+				wantDone = false
 				break
 			end
 		end
 		--frame transition
 		if not escFlag and (esc() or getInput(-1, motif.vs_screen.cancel.key)) then
 			esc(false)
+			if bgLoading and loadStarted then
+				loadCancel()
+				clearSelected()
+			end
 			fadeOutInit(motif.vs_screen.fadeout.FadeData)
 			fadeOutStarted = true
 			escFlag = true
@@ -3842,71 +4023,62 @@ end
 --loading loop called after versus screen is finished
 function start.f_selectLoading(arg)
 	clearAllSound()
-	local parts = {}
 	local t = {}
 	if type(arg) == "table" then
 		t = arg
 	elseif type(arg) == "string" then
 		t.musicParams = arg
 	end
-	if t.musicParams and t.musicParams ~= "" then
-		parts[#parts + 1] = t.musicParams
-	end
-	local function addParam(k, v)
-		if v == nil then return end
-		parts[#parts + 1] = k .. "=" .. tostring(v)
-	end
-	-- Post-match screens are match-scoped.
-	addParam("continue", t.continue)
-	addParam("victoryscreen", t.victoryscreen)
-	addParam("winscreen", t.winscreen)
-	addParam("rankingcondition", main.rankingCondition)
-	addParam("charparam.ai", main.charparam.ai)
-	addParam("charparam.arcadepath", main.charparam.arcadepath)
-	addParam("charparam.music", main.charparam.music)
-	addParam("charparam.rounds", main.charparam.rounds)
-	addParam("charparam.single", main.charparam.single)
-	addParam("charparam.stage", main.charparam.stage)
-	addParam("charparam.time", main.charparam.time)
-	-- Tell the engine how many leading Turns members are already defeated.
-	-- This keeps full roster for lifebar/hiscore while skipping defeated members in gameplay.
-	addParam("p1.turnsoffset", start.p[1].turnsOffset or 0)
-	addParam("p2.turnsoffset", start.p[2].turnsOffset or 0)
-	for side = 1, 2 do
-		for member, v in ipairs(start.p[side].t_selected) do
-			if not v.loading then
-				selectChar(side, v.ref, v.pal)
-				v.loading = true
-			end
-			hook.run("start.f_selectLoading.member", v)
-			local pfx = "p" .. side .. "." .. member .. "."
-			addParam(pfx .. "life", v.life)
-			addParam(pfx .. "lifemax", v.lifeMax)
-			addParam(pfx .. "power", v.power)
-			addParam(pfx .. "dizzypoints", v.dizzyPoints)
-			addParam(pfx .. "guardpoints", v.guardPoints)
-			addParam(pfx .. "existed", v.existed)
-			if type(v.maps) == "table" then
-				for mapName, mapValue in pairs(v.maps) do
-					if type(mapName) == "string" and mapValue ~= nil then
-						local key = mapName
-						if key:sub(1, 4):lower() == "map." then
-							key = key:sub(5)
-						end
-						if key ~= "" then
-							addParam(pfx .. "map." .. key, mapValue)
-						end
-					end
+	local params = start.f_buildLoadStartParams(t, true, start.t_orderRemap)
+	if gameOption('Debug.DumpLuaTables') then main.f_printTable(params, "debug/loadStartParams.txt") end
+	resetGameParams()
+	if not gameOption('Config.VsScreenLoading') then
+		-- If background loading is disabled, first select all chars, then start the loader.
+		for side = 1, 2 do
+			local remap = start.t_orderRemap and start.t_orderRemap[side]
+			for member = 1, #start.p[side].t_selected do
+				local src = remap and remap[member] or member
+				local v = start.p[side].t_selected[src]
+				if not v.selected then
+					selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, member, v))
+					v.selected = true
 				end
 			end
 		end
+		loadStart(params)
+	else
+		-- Background loading: start loader first, then feed selections.
+		loadStart(params)
+		for side = 1, 2 do
+			local remap = start.t_orderRemap and start.t_orderRemap[side]
+			for member = 1, #start.p[side].t_selected do
+				local src = remap and remap[member] or member
+				local v = start.p[side].t_selected[src]
+				if not v.selected then
+					selectChar(side, v.ref, v.pal, start.f_buildOverrideParams(side, member, v))
+					v.selected = true
+				end
+			end
+		end
+		if main.f_storyboard(motif.vs_screen.loading.storyboard) then
+			loadCancel()
+			clearSelected()
+			return false
+		end
+		-- VS screen is normally responsible for showing loading progress.
+		-- If it was skipped/disabled, keep a small Lua render loop alive here.
+		local netReady = false
+		while loading() or not netReady do
+			if not loading() then
+				netReady = netLoadingReady()
+			end
+			clearColor(0, 0, 0)
+			main.f_animPosDraw(motif.vs_screen.loading.wait.AnimData)
+			textImgDraw(motif.vs_screen.loading.wait.TextSpriteData)
+			refresh()
+		end
 	end
-	addParam("persistlife", main.persistLife)
-	addParam("persistmusic", main.persistMusic)
-	addParam("persistrounds", main.persistRounds)
-	local params = table.concat(parts, ", ")
-	if gameOption('Debug.DumpLuaTables') then main.f_printTable(params, "debug/loadStartParams.txt") end
-	loadStart(params)
+	return true
 end
 
 return start

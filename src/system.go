@@ -3,6 +3,7 @@ package main
 import (
 	"arena"
 	"bufio"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -239,6 +240,7 @@ type System struct {
 	chars               [MaxPlayerNo][]*Char
 	charList            CharList
 	cgi                 [MaxPlayerNo]CharGlobalInfo
+	selMutex            sync.RWMutex
 	loadMutex           sync.Mutex
 	ignoreMostErrors    bool
 	stringPool          [MaxPlayerNo]StringPool
@@ -716,6 +718,21 @@ func (s *System) leaveMotifAspect() {
 	s.applyFightAspect()
 }
 
+func (s *System) setGameAspect() {
+	sys.applyFightAspect()
+	if sys.stage != nil {
+		sys.stage.localscl = float32(sys.gameWidth) / float32(sys.stage.stageCamera.localcoord[0])
+		sys.stage.stageCamera.localscl = sys.stage.localscl
+	}
+	for _, p := range sys.chars {
+		if len(p) > 0 {
+			p[0].localcoord = float32(p[0].gi().localcoord[0]) / (float32(sys.gameWidth) / 320)
+			p[0].localscl = 320 / p[0].localcoord
+		}
+	}
+	sys.fightScreen.setScale()
+}
+
 func (s *System) eventUpdate() bool {
 	s.esc = false
 	for _, v := range s.shortcutScripts {
@@ -970,6 +987,52 @@ func (s *System) loaderReset() {
 func (s *System) loadStart() {
 	s.loaderReset()
 	s.loader.runTread()
+}
+
+// Drop everything that might have been partially produced by the pre-match async loader.
+func (s *System) dropCanceledLoadData() {
+	for {
+		select {
+		case <-s.mainThreadTask:
+		default:
+			goto drained
+		}
+	}
+drained:
+	s.loadMutex.Lock()
+	defer s.loadMutex.Unlock()
+
+	for prefix, ffx := range s.ffx {
+		if ffx == nil || !ffx.isCharFX {
+			continue
+		}
+		ffx.sff = nil
+		delete(s.ffx, prefix)
+	}
+
+	for i := range s.cgi {
+		s.cgi[i].sff = nil
+		s.cgi[i].palettedata = nil
+		s.cgi[i].snd = nil
+		s.cgi[i].states = nil
+		s.chars[i] = nil
+		s.cgi[i].palno = -1
+	}
+
+	if s.stage != nil {
+		s.stage.destroy()
+		s.stage = nil
+	}
+	s.stageList = make(map[int32]*Stage)
+	s.stageLoop = false
+}
+
+func (s *System) loadCancel() {
+	s.loader.reset()
+	s.dropCanceledLoadData()
+	if s.netConnection != nil {
+		s.netConnection.ResetLoadingPhase()
+	}
 }
 
 func (s *System) synchronize() error {
@@ -4355,7 +4418,11 @@ func (s *Select) ValidatePalette(charRef, requested int) int {
 	return int(sc.pal[0])
 }
 
-func (s *Select) SelectStage(n int) { s.selectedStageNo = n }
+func (s *Select) SelectStage(n int) {
+	sys.selMutex.Lock()
+	s.selectedStageNo = n
+	sys.selMutex.Unlock()
+}
 
 func (s *Select) GetStage(n int) *SelectStage {
 	if len(s.stagelist) == 0 {
@@ -4924,24 +4991,25 @@ func (s *Select) AddSelectedChar(tn, cn, pl int) bool {
 		n = int(Rand(0, int32(len(s.charlist))-1))
 		pl = int(Rand(1, int32(sys.cfg.Config.PaletteMax)))
 	}
-	sys.loadMutex.Lock()
+	sys.selMutex.Lock()
 	s.selected[tn] = append(s.selected[tn], [...]int{n, pl})
 	if s.gameParams == nil {
 		s.gameParams = newGameParams()
 	}
 	// ensure per-member override slot exists (needed for existed flag / persistence)
-	_ = s.gameParams.ensureOverride(tn, len(s.selected[tn])-1)
-	sys.loadMutex.Unlock()
+	dst := len(s.selected[tn]) - 1
+	_ = s.gameParams.ensureOverride(tn, dst)
+	sys.selMutex.Unlock()
 	return true
 }
 
 func (s *Select) ClearSelected() {
-	sys.loadMutex.Lock()
+	sys.selMutex.Lock()
 	s.selected = [2][][2]int{}
-	sys.loadMutex.Unlock()
 	s.selectedStageNo = -1
 	s.music = make(Music)
 	s.gameParams = newGameParams()
+	sys.selMutex.Unlock()
 }
 
 type LoaderState int32
@@ -4954,14 +5022,38 @@ const (
 	LS_Cancel
 )
 
+// Returned by heavy loaders (notably SFF parsing) to signal cooperative cancellation.
+var ErrLoadingCanceled = errors.New("loading canceled")
+
 type Loader struct {
-	state    LoaderState
-	loadExit chan LoaderState
-	err      error
+	state      LoaderState
+	loadExit   chan LoaderState
+	err        error
+	cancelCh   chan struct{}
+	cancelOnce sync.Once
 }
 
 func newLoader() *Loader {
 	return &Loader{state: LS_NotYet, loadExit: make(chan LoaderState, 1)}
+}
+
+func (l *Loader) requestCancel() {
+	if l.cancelCh == nil {
+		return
+	}
+	l.cancelOnce.Do(func() { close(l.cancelCh) })
+}
+
+func (l *Loader) cancelRequested() bool {
+	if l.cancelCh == nil {
+		return false
+	}
+	select {
+	case <-l.cancelCh:
+		return true
+	default:
+		return false
+	}
 }
 
 /*
@@ -4975,6 +5067,10 @@ func (l *Loader) loadAttachedChar(pn int) int {
 */
 
 func (l *Loader) loadCharacter(pn int, attached bool) int {
+	// Quick abort between expensive steps.
+	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+		return 0
+	}
 	if !attached && sys.roundsExisted[pn&1] > 0 {
 		return 1
 	}
@@ -4982,17 +5078,25 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		return 1
 	}
 
-	sys.loadMutex.Lock()
-	defer sys.loadMutex.Unlock()
-
+	sys.selMutex.RLock()
+	team := pn & 1
+	tm := sys.tmode[team]
+	nSim := sys.numSimul[team]
+	nTurns := sys.numTurns[team]
+	teamSel := make([][2]int, len(sys.sel.selected[team]))
+	copy(teamSel, sys.sel.selected[team])
+	sys.selMutex.RUnlock()
+	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+		return 0
+	}
 	// Get number of selected characters in team
 	memberNo := pn >> 1
-	nsel := len(sys.sel.selected[pn&1])
+	nsel := len(teamSel)
 
 	// Check if player number is acceptable for selected team mode
 	if !attached {
-		if sys.tmode[pn&1] == TM_Simul || sys.tmode[pn&1] == TM_Tag {
-			if memberNo >= int(sys.numSimul[pn&1]) {
+		if tm == TM_Simul || tm == TM_Tag {
+			if memberNo >= int(nSim) {
 				sys.cgi[pn].states = nil
 				sys.chars[pn] = nil
 				return 1
@@ -5001,11 +5105,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 			return 0
 		}
 
-		if sys.tmode[pn&1] == TM_Turns && nsel < int(sys.numTurns[pn&1]) {
+		if tm == TM_Turns && nsel < int(nTurns) {
 			return 0
 		}
 
-		if sys.tmode[pn&1] == TM_Turns {
+		if tm == TM_Turns {
 			off := int32(0)
 			if sys.sel.gameParams != nil {
 				off = sys.sel.gameParams.TurnsOffset[pn&1]
@@ -5018,11 +5122,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 			if int(off) > nsel {
 				off = int32(nsel)
 			}
-			if sys.numTurns[pn&1] < 0 {
-				sys.numTurns[pn&1] = 0
+			if nTurns < 0 {
+				nTurns = 0
 			}
-			if int(off)+int(sys.numTurns[pn&1]) > nsel {
-				sys.numTurns[pn&1] = int32(nsel) - off
+			if int(off)+int(nTurns) > nsel {
+				nTurns = int32(nsel) - off
 			}
 			memberNo = int(off) + int(sys.wins[^pn&1])
 		}
@@ -5034,7 +5138,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	teamChars := make([]int, nsel)
 	for i := range teamChars {
-		teamChars[i] = sys.sel.selected[pn&1][i][0]
+		teamChars[i] = teamSel[i][0]
 	}
 
 	// Prepare loading time clipboard message
@@ -5063,13 +5167,16 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		atcpn := pn - MaxSimul*2
 		cdef = sys.stageList[0].attachedchardef[atcpn]
 	} else {
-		if sys.tmode[pn&1] == TM_Turns {
+		if tm == TM_Turns {
 			cdefOWnumber = memberNo*2 + pn&1
 		} else {
 			cdefOWnumber = pn
 		}
-		if sys.sel.cdefOverwrite[cdefOWnumber] != "" {
-			cdef = sys.sel.cdefOverwrite[cdefOWnumber]
+		sys.selMutex.RLock()
+		cdefOW := sys.sel.cdefOverwrite[cdefOWnumber]
+		sys.selMutex.RUnlock()
+		if cdefOW != "" {
+			cdef = cdefOW
 		} else {
 			cdef = sys.sel.charlist[teamChars[memberNo]].def
 		}
@@ -5144,7 +5251,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		p.controller = pn
 	} else {
 		p.memberNo = memberNo
-		p.selectNo = sys.sel.selected[pn&1][memberNo][0]
+		p.selectNo = teamSel[memberNo][0]
 		p.teamside = p.playerNo & 1
 	}
 
@@ -5154,7 +5261,15 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	// Load character
 	if !sameChar {
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			return 0
+		}
 		if l.err = p.load(cdef); l.err != nil {
+			if errors.Is(l.err, ErrLoadingCanceled) {
+				sys.chars[pn] = nil
+				l.state = LS_Cancel
+				return 0
+			}
 			sys.chars[pn] = nil
 			if attached {
 				tstr = fmt.Sprintf("WARNING: Failed to load new attached char: %v", cdef)
@@ -5162,6 +5277,11 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 				tstr = fmt.Sprintf("WARNING: Failed to load new char: %v", cdef)
 			}
 			return -1
+		}
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			sys.chars[pn] = nil
+			l.state = LS_Cancel
+			return 0
 		}
 
 		// Compile character states
@@ -5182,7 +5302,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 		selectPalno = pal
 	} else if !attached {
 		// Get palette number from select screen choice
-		selectPalno = sys.sel.selected[pn&1][memberNo][1]
+		selectPalno = teamSel[memberNo][1]
 	}
 	sys.cgi[pn].palno = int32(selectPalno)
 
@@ -5193,10 +5313,10 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 
 	// Prepare fight screen portraits and names for Turns mode
 	if !attached {
-		if pn < len(sys.fightScreen.faces[sys.tmode[pn&1]]) && sys.tmode[pn&1] == TM_Turns && sys.round == 1 {
-			fa := sys.fightScreen.faces[sys.tmode[pn&1]][pn]
-			nm := sys.fightScreen.names[sys.tmode[pn&1]][pn]
-			l.prepareTurnsFaces(pn, fa, nm, teamChars)
+		if pn < len(sys.fightScreen.faces[tm]) && tm == TM_Turns && sys.round == 1 {
+			fa := sys.fightScreen.faces[tm][pn]
+			nm := sys.fightScreen.names[tm][pn]
+			l.prepareTurnsFaces(pn, fa, nm, teamChars, teamSel)
 		}
 	}
 
@@ -5207,7 +5327,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	return 1
 }
 
-func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenName, teamChars []int) {
+func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenName, teamChars []int, teamSel [][2]int) {
 	// Reset face and name KO's
 	off := int32(0)
 	if sys.sel.gameParams != nil {
@@ -5260,7 +5380,7 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 			// Check if palettes are already loaded
 			// They won't be unless the select screen used "applypal" (or if the character was already used before maybe)
 			// https://github.com/ikemen-engine/Ikemen-GO/issues/3300
-			palIdx := sys.sel.selected[pn&1][i][1]
+			palIdx := teamSel[i][1]
 			_, hasTarget := sc.sff.palList.PalTable[[...]uint16{1, uint16(palIdx)}]
 			_, has11 := sc.sff.palList.PalTable[[...]uint16{1, 1}]
 
@@ -5307,6 +5427,10 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 
 func (l *Loader) loadStage() bool {
 	if sys.round == 1 {
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return false
+		}
 		var tstr string
 		tnow := time.Now()
 		defer func() {
@@ -5326,15 +5450,21 @@ func (l *Loader) loadStage() bool {
 				}
 			}
 		}()
+		// Snapshot stage selection quickly (avoid races with Lua).
+		sys.selMutex.RLock()
+		stageNo := sys.sel.selectedStageNo
+		sdefOW := sys.sel.sdefOverwrite
+		sys.selMutex.RUnlock()
+
 		var def string
-		if sys.sel.selectedStageNo == 0 {
+		if stageNo == 0 {
 			randomstageno := Rand(0, int32(len(sys.sel.stagelist))-1)
 			def = sys.sel.stagelist[randomstageno].def
 		} else {
-			def = sys.sel.stagelist[sys.sel.selectedStageNo-1].def
+			def = sys.sel.stagelist[stageNo-1].def
 		}
-		if sys.sel.sdefOverwrite != "" {
-			def = sys.sel.sdefOverwrite
+		if sdefOW != "" {
+			def = sdefOW
 		}
 		if sys.stage != nil && sys.stage.def == def && sys.stage.mainstage && !sys.stage.reload {
 			tstr = fmt.Sprintf("Cached stage loaded: %v", def)
@@ -5366,28 +5496,6 @@ func (l *Loader) load() {
 		l.loadExit <- l.state
 	}()
 
-	// Update aspect ratio
-	sys.applyFightAspect()
-
-	// Update cached stage scaling
-	// In case FightAspect option was changed between matches
-	if sys.stage != nil {
-		sys.stage.localscl = float32(sys.gameWidth) / float32(sys.stage.stageCamera.localcoord[0])
-		sys.stage.stageCamera.localscl = sys.stage.localscl
-	}
-
-	// Update cached character scaling
-	for _, p := range sys.chars {
-		if len(p) > 0 {
-			p[0].localcoord = float32(p[0].gi().localcoord[0]) / (float32(sys.gameWidth) / 320)
-			p[0].localscl = 320 / p[0].localcoord
-		}
-	}
-
-	// Update fight screen scale
-	sys.fightScreen.setScale()
-	//sys.motif.setMotifScale()
-
 	// Load any config-driven Common FX not already cached. External modules may
 	// append to Common.Fx before a match; once loaded, non-char FX are kept.
 	if err := loadCommonFightFx(sys.fightScreen.def, false); err != nil {
@@ -5408,13 +5516,13 @@ func (l *Loader) load() {
 					removeSFFCache(ffx.sff.filename)
 				}
 				delete(sys.ffx, prefix)
-				//LogMessage("Unloaded CommonFX: %s (prefix: %s)", ffx.fileName, prefix)
 			}
 		}
 		sys.loadMutex.Unlock()
 	*/
 
 	charDone, stageDone := make([]bool, len(sys.chars)), false
+	playerSlotsEnd := len(sys.chars) - MaxAttachedChar
 
 	// Check if all chars are loaded
 	allCharDone := func() bool {
@@ -5427,9 +5535,21 @@ func (l *Loader) load() {
 	}
 
 	for !stageDone || !allCharDone() {
+		// Fast exit on cancel without waiting for the whole load to complete.
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return
+		}
 		// Load stage
-		if !stageDone && sys.sel.selectedStageNo >= 0 {
+		sys.selMutex.RLock()
+		stageNo := sys.sel.selectedStageNo
+		sys.selMutex.RUnlock()
+		if !stageDone && stageNo >= 0 {
 			if !l.loadStage() {
+				if l.state == LS_Cancel || l.cancelRequested() {
+					l.state = LS_Cancel
+					return
+				}
 				l.state = LS_Error
 				return
 			}
@@ -5438,12 +5558,27 @@ func (l *Loader) load() {
 		// Load characters that aren't already loaded
 		for i, b := range charDone {
 			if !b {
+				if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+					l.state = LS_Cancel
+					return
+				}
 				result := -1
-				if i < len(sys.chars)-MaxAttachedChar ||
-					len(sys.stageList[0].attachedchardef) <= i-MaxSimul*2 {
-					result = l.loadCharacter(i, false)
-				} else {
+				// Attached stage chars depend on the loaded stage definition.
+				if i >= playerSlotsEnd {
+					if !stageDone || sys.stageList[0] == nil {
+						continue
+					}
+					atcpn := i - MaxSimul*2
+					if atcpn < 0 || atcpn >= len(sys.stageList[0].attachedchardef) || sys.stageList[0].attachedchardef[atcpn] == "" {
+						sys.chars[i] = nil
+						sys.cgi[i].states = nil
+						sys.cgi[i].hitPauseToggleFlagCount = 0
+						charDone[i] = true
+						continue
+					}
 					result = l.loadCharacter(i, true)
+				} else {
+					result = l.loadCharacter(i, false)
 				}
 				if result > 0 {
 					charDone[i] = true
@@ -5454,9 +5589,14 @@ func (l *Loader) load() {
 			}
 		}
 		for i := 0; i < 2; i++ {
-			if !charDone[i+2] && len(sys.sel.selected[i]) > 0 &&
-				sys.tmode[i] != TM_Simul && sys.tmode[i] != TM_Tag {
-				for j := i + 2; j < len(sys.chars); j += 2 {
+			// Snapshot selection + team mode under selMutex.
+			sys.selMutex.RLock()
+			selLen := len(sys.sel.selected[i])
+			tm := sys.tmode[i]
+			sys.selMutex.RUnlock()
+			if !charDone[i+2] && selLen > 0 &&
+				tm != TM_Simul && tm != TM_Tag {
+				for j := i + 2; j < playerSlotsEnd; j += 2 {
 					if !charDone[j] {
 						sys.chars[j] = nil
 						sys.cgi[j].states = nil
@@ -5465,6 +5605,10 @@ func (l *Loader) load() {
 					}
 				}
 			}
+		}
+		if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
+			l.state = LS_Cancel
+			return
 		}
 		time.Sleep(10 * time.Millisecond)
 		if sys.gameEnd {
@@ -5482,11 +5626,15 @@ func (l *Loader) load() {
 
 func (l *Loader) reset() {
 	if l.state != LS_NotYet {
+		// Ensure the loader goroutine gets a cooperative cancel signal.
+		l.requestCancel()
 		l.state = LS_Cancel
 		<-l.loadExit
 		l.state = LS_NotYet
 	}
 	l.err = nil
+	l.cancelCh = nil
+	l.cancelOnce = sync.Once{}
 	for i := range sys.cgi {
 		if sys.roundsExisted[i&1] == 0 {
 			sys.cgi[i].palno = -1
@@ -5498,6 +5646,9 @@ func (l *Loader) runTread() bool {
 	if l.state != LS_NotYet {
 		return false
 	}
+	// Fresh cancel signal for this run.
+	l.cancelCh = make(chan struct{})
+	l.cancelOnce = sync.Once{}
 	l.state = LS_Loading
 	SafeGo(func() {
 		l.load()

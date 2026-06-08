@@ -174,6 +174,7 @@ type NetConnection struct {
 	closeOnce        sync.Once
 	uiInputDebounced bool
 	headerWritten    bool
+	loadingPhase     uint8 // 0=idle, 1=host sent token
 }
 
 func NewNetConnection() *NetConnection {
@@ -209,6 +210,8 @@ func (nc *NetConnection) Close() {
 	if nc == nil {
 		return
 	}
+	// Reset any pending loading rendezvous.
+	nc.loadingPhase = 0
 	// Ensure connect/accept goroutines stop retrying/handshaking.
 	nc.closeOnce.Do(func() {
 		if nc.closing != nil {
@@ -532,6 +535,8 @@ func (nc *NetConnection) Synchronize() error {
 	if !nc.IsConnected() || nc.st == NS_Error {
 		return Error("Cannot connect to the other player")
 	}
+	// Reset any pending loading rendezvous so it can't interfere with gameplay sync.
+	nc.loadingPhase = 0
 	nc.Stop()
 
 	header, err := sys.synchronizeNetplayConfig(nc)
@@ -686,6 +691,91 @@ func (nc *NetConnection) Synchronize() error {
 	log.Printf("Network synchronized: seed=%d pmTime=%d time=%d host=%v", seed, pmTime, nc.time, nc.host)
 
 	return nil
+}
+
+func (nc *NetConnection) ResetLoadingPhase() {
+	if nc == nil {
+		return
+	}
+	nc.loadingPhase = 0
+}
+
+func (nc *NetConnection) tryReadU8() (byte, bool, error) {
+	if nc == nil || nc.conn == nil {
+		return 0, false, Error("Cannot connect to the other player")
+	}
+	b := [1]byte{}
+	_ = nc.conn.SetReadDeadline(time.Now())
+	n, err := nc.conn.Read(b[:])
+	_ = nc.conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	if n <= 0 {
+		return 0, false, nil
+	}
+	return b[0], true, nil
+}
+
+// Handshake for both peers finished loading
+func (nc *NetConnection) LoadingReady() (bool, error) {
+	if nc == nil || !nc.IsConnected() || nc.st == NS_Error {
+		return false, Error("Cannot connect to the other player")
+	}
+	nc.Stop()
+
+	const token byte = 0xC7
+	const tokenI8 int8 = -57
+
+	// Host
+	if nc.host {
+		// Phase 0: send token once.
+		if nc.loadingPhase == 0 {
+			if err := nc.writeI8(tokenI8); err != nil {
+				nc.loadingPhase = 0
+				return false, err
+			}
+			nc.loadingPhase = 1
+			return false, nil
+		}
+		// Phase 1: wait for ack (non-blocking poll).
+		v, ok, err := nc.tryReadU8()
+		if err != nil {
+			nc.loadingPhase = 0
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+		if v != token {
+			nc.loadingPhase = 0
+			return false, Error("Synchronization error")
+		}
+		nc.loadingPhase = 0
+		return true, nil
+	}
+
+	// Guest: wait for token, then immediately ack.
+	v, ok, err := nc.tryReadU8()
+	if err != nil {
+		nc.loadingPhase = 0
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	if v != token {
+		nc.loadingPhase = 0
+		return false, Error("Synchronization error")
+	}
+	if err := nc.writeI8(tokenI8); err != nil {
+		nc.loadingPhase = 0
+		return false, err
+	}
+	return true, nil
 }
 
 func (nc *NetConnection) Update() bool {

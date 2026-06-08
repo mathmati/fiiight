@@ -1542,7 +1542,7 @@ end
 function main.f_storyboard(path)
 	local s = loadStoryboard(path)
 	if s == nil then
-		return
+		return false
 	end
 	if gameOption('Debug.DumpLuaTables') then
 		-- get filename without extension from full path
@@ -1556,6 +1556,7 @@ function main.f_storyboard(path)
 		end
 		refresh()
 	end
+	return storyboardCanceled()
 end
 
 function main.f_hiscore(mode, place)
