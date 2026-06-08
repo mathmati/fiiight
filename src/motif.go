@@ -70,8 +70,8 @@ type FontProperties struct {
 }
 
 type FilesProperties struct {
-	Spr     string `ini:"spr" lookup:"def,,data/"`
-	Snd     string `ini:"snd" lookup:"def,,data/"`
+	Spr  string `ini:"spr" lookup:"def,,data/"`
+	Snd  string `ini:"snd" lookup:"def,,data/"`
 	Logo struct {
 		Storyboard string `ini:"storyboard" lookup:"def,,data/"`
 	} `ini:"logo"`
@@ -643,9 +643,9 @@ type TitleInfoProperties struct {
 	Loading struct {
 		TextProperties
 		Wait       AnimationTextProperties `ini:"wait"`
-		Storyboard string `ini:"storyboard" lookup:"def,,data/"`
+		Storyboard string                  `ini:"storyboard" lookup:"def,,data/"`
 	} `ini:"loading"`
-	Footer  struct {
+	Footer struct {
 		Title   TextProperties    `ini:"title"`
 		Info    TextProperties    `ini:"info"`
 		Version TextProperties    `ini:"version"`
