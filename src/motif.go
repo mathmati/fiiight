@@ -640,7 +640,11 @@ type TitleInfoProperties struct {
 	Cancel struct {
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"cancel"`
-	Loading TextProperties `ini:"loading"`
+	Loading struct {
+		TextProperties
+		Wait       AnimationTextProperties `ini:"wait"`
+		Storyboard string `ini:"storyboard" lookup:"def,,data/"`
+	} `ini:"loading"`
 	Footer  struct {
 		Title   TextProperties    `ini:"title"`
 		Info    TextProperties    `ini:"info"`
@@ -2196,6 +2200,8 @@ func (m *Motif) customResultsScreenSections() []string {
 func (m *Motif) overrideParams() {
 	// Define inheritance rules (section/prefix based).
 	specs := []InheritSpec{
+		// [Title Info]
+		{SrcSec: "Title Info", SrcPrefix: "loading.", DstSec: "Title Info", DstPrefix: "loading.wait."},
 		// [Option Info]
 		{SrcSec: "Option Info", SrcPrefix: "menu.", DstSec: "Option Info", DstPrefix: "keymenu."},
 		// [Select Info]

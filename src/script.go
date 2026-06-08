@@ -1163,7 +1163,14 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Anim|nil anim A new `Anim` userdata wrapping the preloaded animation,
 		  or `nil` if no matching animation exists.
 		function animGetPreloadedCharData(charRef, group, number, keepLoop) end*/
-		if anim := sys.sel.GetChar(int(numArg(l, 1))).anims.get(int32(numArg(l, 2)), int32(numArg(l, 3))); anim != nil {
+		sys.sel.preloadMu.Lock()
+		ch := sys.sel.GetChar(int(numArg(l, 1)))
+		var anim *Animation
+		if ch != nil {
+			anim = ch.anims.get(int32(numArg(l, 2)), int32(numArg(l, 3)))
+		}
+		sys.sel.preloadMu.Unlock()
+		if anim != nil {
 			a := NewAnim(nil, "")
 			a.anim = anim
 			if !nilArg(l, 4) && !boolArg(l, 4) && a.anim.totaltime == a.anim.looptime {
@@ -1188,7 +1195,14 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Anim|nil anim A new `Anim` userdata wrapping the preloaded animation,
 		  or `nil` if no matching animation exists.
 		function animGetPreloadedStageData(stageRef, group, number, keepLoop) end*/
-		if anim := sys.sel.GetStage(int(numArg(l, 1))).anims.get(int32(numArg(l, 2)), int32(numArg(l, 3))); anim != nil {
+		sys.sel.preloadMu.Lock()
+		st := sys.sel.GetStage(int(numArg(l, 1)))
+		var anim *Animation
+		if st != nil {
+			anim = st.anims.get(int32(numArg(l, 2)), int32(numArg(l, 3)))
+		}
+		sys.sel.preloadMu.Unlock()
+		if anim != nil {
 			a := NewAnim(nil, "")
 			a.anim = anim
 			if !nilArg(l, 4) && !boolArg(l, 4) && a.anim.totaltime == a.anim.looptime {
@@ -3397,6 +3411,18 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LString(c.name))
 		return 1
 	})
+	luaRegister(l, "getCharPreloadStatus", func(l *lua.LState) int {
+		/*Query the background preload state of a character slot.
+		@function getCharPreloadStatus
+		@tparam int charRef 0-based character index in the select list.
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
+		@treturn string err Error message (empty string if no error).
+		function getCharPreloadStatus(charRef) end*/
+		state, err := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
+		l.Push(lua.LString(state.String()))
+		l.Push(lua.LString(err))
+		return 2
+	})
 	luaRegister(l, "getCharRandomPalette", func(*lua.LState) int {
 		/*Get a random valid palette number for a character slot.
 		@function getCharRandomPalette
@@ -4004,6 +4030,18 @@ func systemScriptInit(l *lua.LState) {
 		function getStageNo() end*/
 		l.Push(lua.LNumber(sys.sel.selectedStageNo))
 		return 1
+	})
+	luaRegister(l, "getStagePreloadStatus", func(l *lua.LState) int {
+		/*Query the background preload state of a stage slot.
+		@function getStagePreloadStatus
+		@tparam int stageRef Stage index as used by the select system.
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
+		@treturn string err Error message (empty string if no error).
+		function getStagePreloadStatus(stageRef) end*/
+		state, err := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
+		l.Push(lua.LString(state.String()))
+		l.Push(lua.LString(err))
+		return 2
 	})
 	luaRegister(l, "getStageSelectParams", func(*lua.LState) int {
 		/*Get parsed select parameters for a stage entry.
@@ -5443,6 +5481,14 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LBool(sys.postMatchFlg))
 		return 1
 	})
+	luaRegister(l, "preloading", func(l *lua.LState) int {
+		/*Check whether resources are currently being preloaded.
+		@function preloading
+		@treturn boolean `true` if assets are still being preloaded.
+		function preloading() end*/
+		l.Push(lua.LBool(!sys.sel.AllPreloadsReady()))
+		return 1
+	})
 	luaRegister(l, "preloadListChar", func(*lua.LState) int {
 		/*Mark a character sprite or animation for preloading.
 		@function preloadListChar
@@ -5491,6 +5537,34 @@ func systemScriptInit(l *lua.LState) {
 		@tparam string text Text to print.
 		function puts(text) end*/
 		fmt.Println(strArg(l, 1))
+		return 0
+	})
+	luaRegister(l, "queueCharPreload", func(l *lua.LState) int {
+		/*Queue a character for background preloading of portraits and palettes.
+		@function queueCharPreload
+		@tparam int charRef 0-based character index in the select list.
+		@tparam[opt=1] int priority Priority level (`1` = low, `2` = high).
+		function queueCharPreload(charRef, priority) end*/
+		ref := int(numArg(l, 1))
+		priority := PreloadPriorityLow
+		if !nilArg(l, 2) {
+			priority = int(numArg(l, 2))
+		}
+		sys.sel.QueueCharPreload(ref, priority)
+		return 0
+	})
+	luaRegister(l, "queueStagePreload", func(l *lua.LState) int {
+		/*Queue a stage for background preloading of portraits.
+		@function queueStagePreload
+		@tparam int stageRef Stage index as used by the select system.
+		@tparam[opt=1] int priority Priority level (`1` = low, `2` = high).
+		function queueStagePreload(stageRef, priority) end*/
+		ref := int(numArg(l, 1))
+		priority := PreloadPriorityLow
+		if !nilArg(l, 2) {
+			priority = int(numArg(l, 2))
+		}
+		sys.sel.QueueStagePreload(ref, priority)
 		return 0
 	})
 	luaRegister(l, "rectDebug", func(*lua.LState) int {

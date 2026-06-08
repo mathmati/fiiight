@@ -501,6 +501,7 @@ function start.f_setStage(num, assigned)
 		end
 	end
 	selectStage(num)
+	main.f_preloadBoostStage(num)
 	return num
 end
 
@@ -1699,6 +1700,9 @@ function start.f_selectMode()
 	start.f_selectReset(true)
 	while true do
 		--select screen
+		if gameOption('Config.BootLoadingMode') == 1 then
+			main.f_waitForPreloads()
+		end
 		if not start.f_selectScreen() then
 			sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
 			bgReset(motif[main.background].BGDef)
@@ -1873,6 +1877,12 @@ function start.f_selectReset(hardReset, preserveProgress)
 	t_reservedChars = {{}, {}}
 	cursorActive = {}
 	cursorDone = {}
+	if main.preload ~= nil and main.preload.charHighlight ~= nil then
+		for _, ref in pairs(main.preload.charHighlight) do
+			queueCharPreload(ref, 1)
+		end
+		main.preload.charHighlight = {}
+	end
 	t_portraitPriority = {1, 1}
 	if start.challenger == 0 and not preserveProgress then
 		start.t_roster = {}
@@ -2332,6 +2342,41 @@ end
 --;===========================================================
 --; SELECT SCREEN
 --;===========================================================
+local function refreshActiveFacePortraits()
+	for side = 1, 2 do
+		for k, v in ipairs(start.p[side].t_selCmd) do
+			local member = main.f_tableLength(start.p[side].t_selected) + k
+			if main.coop and (side == 1 or gameMode('versuscoop')) then
+				member = k
+			end
+			local st = start.p[side].t_selTemp[member]
+			local player = v.player
+			local selRef = start.c[player].selRef
+			if v.selectState == 0 and st ~= nil and selRef ~= nil and st.ref == selRef then
+				local state = getCharPreloadStatus(selRef)
+				if state == 'ready' then
+					local pn = 2 * (member - 1) + side
+					local pCfg = f_getMotifP(motif.select_info, pn, side)
+					local updated = false
+					if st.face_data == nil then
+						st.face_anim = pCfg.face.anim
+						st.face_data = start.f_animGet(selRef, side, member, pCfg.face, nil, true, st.face_data)
+						updated = updated or st.face_data ~= nil
+					end
+					if st.face2_data == nil then
+						st.face2_anim = pCfg.face2.anim
+						st.face2_data = start.f_animGet(selRef, side, member, pCfg.face2, nil, true, st.face2_data)
+						updated = updated or st.face2_data ~= nil
+					end
+					if updated then
+						start.needUpdateDrawList = true
+					end
+				end
+			end
+		end
+	end
+end
+
 function start.updateDrawList()
 	local drawList = {}
 
@@ -2496,6 +2541,8 @@ function start.f_selectScreen()
 	start.needUpdateDrawList = false
 
 	while not selScreenEnd do
+		main.f_preloadTick(4)
+		refreshActiveFacePortraits()
 		counter = counter + 1
 		--draw clearcolor
 		clearColor(motif.selectbgdef.bgclearcolor[1], motif.selectbgdef.bgclearcolor[2], motif.selectbgdef.bgclearcolor[3])
@@ -2688,10 +2735,29 @@ function start.f_selectScreen()
 					)
 				end
 				if not stageEnd then
-					if (getInput(-1, motif.select_info.done.key) and not screenDelayInterrupted) or timerSelect == -1 then
-						sndPlay(motif.Snd, motif.select_info.stage.done.snd[1], motif.select_info.stage.done.snd[2])
-						stageTextData = motif.select_info.stage.done.TextSpriteData
-						stageEnd = true
+					local canConfirmStage = (getInput(-1, motif.select_info.done.key) and not screenDelayInterrupted) or timerSelect == -1
+					if canConfirmStage then
+						local preloadReady = true
+						if stageListNo > 0 then
+							local stageRef = main.t_selectableStages[stageListNo]
+							local state = getStagePreloadStatus(stageRef)
+							preloadReady = state == 'ready'
+							if not preloadReady then
+								main.f_preloadBoostStage(stageRef)
+							else
+								if main.f_materializeStagePortrait(stageRef) then
+									start.needUpdateDrawList = true
+								end
+							end
+						end
+						if not preloadReady and getInput(-1, motif.select_info.done.key) and not screenDelayInterrupted then
+							sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
+						end
+						if preloadReady then
+							sndPlay(motif.Snd, motif.select_info.stage.done.snd[1], motif.select_info.stage.done.snd[2])
+							stageTextData = motif.select_info.stage.done.TextSpriteData
+							stageEnd = true
+						end
 					elseif stageActiveCount < motif.select_info.stage.active.switchtime then --delay change
 						stageActiveCount = stageActiveCount + 1
 					else
@@ -3281,6 +3347,7 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 			start.c[player].selX, start.c[player].selY = start.f_cellMovement(start.c[player].selX, start.c[player].selY, cmd, side, start.f_getCursorData(player).cursor.move.snd)
 			start.c[player].cell = start.c[player].selX + motif.select_info.columns * start.c[player].selY
 			start.c[player].selRef = start.f_selGrid(start.c[player].cell + 1).char_ref
+			main.f_preloadSetCharHighlight(player, start.c[player].selRef)
 			-- temp data not existing yet
 			if start.p[side].t_selTemp[member] == nil then
 				t_portraitPriority[side] = member
@@ -3299,6 +3366,9 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 				local timerExpired = motif.select_info.timer.count ~= -1 and timerSelect == -1
 				needUpdateDrawList = slotChanged
 				local velCopy = false
+				if slotChanged then
+					start.c[player].selRef = start.f_selGrid(start.c[player].cell + 1).char_ref
+				end
 				if timerExpired then
 					if start.c[player].selRef == nil or main.t_selChars[start.c[player].selRef + 1] == nil then
 						start.c[player].selRef = start.f_randomChar(side)
@@ -3354,6 +3424,7 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 				else
 					start.p[side].t_selTemp[member].inRandom = false
 				end
+				main.f_preloadSetCharHighlight(player, start.c[player].selRef)
 				-- update anim data
 				if updateAnim then
 					local face_data = velCopy and start.p[side].t_selTemp[member].face_data or nil
@@ -3362,7 +3433,26 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 					start.p[side].t_selTemp[member].face2_data = start.f_animGet(start.c[player].selRef, side, member, pCfg.face2, nil, true, face2_data)
 				end
 				-- cell selected or select screen timer reached 0
-				if (slotSelected and start.f_selGrid(start.c[player].cell + 1).char ~= nil and start.f_selGrid(start.c[player].cell + 1).hidden ~= 2) or timerExpired then
+				local canConfirm = (slotSelected and start.f_selGrid(start.c[player].cell + 1).char ~= nil and start.f_selGrid(start.c[player].cell + 1).hidden ~= 2) or timerExpired
+				if canConfirm then
+					local preloadReady = true
+					if start.c[player].selRef ~= nil then
+						local state = getCharPreloadStatus(start.c[player].selRef)
+						preloadReady = state == 'ready'
+						if not preloadReady then
+							main.f_preloadBoostChar(start.c[player].selRef)
+						else
+							main.f_materializeCharByRef(start.c[player].selRef)
+						end
+					end
+					if not preloadReady then
+						if slotSelected then
+							sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
+						end
+						canConfirm = false
+					end
+				end
+				if canConfirm then
 					if motif.select_info.paletteselect ~= 0 then
 						timerSelect = motif.select_info.timer.displaytime
 					end
@@ -3476,6 +3566,7 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 				pn = start.f_getPlayerNo(side, member),
 				cursor = {start.c[player].selX, start.c[player].selY},
 			}
+			main.f_preloadSetCharHighlight(player, nil)
 			hook.run("start.f_selectMenu.selected", side, member, start.p[side].t_selected[member], start.p[side], player)
 			if not gameOption('Options.Team.Duplicates') then
 				t_reservedChars[side][start.c[player].selRef] = true
@@ -3571,6 +3662,9 @@ function start.f_stageMenu()
 	if n ~= stageListNo and stageListNo > 0 then
 		animReset(main.t_selStages[main.t_selectableStages[stageListNo]].anim_data)
 		animUpdate(main.t_selStages[main.t_selectableStages[stageListNo]].anim_data)
+	end
+	if stageListNo > 0 then
+		main.f_preloadBoostStage(main.t_selectableStages[stageListNo])
 	end
 end
 
@@ -3755,6 +3849,7 @@ function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 		end
 	end
 	while true do
+		main.f_preloadTick(4)
 		local snd = false
 		-- CPU order select: randomize first, then selectChar() using randomized slot order
 		for side = 1, 2 do

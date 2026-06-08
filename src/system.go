@@ -4334,6 +4334,8 @@ type SelectChar struct {
 	sff           *Sff
 	music         Music
 	scp           *SelectCharParams
+	preloadAnim   string
+	preloadSprite string
 }
 
 func newSelectChar() *SelectChar {
@@ -4357,6 +4359,7 @@ type SelectStage struct {
 	sff             *Sff
 	music           Music
 	ssp             *SelectStageParams
+	preloadSprite   string
 }
 
 func newSelectStage() *SelectStage {
@@ -4383,6 +4386,50 @@ type Select struct {
 	sdefOverwrite      string
 	music              Music
 	gameParams         *GameParams
+	preloadMu          sync.Mutex
+	preloadCond        *sync.Cond
+	preloadWorkerRun   bool
+	preloadOrder       int64
+	charPreload        []PreloadEntry
+	stagePreload       []PreloadEntry
+}
+
+type PreloadState int32
+
+const (
+	PS_Idle PreloadState = iota
+	PS_Queued
+	PS_Loading
+	PS_Ready
+	PS_Error
+)
+
+func (ps PreloadState) String() string {
+	switch ps {
+	case PS_Idle:
+		return "idle"
+	case PS_Queued:
+		return "queued"
+	case PS_Loading:
+		return "loading"
+	case PS_Ready:
+		return "ready"
+	case PS_Error:
+		return "error"
+	}
+	return "idle"
+}
+
+const (
+	PreloadPriorityLow  = 1
+	PreloadPriorityHigh = 2
+)
+
+type PreloadEntry struct {
+	State    PreloadState
+	Priority int
+	Order    int64
+	Err      string
 }
 
 func newSelect() *Select {
@@ -4398,6 +4445,420 @@ func newSelect() *Select {
 		music:              make(Music),
 		gameParams:         newGameParams(),
 	}
+}
+
+func (s *Select) initPreloadSync() {
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if s.preloadCond == nil {
+		s.preloadCond = sync.NewCond(&s.preloadMu)
+	}
+}
+
+func (s *Select) ensurePreloadWorker() {
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	if s.preloadWorkerRun {
+		s.preloadMu.Unlock()
+		return
+	}
+	s.preloadWorkerRun = true
+	s.preloadMu.Unlock()
+	SafeGo(func() {
+		s.preloadWorkerLoop()
+	})
+}
+
+func (s *Select) ensureCharPreloadSlot(ref int) {
+	if ref < 0 {
+		return
+	}
+	for len(s.charPreload) <= ref {
+		s.charPreload = append(s.charPreload, PreloadEntry{})
+	}
+}
+
+func (s *Select) ensureStagePreloadSlot(ref int) {
+	if ref <= 0 {
+		return
+	}
+	idx := ref - 1
+	for len(s.stagePreload) <= idx {
+		s.stagePreload = append(s.stagePreload, PreloadEntry{})
+	}
+}
+
+func (s *Select) QueueCharPreload(ref int, priority int) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return
+	}
+	if ref < 0 || ref >= len(s.charlist) {
+		return
+	}
+	s.initPreloadSync()
+	s.ensurePreloadWorker()
+	s.preloadMu.Lock()
+	defer func() {
+		s.preloadCond.Broadcast()
+		s.preloadMu.Unlock()
+	}()
+	s.ensureCharPreloadSlot(ref)
+	e := &s.charPreload[ref]
+	if e.State == PS_Ready {
+		return
+	}
+	if e.State == PS_Loading {
+		e.Priority = priority
+		return
+	}
+	if e.State == PS_Idle || e.State == PS_Error {
+		e.State = PS_Queued
+	}
+	if e.Priority == priority {
+		return
+	}
+	e.Priority = priority
+	if priority <= PreloadPriorityLow {
+		e.Order = 0
+	} else {
+		s.preloadOrder++
+		e.Order = s.preloadOrder
+	}
+}
+
+func (s *Select) QueueStagePreload(ref int, priority int) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return
+	}
+	if ref <= 0 || ref > len(s.stagelist) {
+		return
+	}
+	s.initPreloadSync()
+	s.ensurePreloadWorker()
+	s.preloadMu.Lock()
+	defer func() {
+		s.preloadCond.Broadcast()
+		s.preloadMu.Unlock()
+	}()
+	s.ensureStagePreloadSlot(ref)
+	e := &s.stagePreload[ref-1]
+	if e.State == PS_Ready {
+		return
+	}
+	if e.State == PS_Loading {
+		e.Priority = priority
+		return
+	}
+	if e.State == PS_Idle || e.State == PS_Error {
+		e.State = PS_Queued
+	}
+	if e.Priority == priority {
+		return
+	}
+	e.Priority = priority
+	if priority <= PreloadPriorityLow {
+		e.Order = 0
+	} else {
+		s.preloadOrder++
+		e.Order = s.preloadOrder
+	}
+}
+
+func (s *Select) CharPreloadStatus(ref int) (PreloadState, string) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return PS_Ready, ""
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if ref < 0 || ref >= len(s.charPreload) {
+		return PS_Idle, ""
+	}
+	return s.charPreload[ref].State, s.charPreload[ref].Err
+}
+
+func (s *Select) StagePreloadStatus(ref int) (PreloadState, string) {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return PS_Ready, ""
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	if ref <= 0 || ref-1 >= len(s.stagePreload) {
+		return PS_Idle, ""
+	}
+	return s.stagePreload[ref-1].State, s.stagePreload[ref-1].Err
+}
+
+func (s *Select) AllPreloadsReady() bool {
+	if sys.cfg.Config.BootLoadingMode == 0 {
+		return true
+	}
+	s.initPreloadSync()
+	s.preloadMu.Lock()
+	defer s.preloadMu.Unlock()
+	for _, e := range s.charPreload {
+		switch e.State {
+		case PS_Queued, PS_Loading:
+			return false
+		}
+	}
+	for _, e := range s.stagePreload {
+		switch e.State {
+		case PS_Queued, PS_Loading:
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Select) preloadWorkerLoop() {
+	s.initPreloadSync()
+	for {
+		s.preloadMu.Lock()
+		for {
+			kind := ""
+			ref := -1
+			bestPriority := -1
+			bestOrder := int64(-1)
+			for i, e := range s.charPreload {
+				if e.State != PS_Queued {
+					continue
+				}
+				if e.Priority > bestPriority || (e.Priority == bestPriority && e.Order > bestOrder) {
+					bestPriority = e.Priority
+					bestOrder = e.Order
+					kind = "char"
+					ref = i
+				}
+			}
+			for i, e := range s.stagePreload {
+				if e.State != PS_Queued {
+					continue
+				}
+				if e.Priority > bestPriority || (e.Priority == bestPriority && e.Order > bestOrder) {
+					bestPriority = e.Priority
+					bestOrder = e.Order
+					kind = "stage"
+					ref = i + 1
+				}
+			}
+			if ref >= 0 {
+				if kind == "char" {
+					s.charPreload[ref].State = PS_Loading
+					s.charPreload[ref].Err = ""
+				} else {
+					s.stagePreload[ref-1].State = PS_Loading
+					s.stagePreload[ref-1].Err = ""
+				}
+				s.preloadMu.Unlock()
+
+				var err error
+				if kind == "char" {
+					err = s.preloadCharAssets(ref)
+				} else {
+					err = s.preloadStageAssets(ref)
+				}
+
+				s.preloadMu.Lock()
+				if kind == "char" {
+					if err != nil {
+						s.charPreload[ref].State = PS_Error
+						s.charPreload[ref].Err = err.Error()
+					} else {
+						s.charPreload[ref].State = PS_Ready
+						s.charPreload[ref].Err = ""
+					}
+				} else {
+					if err != nil {
+						s.stagePreload[ref-1].State = PS_Error
+						s.stagePreload[ref-1].Err = err.Error()
+					} else {
+						s.stagePreload[ref-1].State = PS_Ready
+						s.stagePreload[ref-1].Err = ""
+					}
+				}
+				s.preloadCond.Broadcast()
+				break
+			}
+			s.preloadCond.Wait()
+		}
+		s.preloadMu.Unlock()
+	}
+}
+
+func (s *Select) preloadCharAssets(ref int) error {
+	if ref < 0 || ref >= len(s.charlist) {
+		return nil
+	}
+	sc := s.charlist[ref]
+	localAnims := NewPreloadedAnims()
+	listSpr := make(map[[2]uint16]bool)
+	for k := range s.charSpritePreload {
+		listSpr[k] = true
+	}
+	tempSff := newSff()
+
+	if sc.preloadAnim != "" {
+		animPath := sc.preloadAnim
+		if err := LoadFile(&animPath, []string{sc.def}, "", func(filename string) error {
+			str, err := LoadText(filename)
+			if err != nil {
+				return err
+			}
+			lines, lnidx := SplitAndTrim(str, "\n"), 0
+			at := ReadAnimationTable(sc.def, tempSff, &tempSff.palList, lines, &lnidx, false)
+			for vAnim := range s.charAnimPreload {
+				if animation := at.get(vAnim); animation != nil {
+					localAnims.addAnim(animation, vAnim)
+					for _, fr := range animation.frames {
+						if fr.Group < 0 || fr.Number < 0 {
+							continue
+						}
+						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	var localSff *Sff
+	if sc.preloadSprite != "" {
+		spritePath := sc.preloadSprite
+		var selPal []int32
+		if err := LoadFile(&spritePath, []string{sc.def, "", "data/"}, "", func(file string) error {
+			var err error
+			localSff, selPal, err = preloadSff(file, true, listSpr)
+			if err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		localAnims.updateSff(localSff)
+		for k := range s.charSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+		if localSff.header.Version[0] != 1 {
+			defPals := make(map[int32]bool)
+			for _, p := range sc.pal {
+				defPals[p] = true
+			}
+			maxPalSlots := sys.cfg.Config.PaletteMax
+			newPalFiles := make([]string, maxPalSlots)
+			for i, pIdx := range sc.pal {
+				if pIdx >= 1 && int(pIdx) <= maxPalSlots && i < len(sc.pal_files) {
+					newPalFiles[pIdx-1] = sc.pal_files[i]
+				}
+			}
+			newPal := make([]int32, 0, maxPalSlots)
+			newPalFilesOut := make([]string, 0, maxPalSlots)
+			for i := 1; i <= maxPalSlots; i++ {
+				existsInSff := false
+				for _, sIdx := range selPal {
+					if sIdx == int32(i) {
+						existsInSff = true
+						break
+					}
+				}
+				if defPals[int32(i)] || existsInSff {
+					newPal = append(newPal, int32(i))
+					newPalFilesOut = append(newPalFilesOut, newPalFiles[i-1])
+				}
+			}
+			sc.pal = newPal
+			sc.pal_files = newPalFilesOut
+		} else if len(sc.pal) == 0 {
+			sc.pal = selPal
+		}
+	} else {
+		localSff = newSff()
+		localAnims.updateSff(localSff)
+		for k := range s.charSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+	}
+
+	s.preloadMu.Lock()
+	dst := &s.charlist[ref]
+	dst.sff = localSff
+	dst.anims = localAnims
+	dst.pal = sc.pal
+	dst.pal_files = sc.pal_files
+	s.preloadMu.Unlock()
+	return nil
+}
+
+func (s *Select) preloadStageAssets(ref int) error {
+	if ref <= 0 || ref > len(s.stagelist) {
+		return nil
+	}
+	ss := s.stagelist[ref-1]
+	lines := []string{}
+	defPath := ss.def
+	if err := LoadFile(&defPath, nil, "", func(file string) error {
+		str, err := LoadText(file)
+		if err != nil {
+			return err
+		}
+		lines = SplitAndTrim(str, "\n")
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	localAnims := NewPreloadedAnims()
+	listSpr := make(map[[2]uint16]bool)
+	for k := range s.stageSpritePreload {
+		listSpr[k] = true
+	}
+
+	tempSff := newSff()
+	atidx := 0
+	at := ReadAnimationTable(ss.def, tempSff, &tempSff.palList, lines, &atidx, false)
+	for v := range s.stageAnimPreload {
+		if anim := at.get(v); anim != nil {
+			localAnims.addAnim(anim, v)
+			for _, fr := range anim.frames {
+				if fr.Group >= 0 && fr.Number >= 0 {
+					listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
+				}
+			}
+		}
+	}
+
+	var localSff *Sff
+	if ss.preloadSprite != "" {
+		spritePath := ss.preloadSprite
+		if err := LoadFile(&spritePath, []string{ss.def, "", "data/"}, "", func(file string) error {
+			var err error
+			localSff, _, err = preloadSff(file, false, listSpr)
+			if err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		localAnims.updateSff(localSff)
+		for k := range s.stageSpritePreload {
+			localAnims.addSprite(localSff, k[0], k[1])
+		}
+	} else {
+		localSff = newSff()
+		localAnims.updateSff(localSff)
+	}
+
+	s.preloadMu.Lock()
+	dst := &s.stagelist[ref-1]
+	dst.sff = localSff
+	dst.anims = localAnims
+	s.preloadMu.Unlock()
+	return nil
 }
 
 func (s *Select) GetCharNo(i int) int {
@@ -4676,12 +5137,6 @@ func (s *Select) AddChar(def string) *SelectChar {
 		}
 	}
 
-	listSpr := make(map[[2]uint16]bool)
-	for k := range s.charSpritePreload {
-		listSpr[k] = true
-	}
-
-	tempSff := newSff()
 	LoadFile(&cns_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
 		str, err := LoadText(filename)
 		if err != nil {
@@ -4706,31 +5161,7 @@ func (s *Select) AddChar(def string) *SelectChar {
 
 	// preload animations
 	if len(anim_orig) > 0 {
-		err := LoadFile(&anim_orig, []string{sc.def, "", "data/"}, "", func(filename string) error {
-			str, err := LoadText(filename) // LoadText is zip-aware
-			if err != nil {
-				return err
-			}
-			lines, lnidx := SplitAndTrim(str, "\n"), 0
-			// We disable logging here or else preloading will print the errors of all characters in the select screen
-			at := ReadAnimationTable(sc.def, tempSff, &tempSff.palList, lines, &lnidx, false)
-			for v_anim := range s.charAnimPreload {
-				if animation := at.get(v_anim); animation != nil {
-					sc.anims.addAnim(animation, v_anim)
-					for _, fr := range animation.frames {
-						if fr.Group < 0 || fr.Number < 0 {
-							continue
-						}
-						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
-					}
-				}
-			}
-			return nil
-		})
-		// Crash if we expected an AIR file but didn't find any
-		if err != nil {
-			panic(fmt.Sprintf("Cannot open air file for character %s: %v", def, err))
-		}
+		sc.preloadAnim = anim_orig
 	}
 
 	// Try to use the "_preload.sff" file if available
@@ -4742,63 +5173,17 @@ func (s *Select) AddChar(def string) *SelectChar {
 
 	// preload portion of sff file
 	if len(fp) > 0 {
-		err := LoadFile(&fp, []string{sc.def, "", "data/"}, "", func(file string) error {
-			var selPal []int32
-			var err_sff error
-			sc.sff, selPal, err_sff = preloadSff(file, true, listSpr)
-			if err_sff != nil {
-				return fmt.Errorf("failed to preload SFF %s for %s: %w", file, sc.def, err_sff)
-			}
-			sc.anims.updateSff(sc.sff)
-			for k_spr := range s.charSpritePreload {
-				sc.anims.addSprite(sc.sff, k_spr[0], k_spr[1])
-			}
-			// Synchronize SFFv2 internal palettes with DEF declarations
-			if sc.sff.header.Version[0] != 1 {
-				defPals := make(map[int32]bool)
-				for _, p := range sc.pal {
-					defPals[p] = true
-				}
-				// Map DEF palette files to their intended slots
-				maxPalSlots := sys.cfg.Config.PaletteMax
-				newPalFiles := make([]string, maxPalSlots)
-				for i, pIdx := range sc.pal {
-					if pIdx >= 1 && int(pIdx) <= maxPalSlots {
-						newPalFiles[pIdx-1] = sc.pal_files[i]
-					}
-				}
-				// Rebuild sc.pal and sc.pal_files in sequential order
-				sc.pal = nil
-				sc.pal_files = nil
-				for i := 1; i <= maxPalSlots; i++ {
-					existsInSff := false
-					for _, sIdx := range selPal {
-						if sIdx == int32(i) {
-							existsInSff = true
-							break
-						}
-					}
-					// Include palette if it exists in either the SFFv2 or the DEF
-					if defPals[int32(i)] || existsInSff {
-						sc.pal = append(sc.pal, int32(i))
-						sc.pal_files = append(sc.pal_files, newPalFiles[i-1])
-					}
-				}
-			} else if len(sc.pal) == 0 {
-				sc.pal = selPal
-			}
-			return nil
-		})
-		// Crash if we expected a SFF file but didn't find any
-		if err != nil {
-			panic(fmt.Sprintf("Cannot open sprite file for character %s: %v", def, err))
-		}
-	} else {
-		// If we deliberately lack a SFF, then make a dummy one
+		sc.preloadSprite = fp
+	}
+	if sys.cfg.Config.BootLoadingMode > 0 {
 		sc.sff = newSff()
 		sc.anims.updateSff(sc.sff)
 		for k := range s.charSpritePreload {
 			sc.anims.addSprite(sc.sff, k[0], k[1])
+		}
+	} else {
+		if err := s.preloadCharAssets(len(s.charlist) - 1); err != nil {
+			panic(fmt.Errorf("failed to preload %v: %v", sc.def, err))
 		}
 	}
 
@@ -4968,38 +5353,20 @@ func (s *Select) AddStage(def string) (*SelectStage, error) {
 			}
 		}
 	}
-	if len(s.stageSpritePreload) > 0 || len(s.stageAnimPreload) > 0 {
-		listSpr := make(map[[2]uint16]bool)
+	if spr != "" {
+		ss.preloadSprite = spr
+	}
+	if sys.cfg.Config.BootLoadingMode > 0 {
+		ss.sff = newSff()
+		ss.anims.updateSff(ss.sff)
 		for k := range s.stageSpritePreload {
-			listSpr[[...]uint16{k[0], k[1]}] = true
+			ss.anims.addSprite(ss.sff, k[0], k[1])
 		}
-		sff := newSff()
-		// preload animations
-		atidx := 0
-		at := ReadAnimationTable(finalDefPath, sff, &sff.palList, lines, &atidx, false)
-		for v := range s.stageAnimPreload {
-			if anim := at.get(v); anim != nil {
-				ss.anims.addAnim(anim, v)
-				for _, fr := range anim.frames {
-					if fr.Group >= 0 && fr.Number >= 0 {
-						listSpr[[2]uint16{uint16(fr.Group), uint16(fr.Number)}] = true
-					}
-				}
-			}
+		s.ensureStagePreloadSlot(len(s.stagelist))
+	} else {
+		if err := s.preloadStageAssets(len(s.stagelist)); err != nil {
+			panic(fmt.Errorf("failed to preload %v: %v", def, err))
 		}
-		// preload portion of sff file
-		LoadFile(&spr, []string{finalDefPath, "", "data/"}, "", func(file string) error {
-			var err error
-			ss.sff, _, err = preloadSff(file, false, listSpr)
-			if err != nil {
-				panic(fmt.Errorf("failed to load %v: %v\nerror preloading %v", file, err, def))
-			}
-			ss.anims.updateSff(ss.sff)
-			for k := range s.stageSpritePreload {
-				ss.anims.addSprite(ss.sff, k[0], k[1])
-			}
-			return nil
-		})
 	}
 	return ss, nil
 }

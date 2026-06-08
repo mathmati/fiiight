@@ -679,9 +679,10 @@ func (s *Storyboard) step() {
 			startFadeAt = 0
 		}
 	}
-	// Loading storyboard: when local loading is done, poll net rendezvous (non-blocking) and auto-finish with fadeout.
+	// Loading storyboard: when local loading and boot preloading are done,
+	// poll net rendezvous (non-blocking) and auto-finish with fadeout.
 	if s.SceneDef.WaitForLoading && !s.canceled && !s.loadEnding && s.endTimer == -1 {
-		if sys.loader.state != LS_Loading {
+		if sys.loader.state != LS_Loading && sys.sel.AllPreloadsReady() {
 			if sys.netConnection == nil {
 				s.netReady = true
 			} else if !s.netReady {
