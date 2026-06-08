@@ -411,9 +411,9 @@ type ItemProperties struct {
 
 type FaceProperties struct {
 	AnimationCharPreloadProperties `skipinit:"true"`
-	Done struct { // not used by [Victory Screen]
+	Done                           struct { // not used by [Victory Screen]
 		AnimationCharPreloadProperties `skipinit:"true"`
-		Key []string `ini:"key"` // only used by [VS Screen]
+		Key                            []string `ini:"key"` // only used by [VS Screen]
 	} `ini:"done"`
 	Random   AnimationProperties `ini:"random"` // only used by [Select Info]
 	Velocity [2]float32          `ini:"velocity"`
@@ -515,7 +515,7 @@ type PlayerSelectProperties struct {
 		} `ini:"value"`
 		Preview struct {
 			AnimationCharPreloadProperties `skipinit:"true"`
-			Snd [2]int32 `ini:"snd" default:"-1,0"`
+			Snd                            [2]int32 `ini:"snd" default:"-1,0"`
 		} `ini:"preview"`
 		Number TextProperties      `ini:"number"`
 		Text   TextProperties      `ini:"text"`
@@ -733,8 +733,8 @@ type SelectInfoProperties struct {
 		} `ini:"move"`
 		Portrait struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
-			Bg     AnimationProperties `ini:"bg"`
-			Random AnimationProperties `ini:"random"`
+			Bg                              AnimationProperties `ini:"bg"`
+			Random                          AnimationProperties `ini:"random"`
 		} `ini:"portrait"`
 	} `ini:"stage"`
 	Done struct {
@@ -789,7 +789,7 @@ type VsScreenProperties struct {
 		TextProperties
 		Portrait struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
-			Bg AnimationProperties `ini:"bg"`
+			Bg                              AnimationProperties `ini:"bg"`
 		} `ini:"portrait"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"stage"`
@@ -1238,10 +1238,10 @@ type HiscoreInfoProperties struct {
 		Name    ItemProperties `ini:"name"`
 		Face    struct {
 			AnimationCharPreloadProperties `skipinit:"true"`
-			Num     int32               `ini:"num"`
-			Spacing [2]float32          `ini:"spacing"`
-			Bg      AnimationProperties `ini:"bg"`
-			Unknown AnimationProperties `ini:"unknown"`
+			Num                            int32               `ini:"num"`
+			Spacing                        [2]float32          `ini:"spacing"`
+			Bg                             AnimationProperties `ini:"bg"`
+			Unknown                        AnimationProperties `ini:"unknown"`
 		} `ini:"face"`
 	} `ini:"item"`
 	Timer  TimerProperties `ini:"timer"`
