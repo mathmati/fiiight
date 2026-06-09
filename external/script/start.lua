@@ -1716,22 +1716,7 @@ function start.f_selectMode()
 			playBgm({source = "motif.title", interrupt = true})
 			return
 		end
-		--first match
-		if start.reset then
-			-- Save current remap state. main.f_restoreInput() should restore to this.
-			main.f_saveBaseRemapInput()
-			main.t_availableChars = main.f_tableCopy(start.f_getOrderChars())
-			--generate default roster
-			if main.makeRoster then
-				start.t_roster = start.f_makeRoster()
-			end
-			--generate AI ramping table
-			if main.aiRamp then
-				start.f_aiRamp(1)
-			end
-			start.reset = false
-		end
-		--lua file with custom arcade path detection
+		-- lua file with custom arcade path detection
 		local path = main.luaPath
 		if main.charparam.arcadepath then
 			if start.f_getCharData(start.p[1].t_selected[1].ref).arcadepath ~= '' then
@@ -1744,9 +1729,31 @@ function start.f_selectMode()
 				end
 			end
 		end
+		local customArcadePath = main.charparam.arcadepath and path ~= main.luaPath
+		--first match
+		if start.reset then
+			-- Save current remap state. main.f_restoreInput() should restore to this.
+			main.f_saveBaseRemapInput()
+			if customArcadePath then
+				main.t_availableChars = main.f_tableCopy(main.t_orderChars.default)
+			else
+				main.t_availableChars = main.f_tableCopy(start.f_getOrderChars())
+			end
+			--generate default roster
+			if main.makeRoster and not customArcadePath then
+				start.t_roster = start.f_makeRoster()
+			else
+				start.t_roster = {}
+			end
+			--generate AI ramping table
+			if main.aiRamp then
+				start.f_aiRamp(1)
+			end
+			start.reset = false
+		end
 		--external script execution
 		local oldCustomArcadePath = start.customArcadePath
-		start.customArcadePath = main.charparam.arcadepath and path ~= main.luaPath
+		start.customArcadePath = customArcadePath
 		assert(loadfile(path))()
 		start.customArcadePath = oldCustomArcadePath
 		--infinite matches flag detected
