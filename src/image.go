@@ -20,6 +20,7 @@ const (
 	TT_none TransType = iota
 	TT_add
 	TT_sub
+	TT_subadd
 	TT_default
 )
 

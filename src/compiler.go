@@ -6419,6 +6419,9 @@ func (c *CharCompiler) paramTrans(is IniSection, sc *StateControllerBase, prefix
 		case "sub":
 			tt = TT_sub
 			defsrc, defdst = 255, 255
+		case "subadd":
+			tt = TT_subadd
+			defsrc, defdst = 255, 255
 		default:
 			// In Mugen, CNS ignores invalid parameter names
 			if c.zssMode || !sys.ignoreMostErrors {

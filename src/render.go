@@ -684,13 +684,16 @@ func RenderSprite(rp RenderParams) {
 		renderSpriteQuad(modelview, rp)
 	}
 
-	renderWithBlending(renderPass, rp.blendMode, rp.blendAlpha, rp.paltex != nil, invblend, &neg, &padd, &pmul, rp.paltex == nil)
+	renderWithBlending(renderPass, rp.blendMode, rp.blendAlpha,
+		rp.paltex != nil, invblend, &neg, &padd, &pmul, rp.paltex == nil, grayscale)
+
 	gfx.DisableScissor()
 }
 
 func renderWithBlending(
 	render func(eq BlendEquation, src, dst BlendFunc, a float32),
-	blendMode TransType, blendAlpha [2]int32, correctAlpha bool, invblend int32, neg *bool, acolor *[3]float32, mcolor *[3]float32, isrgba bool) {
+	blendMode TransType, blendAlpha [2]int32, correctAlpha bool, invblend int32,
+	neg *bool, acolor *[3]float32, mcolor *[3]float32, isrgba bool, gray float32) {
 
 	blendSourceFactor := BlendSrcAlpha
 	if !correctAlpha {
@@ -718,11 +721,14 @@ func renderWithBlending(
 	}
 
 	// Helpers for invertblend
-	invertColor := func() {
+	// Invert PalFX add
+	invertAColor := func() {
 		if acolor != nil {
 			(*acolor)[0], (*acolor)[1], (*acolor)[2] = -acolor[0], -acolor[1], -acolor[2]
 		}
 	}
+	// Disable the "neg" uniform, which the shader uses to invert colors
+	// We sometimes use this because subtractive transparency already inverts colors on its own, so it'd be a double negation
 	disableNeg := func() {
 		if neg != nil {
 			*neg = false
@@ -739,7 +745,7 @@ func renderWithBlending(
 		case src == 255 && dst == 255:
 			// Fast path for full subtraction
 			if invblend >= 1 {
-				invertColor()
+				invertAColor()
 			}
 			if invblend == 3 {
 				disableNeg()
@@ -752,12 +758,44 @@ func renderWithBlending(
 			}
 			if src > 0 {
 				if invblend >= 1 {
-					invertColor()
+					invertAColor()
 				}
 				if invblend == 3 {
 					disableNeg()
 				}
 				render(BlendInv, blendSourceFactor, BlendOne, float32(src)/255)
+			}
+		}
+	// SubAdd
+	case blendMode == TT_subadd:
+		srcf := float32(src) / 255.0
+		dstf := float32(dst) / 255.0
+
+		if neg != nil && *neg {
+			// With invertall we invert the passes. Add then sub
+			// This is kind of like "invblend = 3"
+			// But adding "invertblend" support here would force people to have to use it to get the expected results
+			disableNeg()
+			//invertAColor()
+			if dst > 0 {
+				gfx.SetUniformF("gray", 1.0)
+				render(BlendAdd, blendSourceFactor, BlendOne, dst)
+			}
+			if src > 0 {
+				gfx.SetUniformF("gray", gray)
+				render(BlendReverseSubtract, blendSourceFactor, BlendOne, src)
+			}
+		} else {
+			// Normal behavior
+			// Pass 1: subtractive, forced grayscale, intensity = dst
+			if dst > 0 {
+				gfx.SetUniformF("gray", 1.0)
+				render(BlendReverseSubtract, blendSourceFactor, BlendOne, dst)
+			}
+			// Pass 2: additive, original grayscale, intensity = src
+			if src > 0 {
+				gfx.SetUniformF("gray", gray)
+				render(BlendAdd, blendSourceFactor, BlendOne, src)
 			}
 		}
 	// Add, None or Default
@@ -773,7 +811,7 @@ func renderWithBlending(
 		case src == 255 && dst == 255:
 			// Fast path for full Add
 			if invblend >= 1 {
-				invertColor()
+				invertAColor()
 			}
 			if invblend == 3 {
 				disableNeg()
@@ -788,7 +826,7 @@ func renderWithBlending(
 				if invblend >= 1 && dst >= 255 {
 					Blend = BlendReverseSubtract
 					if invblend >= 2 { // Not 1 here. TODO: Explain why in comment
-						invertColor()
+						invertAColor()
 					}
 					if invblend == 3 {
 						disableNeg()
@@ -865,7 +903,7 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 		gfx.RenderQuad()
 	}
 
-	renderWithBlending(renderPass, TT_add, alpha, true, invblend, &neg, &padd, &pmul, true)
+	renderWithBlending(renderPass, TT_add, alpha, true, invblend, &neg, &padd, &pmul, true, grayscale)
 }
 
 type TextureAtlas struct {

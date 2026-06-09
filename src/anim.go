@@ -113,18 +113,22 @@ func ReadAnimFrame(line string) *AnimFrame {
 			af.SrcAlpha = 255
 			af.DstAlpha = 128
 
+		case len(a) >= 3 && a[:3] == "sas": // SubAdd
+			af.TransType = TT_subadd
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 3, 255, 255)
+
 		case len(a) >= 2 && a[:2] == "as": // Add with alpha
 			af.TransType = TT_add
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255)
+
+		case len(a) >= 2 && a[:2] == "ss": // Sub with alpha
+			af.TransType = TT_sub
 			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255)
 
 		case len(a) > 0 && a[0] == 'a': // Plain Add
 			af.TransType = TT_add
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
-
-		case len(a) >= 2 && a[:2] == "ss": // Sub with alpha
-			af.TransType = TT_sub
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255)
 
 		case len(a) == 1 && a[0] == 's': // Plain sub
 			af.TransType = TT_sub
