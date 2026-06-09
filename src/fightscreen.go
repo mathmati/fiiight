@@ -5534,7 +5534,7 @@ func (fs *FightScreen) visible() bool {
 	return fs.active &&
 		!sys.postMatchFlg &&
 		!sys.lifebarHide &&
-		!sys.dialogueBarsFlg &&
+		!(sys.dialogueHideBars || sys.motif.di.active) &&
 		!(sys.motif.me.active && sys.motif.PauseMenu["pause_menu"].HideBars &&
 			(!sys.motif.me.closeRequested || sys.paused))
 }

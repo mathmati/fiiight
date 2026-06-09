@@ -4069,7 +4069,7 @@ func (be BytecodeExp) run_ex2(c *Char, i *int, oc *Char) {
 	case OC_ex2_gamevar_persistrounds:
 		sys.bcStack.PushB(sys.sel.gameParams.PersistRounds)
 	case OC_ex2_gamevar_hidebars:
-		sys.bcStack.PushB(sys.lifebarHide || sys.dialogueBarsFlg)
+		sys.bcStack.PushB(sys.lifebarHide || sys.dialogueHideBars)
 	// HitByAttr
 	case OC_ex2_hitbyattr:
 		attr := be.ReadIntAt(i)
@@ -11802,7 +11802,7 @@ func (sc dialogue) Run(c *Char, _ []int32) bool {
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case dialogue_hidebars:
-			sys.dialogueBarsFlg = sys.motif.DialogueInfo.Enabled && exp[0].evalB(c)
+			sys.dialogueHideBars = sys.motif.DialogueInfo.Enabled && exp[0].evalB(c)
 		case dialogue_force:
 			force = exp[0].evalB(c)
 		case dialogue_text:

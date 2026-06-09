@@ -123,7 +123,7 @@ type SystemStateVars struct {
 	firstAttack     [3]int
 	home            int
 	stageLoop       bool
-	dialogueBarsFlg bool
+	dialogueHideBars bool
 	dialogueForce   int
 	playBgmFlg      bool
 
