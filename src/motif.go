@@ -416,6 +416,7 @@ type FaceProperties struct {
 		Key                            []string `ini:"key"` // only used by [VS Screen]
 	} `ini:"done"`
 	Random   AnimationProperties `ini:"random"` // only used by [Select Info]
+	Loading  AnimationProperties `ini:"loading"` // only used by [Select Info] and [VS Screen]
 	Velocity [2]float32          `ini:"velocity"`
 	MaxDist  [2]float32          `ini:"maxdist"`
 	Accel    [2]float32          `ini:"accel"`
@@ -735,6 +736,7 @@ type SelectInfoProperties struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg                              AnimationProperties `ini:"bg"`
 			Random                          AnimationProperties `ini:"random"`
+			Loading                         AnimationProperties `ini:"loading"`
 		} `ini:"portrait"`
 	} `ini:"stage"`
 	Done struct {
@@ -744,7 +746,10 @@ type SelectInfoProperties struct {
 		Key []string `ini:"key"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"cancel"`
-	Portrait AnimationCharPreloadProperties `ini:"portrait" skipinit:"true"`
+	Portrait struct {
+		AnimationCharPreloadProperties `skipinit:"true"`
+		Loading                        AnimationProperties `ini:"loading"`
+	} `ini:"portrait"`
 	Title    TextMapProperties              `ini:"title"`
 	Record   TextMapProperties              `ini:"record"`
 	TeamMenu struct {
@@ -790,6 +795,7 @@ type VsScreenProperties struct {
 		Portrait struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg                              AnimationProperties `ini:"bg"`
+			Loading                         AnimationProperties `ini:"loading"`
 		} `ini:"portrait"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"stage"`
@@ -2206,9 +2212,13 @@ func (m *Motif) overrideParams() {
 		{SrcSec: "Option Info", SrcPrefix: "menu.", DstSec: "Option Info", DstPrefix: "keymenu."},
 		// [Select Info]
 		{SrcSec: "Select Info", SrcPrefix: "p1.face.", DstSec: "Select Info", DstPrefix: "p1.face.done."},
+		{SrcSec: "Select Info", SrcPrefix: "p1.face.", DstSec: "Select Info", DstPrefix: "p1.face.loading."},
 		{SrcSec: "Select Info", SrcPrefix: "p1.face2.", DstSec: "Select Info", DstPrefix: "p1.face2.done."},
+		{SrcSec: "Select Info", SrcPrefix: "p1.face2.", DstSec: "Select Info", DstPrefix: "p1.face2.loading."},
 		{SrcSec: "Select Info", SrcPrefix: "p2.face.", DstSec: "Select Info", DstPrefix: "p2.face.done."},
+		{SrcSec: "Select Info", SrcPrefix: "p2.face.", DstSec: "Select Info", DstPrefix: "p2.face.loading."},
 		{SrcSec: "Select Info", SrcPrefix: "p2.face2.", DstSec: "Select Info", DstPrefix: "p2.face2.done."},
+		{SrcSec: "Select Info", SrcPrefix: "p2.face2.", DstSec: "Select Info", DstPrefix: "p2.face2.loading."},
 		{SrcSec: "Select Info", SrcPrefix: "p1.face.", DstSec: "Select Info", DstPrefix: "p1.palmenu.preview."},
 		{SrcSec: "Select Info", SrcPrefix: "p2.face.", DstSec: "Select Info", DstPrefix: "p2.palmenu.preview."},
 		{SrcSec: "Select Info", SrcPrefix: "p1.teammenu.item.", DstSec: "Select Info", DstPrefix: "p1.teammenu.item.active."},
@@ -2221,21 +2231,28 @@ func (m *Motif) overrideParams() {
 		{SrcSec: "Select Info", SrcPrefix: "p2.", DstSec: "Select Info", DstPrefix: "p4."},
 		{SrcSec: "Select Info", SrcPrefix: "p2.", DstSec: "Select Info", DstPrefix: "p6."},
 		{SrcSec: "Select Info", SrcPrefix: "p2.", DstSec: "Select Info", DstPrefix: "p8."},
+		{SrcSec: "Select Info", SrcPrefix: "portrait.", DstSec: "Select Info", DstPrefix: "portrait.loading."},
 		{SrcSec: "Select Info", SrcPrefix: "stage.", DstSec: "Select Info", DstPrefix: "stage.active."},
 		{SrcSec: "Select Info", SrcPrefix: "stage.", DstSec: "Select Info", DstPrefix: "stage.active2."},
 		{SrcSec: "Select Info", SrcPrefix: "stage.", DstSec: "Select Info", DstPrefix: "stage.done."},
+		{SrcSec: "Select Info", SrcPrefix: "stage.portrait.", DstSec: "Select Info", DstPrefix: "stage.portrait.loading."},
 		// [VS Screen]
 		{SrcSec: "Title Info", SrcPrefix: "loading.", DstSec: "VS Screen", DstPrefix: "loading.wait."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p1.done."},
+		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p1.loading."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.face2.", DstSec: "VS Screen", DstPrefix: "p1.face2.done."},
+		{SrcSec: "VS Screen", SrcPrefix: "p1.face2.", DstSec: "VS Screen", DstPrefix: "p1.face2.loading."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p2.done."},
+		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p2.loading."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.face2.", DstSec: "VS Screen", DstPrefix: "p2.face2.done."},
+		{SrcSec: "VS Screen", SrcPrefix: "p2.face2.", DstSec: "VS Screen", DstPrefix: "p2.face2.loading."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p3."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p5."},
 		{SrcSec: "VS Screen", SrcPrefix: "p1.", DstSec: "VS Screen", DstPrefix: "p7."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p4."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p6."},
 		{SrcSec: "VS Screen", SrcPrefix: "p2.", DstSec: "VS Screen", DstPrefix: "p8."},
+		{SrcSec: "VS Screen", SrcPrefix: "stage.portrait.", DstSec: "VS Screen", DstPrefix: "stage.portrait.loading."},
 		// [Victory Screen]
 		{SrcSec: "Victory Screen", SrcPrefix: "p1.", DstSec: "Victory Screen", DstPrefix: "p3."},
 		{SrcSec: "Victory Screen", SrcPrefix: "p1.", DstSec: "Victory Screen", DstPrefix: "p5."},
