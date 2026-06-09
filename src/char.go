@@ -2166,9 +2166,6 @@ func (e *Explod) update() {
 
 	// Determine shadow color
 	sdwclr := e.shadow[0]<<16 | e.shadow[1]&0xff<<8 | e.shadow[2]&0xff
-	if e.reflection < 0 {
-		e.reflection = sdwclr
-	}
 
 	// Add shadow if color is not 0
 	if sdwclr != 0 {
@@ -2189,7 +2186,7 @@ func (e *Explod) update() {
 		// Add shadow to list
 		sys.shadowList.add(ss)
 	}
-	if e.reflection != 0 {
+	if (e.reflection < 0 && sdwclr != 0) || e.reflection > 0 {
 		drawZoff := sys.posZtoYoffset(e.interPos[2], e.localscl)
 
 		// Prepare reflection sprite
@@ -2893,9 +2890,6 @@ func (p *Projectile) cueDraw() {
 
 	// Determine shadow color
 	sdwclr := p.shadow[0]<<16 | p.shadow[1]&0xff<<8 | p.shadow[2]&0xff
-	if p.reflection < 0 {
-		p.reflection = sdwclr
-	}
 
 	// Add a shadow if color is not 0
 	if sdwclr != 0 {
@@ -2911,7 +2905,7 @@ func (p *Projectile) cueDraw() {
 		// Add shadow to list
 		sys.shadowList.add(ss)
 	}
-	if p.reflection != 0 {
+	if (p.reflection < 0 && sdwclr != 0) || p.reflection > 0 {
 		drawZoff := sys.posZtoYoffset(p.interPos[2], p.localscl)
 
 		// Prepare reflection sprite
