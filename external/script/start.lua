@@ -799,6 +799,32 @@ local function drawPortraitRandom(randomCfg)
 	return false
 end
 
+local function hasPortraitAnim(params)
+	return params ~= nil and params.AnimData ~= nil and ((params.anim or -1) ~= -1 or (params.spr ~= nil and params.spr[1] ~= -1))
+end
+
+local function getPortraitDrawData(v, side, member, params, dataField)
+	local data = v[dataField]
+	local drawParams = params
+	if not v.skipCurrent and data ~= nil then
+		local state = v.ref ~= nil and getCharPreloadStatus(v.ref) or 'ready'
+		if state ~= 'ready' and hasPortraitAnim(params.loading) then
+			data = params.loading.AnimData
+			drawParams = params.loading
+		end
+	elseif not v.skipCurrent and v.ref ~= nil then
+		local state = getCharPreloadStatus(v.ref)
+		if state == 'ready' then
+			data = start.f_animGet(v.ref, side, member, params, nil, true)
+			v[dataField] = data
+		elseif hasPortraitAnim(params.loading) then
+			data = params.loading.AnimData
+			drawParams = params.loading
+		end
+	end
+	return data, drawParams
+end
+
 local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
 	local lastIdx = #t_portraits
 	-- "next player replaces previous one" case
@@ -806,12 +832,12 @@ local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
 	local paramsSide, params = getParams(side, idx, t, subname)
 	if paramsSide.num == 1 and last then
 		local v = t_portraits[idx]
-		local data = v[dataField]
+		local data, drawParams = getPortraitDrawData(v, side, idx, params, dataField)
 		if not v.skipCurrent and data ~= nil then
 			main.f_animPosDraw(
 				data,
-				f_portraitsXCalc(side, 1, paramsSide, params),
-				paramsSide.pos[2] + params.offset[2]
+				f_portraitsXCalc(side, 1, paramsSide, drawParams),
+				paramsSide.pos[2] + drawParams.offset[2]
 			)
 		end
 		-- we're done for this layer in this mode
@@ -833,12 +859,12 @@ local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
 		local member = it.m
 		local paramsSide, params = getParams(side, member, t, subname)
 		local v = t_portraits[member]
-		local data = v[dataField]
+		local data, drawParams = getPortraitDrawData(v, side, member, params, dataField)
 		if member <= paramsSide.num and not v.skipCurrent and data ~= nil then
 			main.f_animPosDraw(
 				data,
-				f_portraitsXCalc(side, member, paramsSide, params),
-				paramsSide.pos[2] + params.offset[2] + (member - 1) * paramsSide.spacing[2]
+				f_portraitsXCalc(side, member, paramsSide, drawParams),
+				paramsSide.pos[2] + drawParams.offset[2] + (member - 1) * paramsSide.spacing[2]
 			)
 		end
 	end
@@ -2440,12 +2466,19 @@ function start.updateDrawList()
 				end
 
 				if charData and charData.char_ref ~= nil and charData.hidden == 0 then
-					local item = getTransforms(motif.select_info.portrait)
-					item.anim = charData.cell_data
-					item.x = motif.select_info.pos[1] + t.x + motif.select_info.portrait.offset[1]
-					item.y = motif.select_info.pos[2] + t.y + motif.select_info.portrait.offset[2]
+					local portrait = motif.select_info.portrait
+					local loadingPortrait = false
+					if getCharPreloadStatus(charData.char_ref) ~= 'ready' and hasPortraitAnim(portrait.loading) then
+						portrait = portrait.loading
+						loadingPortrait = true
+					end
+					local item = getTransforms(portrait)
+					item.anim = loadingPortrait and portrait.AnimData or charData.cell_data
+					item.x = motif.select_info.pos[1] + t.x + portrait.offset[1]
+					item.y = motif.select_info.pos[2] + t.y + portrait.offset[2]
 					-- apply cell scale override while preserving portrait resolution factor
-					if item.scale ~= nil then
+					-- loading portrait comes from system.sff, so don't apply character localcoord scaling to it
+					if item.scale ~= nil and not loadingPortrait then
 						local charInfo = main.t_selChars[charData.char_ref + 1]
 						if charInfo then
 							local portraitScale = charInfo.portraitscale or 1
@@ -2749,10 +2782,17 @@ function start.f_selectScreen()
 					main.f_animPosDraw(motif.select_info.stage.portrait.random.AnimData)
 				--draw stage portrait loaded from stage SFF
 				else
+					local stageRef = main.t_selectableStages[stageListNo]
+					local portrait = motif.select_info.stage.portrait
+					local anim = main.t_selStages[stageRef].anim_data
+					if getStagePreloadStatus(stageRef) ~= 'ready' and hasPortraitAnim(portrait.loading) then
+						portrait = portrait.loading
+						anim = portrait.AnimData
+					end
 					main.f_animPosDraw(
-						main.t_selStages[main.t_selectableStages[stageListNo]].anim_data,
-						motif.select_info.stage.pos[1] + motif.select_info.stage.portrait.offset[1],
-						motif.select_info.stage.pos[2] + motif.select_info.stage.portrait.offset[2]
+						anim,
+						motif.select_info.stage.pos[1] + portrait.offset[1],
+						motif.select_info.stage.pos[2] + portrait.offset[2]
 					)
 				end
 				if not stageEnd then
@@ -3785,6 +3825,7 @@ function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 		end
 		-- reset order-confirm flags and selection flags
 		for _, v in ipairs(start.p[side].t_selected) do
+			main.f_preloadBoostChar(v.ref)
 			v.loading = false
 			v.selected = false
 		end
@@ -4046,11 +4087,17 @@ function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 			--draw stage portrait background
 			main.f_animPosDraw(motif.vs_screen.stage.portrait.bg.AnimData)
 			--draw stage portrait loaded from stage SFF
-			if main.t_selStages[selStageNo].vs_anim_data then
+			local portrait = motif.vs_screen.stage.portrait
+			local anim = main.t_selStages[selStageNo].vs_anim_data
+			if getStagePreloadStatus(selStageNo) ~= 'ready' and hasPortraitAnim(portrait.loading) then
+				portrait = portrait.loading
+				anim = portrait.AnimData
+			end
+			if anim then
 				main.f_animPosDraw(
-					main.t_selStages[selStageNo].vs_anim_data,
-					motif.vs_screen.stage.pos[1] + motif.vs_screen.stage.portrait.offset[1],
-					motif.vs_screen.stage.pos[2] + motif.vs_screen.stage.portrait.offset[2]
+					anim,
+					motif.vs_screen.stage.pos[1] + portrait.offset[1],
+					motif.vs_screen.stage.pos[2] + portrait.offset[2]
 				)
 			end
 		end
