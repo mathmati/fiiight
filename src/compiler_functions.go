@@ -4731,6 +4731,10 @@ func (c *CharCompiler) lifebarAction(is IniSection, sc *StateControllerBase) (St
 			lifebarAction_fontcolor, VT_Int, 4, false); err != nil {
 			return err
 		}
+		if err := c.paramValue(is, sc, "refreshtype",
+			lifebarAction_refreshtype, VT_Int, 1, false); err != nil {
+			return err
+		}
 		return nil
 	})
 	return *ret, err

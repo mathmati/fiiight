@@ -11982,6 +11982,7 @@ const (
 	lifebarAction_fontbank
 	lifebarAction_fontalign
 	lifebarAction_fontcolor
+	lifebarAction_refreshtype
 	lifebarAction_redirectid
 )
 
@@ -11991,20 +11992,17 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 		return false
 	}
 
-	var top bool
-	var timemul float32 = 1
-	var anim int32 = -1
-	s_ffx, a_ffx := "", ""
-	spr := [2]int32{-1, 0}
-	snd := [2]int32{-1, 0}
-
 	// Initialize a text message with defaults
 	msg := newFSMsg(crun.teamside)
+	timemul := float32(1.0)
+
+	// Default to no duplicates and making an identical message reappear
+	refresh := int32(2)
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case lifebarAction_top:
-			top = exp[0].evalB(c)
+			msg.top = exp[0].evalB(c)
 		case lifebarAction_timemul:
 			timemul = exp[0].evalF(c)
 		case lifebarAction_time:
@@ -12023,20 +12021,26 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 			}
 			msg.fontColorSet = true
 		case lifebarAction_anim:
-			a_ffx = exp[0].evalS()
-			anim = exp[1].evalI(c)
+			msg.anim_ffx = exp[0].evalS()
+			msg.animNo = exp[1].evalI(c)
+			msg.spr = [2]int32{-1, -1}
 		case lifebarAction_spr:
-			a_ffx = exp[0].evalS()
-			spr[0] = exp[1].evalI(c)
+			msg.spr[0] = exp[1].evalI(c)
 			if len(exp) > 2 {
-				spr[1] = exp[2].evalI(c)
+				msg.spr[1] = exp[2].evalI(c)
+			} else {
+				msg.spr[1] = 0
 			}
+			msg.animNo = -1
+			msg.anim_ffx = ""
 		case lifebarAction_snd:
-			s_ffx = exp[0].evalS()
-			snd[0] = exp[1].evalI(c)
+			msg.snd_ffx = exp[0].evalS()
+			msg.snd[0] = exp[1].evalI(c)
 			if len(exp) > 2 {
-				snd[1] = exp[2].evalI(c)
+				msg.snd[1] = exp[2].evalI(c)
 			}
+		case lifebarAction_refreshtype:
+			refresh = exp[0].evalI(c)
 		default:
 			if isPalFXParam(paramID) {
 				if msg.palfx == nil {
@@ -12055,7 +12059,7 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 	}
 	msg.resttime = int32(float32(msg.resttime) * timemul)
 
-	sys.fightScreen.appendAction(crun, msg, s_ffx, a_ffx, snd, spr, anim, top)
+	sys.fightScreen.appendAction(crun, msg, refresh)
 	return false
 }
 

@@ -2827,6 +2827,12 @@ type FSMsg struct {
 	bg           AnimLayout
 	front        AnimLayout
 	del          bool
+	snd          [2]int32
+	snd_ffx      string
+	spr          [2]int32
+	animNo       int32
+	anim_ffx     string
+	top          bool
 }
 
 func newFSMsg(side int) *FSMsg {
@@ -2837,6 +2843,10 @@ func newFSMsg(side int) *FSMsg {
 		fontBank:  -1,
 		fontAlign: IErr, // Default to the font's
 		fontColor: [4]int32{255, 255, 255, 255},
+		snd:       [2]int32{-1, -1},
+		spr:       [2]int32{-1, -1},
+		animNo:    -1,
+		top:       true,
 	}
 }
 
@@ -2875,6 +2885,36 @@ func insertFSMsg(array []*FSMsg, value *FSMsg, index int) []*FSMsg {
 
 func removeFSMsg(array []*FSMsg, index int) []*FSMsg {
 	return SliceDelete(array, index)
+}
+
+func (m *FSMsg) isEqual(other *FSMsg) bool {
+	if m == other {
+		return true
+	}
+	if m == nil || other == nil {
+		return false
+	}
+	// Compare font settings
+	if m.fontNo != other.fontNo ||
+		m.fontBank != other.fontBank ||
+		m.fontAlign != other.fontAlign ||
+		m.fontColorSet != other.fontColorSet ||
+		m.fontColor != other.fontColor {
+		return false
+	}
+	// Compare animation
+	if m.animNo != other.animNo || m.anim_ffx != other.anim_ffx {
+		return false
+	}
+	// Compare sprite
+	if m.spr != other.spr {
+		return false
+	}
+	// Compare text (slowest last)
+	if m.text != other.text {
+		return false
+	}
+	return true
 }
 
 type FightScreenAction struct {
@@ -5835,7 +5875,7 @@ func (fs *FightScreen) resolvePath() {
 	fs.def = v
 }
 
-func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, snd, spr [2]int32, anim int32, top bool) {
+func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, refresh int32) {
 	if c.teamside < 0 {
 		return
 	}
@@ -5844,24 +5884,45 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 	}
 
 	// Play sound
-	if snd[0] != -1 && snd[1] != -1 {
-		if s_ffx != "" && s_ffx != "s" && sys.ffx[s_ffx] != nil && sys.ffx[s_ffx].snd != nil {
-			s := sys.ffx[s_ffx].snd.Get(snd) // Common FX
+	if msg.snd[0] != -1 && msg.snd[1] != -1 {
+		if msg.snd_ffx != "" && msg.snd_ffx != "s" && sys.ffx[msg.snd_ffx] != nil && sys.ffx[msg.snd_ffx].snd != nil {
+			s := sys.ffx[msg.snd_ffx].snd.Get(msg.snd)
 			if s != nil {
-				sys.soundChannels.Play(s, snd[0], snd[1], 100, 0, 0, 0, 0)
+				sys.soundChannels.Play(s, msg.snd[0], msg.snd[1], 100, 0, 0, 0, 0)
 			}
 		} else {
-			fs.snd.play(snd, 100, 0, 0, 0, 0)
+			fs.snd.play(msg.snd, 100, 0, 0, 0, 0)
 		}
 	}
 
 	// If sound only, we can stop here
-	if anim == -1 && (spr[0] == -1 || spr[1] == -1) && msg.text == "" {
+	if msg.animNo == -1 && msg.spr[0] == -1 && msg.text == "" {
 		return
 	}
 
 	// Select side of screen
 	teammsg := fs.actions[c.teamside]
+
+	// Duplicate detection
+	if refresh == 1 || refresh == 2 {
+		for _, existing := range teammsg.messages {
+			if existing.del {
+				continue
+			}
+			if existing.isEqual(msg) {
+				// Found an identical message: refresh its timer to keep it alive
+				existing.resttime = msg.resttime
+				existing.agetimer = 0
+				existing.del = false
+				// Also reappear from outside screen
+				if refresh == 2 {
+					existing.counterX = teammsg.start_x * 2
+				}
+				// Don't add another
+				return
+			}
+		}
+	}
 
 	// If adding a new message while exceeding the maximum number allowed, make the oldest message go away faster
 	var count int32
@@ -5872,11 +5933,11 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 	}
 	if count >= teammsg.max {
 		var oldest int
-		var oldesttimer int32
-		for i, msg := range teammsg.messages {
-			if !msg.del && msg.resttime > 0 && msg.agetimer > oldesttimer {
+		var oldestTimer int32
+		for i, m := range teammsg.messages {
+			if !m.del && m.resttime > 0 && m.agetimer > oldestTimer {
 				oldest = i
-				oldesttimer = msg.agetimer
+				oldestTimer = m.agetimer
 			}
 		}
 		if oldest < len(teammsg.messages) {
@@ -5884,9 +5945,9 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 		}
 	}
 
-	// Use index 0 if "top", otherwise find the first free message slot
+	// Use index 0 if "top". Otherwise find the first free message slot
 	index := 0
-	if !top {
+	if !msg.top {
 		for k, v := range teammsg.messages {
 			if v.del {
 				teammsg.messages = removeFSMsg(teammsg.messages, k)
@@ -5902,13 +5963,13 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 	delete(teammsg.is, prefix+"spr")
 
 	// Read animation
-	if anim != -1 {
-		teammsg.is[prefix+"anim"] = fmt.Sprintf("%v", anim)
+	if msg.animNo != -1 {
+		teammsg.is[prefix+"anim"] = fmt.Sprintf("%v", msg.animNo)
 	}
 
 	// Read sprite
-	if spr[0] != -1 && spr[1] != -1 {
-		teammsg.is[prefix+"spr"] = fmt.Sprintf("%v,%v", spr[0], spr[1])
+	if msg.spr[0] != -1 {
+		teammsg.is[prefix+"spr"] = fmt.Sprintf("%v,%v", msg.spr[0], msg.spr[1])
 	}
 
 	// Read background
@@ -5917,21 +5978,21 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 	// Default to fight screen assets
 	sff := fs.sff
 	at := fs.animTable
-	var alscale float32 = 1.0
+	alscale := float32(1.0)
 
 	// Use animation prefixes to change asset source
-	if a_ffx != "" {
-		if a_ffx == "s" {
+	if msg.anim_ffx != "" {
+		if msg.anim_ffx == "s" {
 			// Use the character
 			sff = sys.cgi[c.playerNo].sff
 			at = sys.cgi[c.playerNo].animTable
-			alscale = float32(sys.fightScreen.localcoord[0]) / float32(sys.chars[c.playerNo][0].localcoord)
-		} else if sys.ffx[a_ffx] != nil {
+			alscale = float32(fs.localcoord[0]) / float32(sys.chars[c.playerNo][0].localcoord)
+		} else if sys.ffx[msg.anim_ffx] != nil {
 			// Use common FX
-			fx := sys.ffx[a_ffx]
+			fx := sys.ffx[msg.anim_ffx]
 			sff = fx.sff
 			at = fx.animTable
-			alscale = fx.fx_scale * float32(sys.fightScreen.localcoord[0]) / float32(fx.localcoord[0])
+			alscale = fx.fx_scale * float32(fs.localcoord[0]) / float32(fx.localcoord[0])
 		}
 	}
 
@@ -5943,7 +6004,7 @@ func (fs *FightScreen) appendAction(c *Char, msg *FSMsg, s_ffx, a_ffx string, sn
 		msg.front.anim.start_scale[1] *= alscale
 	}
 
-	// Insert new message
+	// Insert the new message
 	teammsg.messages = insertFSMsg(teammsg.messages, msg, index)
 }
 
