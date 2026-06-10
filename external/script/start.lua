@@ -1734,7 +1734,6 @@ function start.f_selectMode()
 			main.f_waitForPreloads()
 		end
 		if not start.f_selectScreen() then
-			sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
 			bgReset(motif[main.background].BGDef)
 			fadeInInit(motif[main.group].fadein.FadeData)
 			playBgm({source = "motif.title", interrupt = true})
@@ -2720,6 +2719,7 @@ function start.f_selectScreen()
 			--exit select screen
 			for _, v in ipairs(start.p[side].t_selCmd) do
 				if not start.escFlag and (esc() or (getInput(v.cmd, motif.select_info.cancel.key) and not start.p[side].inPalMenu)) then
+					sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
 					fadeOutInit(motif.select_info.fadeout.FadeData)
 					fadeOutStarted = true
 					start.escFlag = true
@@ -2978,6 +2978,7 @@ function start.f_teamMenu(side, t)
 		--Exit during team menu
 		if not start.escFlag and (esc() or getInput(-1, motif.select_info.cancel.key)) then
 			esc(false)
+			sndPlay(motif.Snd, motif.select_info.cancel.snd[1], motif.select_info.cancel.snd[2])
 			fadeOutInit(motif.select_info.fadeout.FadeData)
 			fadeOutStarted = true
 			start.escFlag = true
