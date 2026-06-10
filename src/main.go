@@ -271,6 +271,7 @@ func processCommandLine() {
 -width <num>            Sets game width
 -height <num>           Sets game height
 -setvolume <num>        Sets master volume to <num> (0-100)
+-setport <num>          Overrides port number
 	
 Quick VS Options:
 -p<n> <playername>      Loads player n, eg. -p3 kfm
@@ -278,11 +279,17 @@ Quick VS Options:
 -p<n>.color <col>       Sets player n's color to <col>
 -p<n>.power <power>     Sets player n's power to <power>
 -p<n>.life <life>       Sets player n's life to <life>
+-p<n>.lifeMax <life>    Sets player n's max life to <life>
+-p<n>.dizzyPoints <pts> Sets player n's dizzy points to <pts>
+-p<n>.guardPoints <pts> Sets player n's guard points to <pts>
+-p<n>.input <pn>        Sets player n's controls to use <pn>'s input settings
 -tmode1 <tmode>         Sets p1 team mode to <tmode>
 -tmode2 <tmode>         Sets p2 team mode to <tmode>
 -time <num>             Round time (-1 to disable)
 -rounds <num>           Plays for <num> rounds, and then quits
 -s <stagename>          Loads stage <stagename>
+-loadmotif              Fully loads motif/chars/stages
+-ip <hostip>            Connect to <hostip> for netplay; leave blank for host
 	
 Debug Options:
 -nojoy                  Disables joysticks
