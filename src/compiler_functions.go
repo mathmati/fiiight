@@ -2169,6 +2169,14 @@ func (c *CharCompiler) hitDefSub(is IniSection, sc *StateControllerBase) error {
 		hitDef_envshake_dir, VT_Float, 1, false); err != nil {
 		return err
 	}
+	if err := c.paramValue(is, sc, "envshake.diradd",
+		hitDef_envshake_diradd, VT_Float, 1, false); err != nil {
+		return err
+	}
+	if err := c.paramValue(is, sc, "envshake.decay",
+		hitDef_envshake_decay, VT_Float, 1, false); err != nil {
+		return err
+	}
 	if err := c.paramValue(is, sc, "fall.envshake.time",
 		hitDef_fall_envshake_time, VT_Int, 1, false); err != nil {
 		return err
