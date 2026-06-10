@@ -707,13 +707,13 @@ func renderWithBlending(
 		BlendInv = BlendAdd
 	}
 
-	src := blendAlpha[0]
-	dst := blendAlpha[1]
+	// Convert alpha to the float the renderer uses
+	src := float32(blendAlpha[0]) / 255.0
+	dst := float32(blendAlpha[1]) / 255.0
 
 	// Ensure proper source and destination
-	// TODO: Maybe use byte everywhere
-	src = Clamp(src, 0, 255)
-	dst = Clamp(dst, 0, 255)
+	src = Clamp(src, 0, 1)
+	dst = Clamp(dst, 0, 1)
 
 	// Force None destination to 0 just in case
 	if blendMode == TT_none {
@@ -740,9 +740,9 @@ func renderWithBlending(
 	// Sub
 	case blendMode == TT_sub:
 		switch {
-		case src == 0 && dst == 255:
+		case src == 0 && dst == 1:
 			// Fully transparent. Skip render
-		case src == 255 && dst == 255:
+		case src == 1 && dst == 1:
 			// Fast path for full subtraction
 			if invblend >= 1 {
 				invertAColor()
@@ -753,8 +753,8 @@ func renderWithBlending(
 			render(BlendInv, blendSourceFactor, BlendOne, 1)
 		default:
 			// Full alpha range
-			if dst < 255 {
-				render(BlendAdd, BlendZero, BlendOneMinusSrcAlpha, 1-float32(dst)/255)
+			if dst < 1 {
+				render(BlendAdd, BlendZero, BlendOneMinusSrcAlpha, 1-dst)
 			}
 			if src > 0 {
 				if invblend >= 1 {
@@ -763,14 +763,11 @@ func renderWithBlending(
 				if invblend == 3 {
 					disableNeg()
 				}
-				render(BlendInv, blendSourceFactor, BlendOne, float32(src)/255)
+				render(BlendInv, blendSourceFactor, BlendOne, src)
 			}
 		}
 	// SubAdd
 	case blendMode == TT_subadd:
-		srcf := float32(src) / 255.0
-		dstf := float32(dst) / 255.0
-
 		if neg != nil && *neg {
 			// With invertall we invert the passes. Add then sub
 			// This is kind of like "invblend = 3"
@@ -803,12 +800,12 @@ func renderWithBlending(
 	// Default should normally not reach here, so this is only a fallback
 	default:
 		switch {
-		case src == 0 && dst == 255:
+		case src == 0 && dst == 1:
 			// Fully transparent. Just don't render
-		case src == 255 && dst == 0:
+		case src == 1 && dst == 0:
 			// Fast path for fully opaque
 			render(BlendAdd, blendSourceFactor, BlendOneMinusSrcAlpha, 1)
-		case src == 255 && dst == 255:
+		case src == 1 && dst == 1:
 			// Fast path for full Add
 			if invblend >= 1 {
 				invertAColor()
@@ -819,11 +816,11 @@ func renderWithBlending(
 			render(Blend, blendSourceFactor, BlendOne, 1)
 		default:
 			// AddAlpha (includes Add1)
-			if dst < 255 {
-				render(Blend, BlendZero, BlendOneMinusSrcAlpha, 1-float32(dst)/255)
+			if dst < 1 {
+				render(Blend, BlendZero, BlendOneMinusSrcAlpha, 1-dst)
 			}
 			if src > 0 {
-				if invblend >= 1 && dst >= 255 {
+				if invblend >= 1 && dst == 1 {
 					Blend = BlendReverseSubtract
 					if invblend >= 2 { // Not 1 here. TODO: Explain why in comment
 						invertAColor()
@@ -834,15 +831,15 @@ func renderWithBlending(
 				} else {
 					Blend = BlendAdd
 				}
-				if !isrgba && (invblend <= -1 || invblend >= 2) && acolor != nil && mcolor != nil && src < 255 {
+				if !isrgba && (invblend <= -1 || invblend >= 2) && acolor != nil && mcolor != nil && src < 1 {
 					// Sum of add components
 					gc := Abs(acolor[0]) + Abs(acolor[1]) + Abs(acolor[2])
-					v3, ml, al := Max((gc*255)-float32(dst+src), 512)/128, (float32(src) / 255), (float32(src+dst) / 255)
+					v3, ml, al := Max(255*(gc-(src+dst)), 512)/128, src, src+dst
 					rM, gM, bM := mcolor[0]*ml, mcolor[1]*ml, mcolor[2]*ml
 					(*mcolor)[0], (*mcolor)[1], (*mcolor)[2] = rM, gM, bM
 					render(Blend, blendSourceFactor, BlendOne, al*Pow(v3, 3))
 				} else {
-					render(Blend, blendSourceFactor, BlendOne, float32(src)/255)
+					render(Blend, blendSourceFactor, BlendOne, src)
 				}
 			}
 		}
