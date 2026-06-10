@@ -283,6 +283,7 @@ Quick VS Options:
 -time <num>             Round time (-1 to disable)
 -rounds <num>           Plays for <num> rounds, and then quits
 -s <stagename>          Loads stage <stagename>
+-loadmotif              Fully loads motif/chars/stages
 	
 Debug Options:
 -nojoy                  Disables joysticks
