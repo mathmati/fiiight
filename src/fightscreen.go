@@ -1005,17 +1005,23 @@ func (pb *PowerBar) step(charpn int, pbr *PowerBar, snd *Snd) {
 		pbr.midpower = pbr.midpowerMin
 	}
 
+	// Initialize "previous power" in the first frame of the round
+	// This prevents level sounds and similar actions from happening in that frame
+	if sys.matchTime == 0 {
+		pbr.prevLevel = level
+		pbr.prevPower = pbval
+	}
+
 	// Level sounds
 	// Skipped if the bar is invisible
-	canPlaySnd := !sys.gsf(GSF_nobardisplay) && !refChar.powerOwner().asf(ASF_nopowerbardisplay)
-	if pbval >= refChar.powerMax && pbr.prevPower < refChar.powerMax && pb.levelmax_snd[0] != -1 {
-		if canPlaySnd {
+	if !sys.gsf(GSF_nobardisplay) && !refChar.powerOwner().asf(ASF_nopowerbardisplay) {
+		if pbval >= refChar.powerMax && pbr.prevPower < refChar.powerMax && pb.levelmax_snd[0] != -1 {
 			snd.play(pb.levelmax_snd, 100, 0, 0, 0, 0)
-		}
-	} else if level > pbr.prevLevel && canPlaySnd {
-		i := int(level - 1)
-		if i >= 0 && i < len(pb.level_snd) {
-			snd.play(pb.level_snd[i], 100, 0, 0, 0, 0)
+		} else if level > pbr.prevLevel {
+			i := int(level - 1)
+			if i >= 0 && i < len(pb.level_snd) {
+				snd.play(pb.level_snd[i], 100, 0, 0, 0, 0)
+			}
 		}
 	}
 
