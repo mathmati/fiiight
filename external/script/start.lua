@@ -2075,9 +2075,11 @@ function start.f_selectChallenger(resume)
 	start.reset = false
 	start.exit = false
 
-	-- Preserve the arcade progress, but clear the temporary select state so the
-	-- winner can pick a fresh character/team for the interrupted run.
+	-- Preserve the interrupted opponent. P1 is cleared for re-selection,
+	-- but P2 stays selected so resuming does not roll a new random opponent.
+	local p2 = main.f_tableCopy(start.p[2])
 	start.f_selectReset(false, true)
+	start.p[2] = p2 
 	start.reset = false
 
 	if not start.f_selectScreen() then
