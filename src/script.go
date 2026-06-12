@@ -2636,9 +2636,9 @@ func systemScriptInit(l *lua.LState) {
 		if !ok {
 			userDataError(l, 1, f)
 		}
-		f.col[0] = int32(numArg(l, 2))
-		f.col[1] = int32(numArg(l, 3))
-		f.col[2] = int32(numArg(l, 4))
+		f.col[0] = int32(numArg(l, 2)) & 0xff
+		f.col[1] = int32(numArg(l, 3)) & 0xff
+		f.col[2] = int32(numArg(l, 4)) & 0xff
 		return 0
 	})
 	luaRegister(l, "fadeSetAnim", func(*lua.LState) int {
