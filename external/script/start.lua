@@ -465,13 +465,8 @@ function start.stageShuffleBag(id, pool)
 
 	local idx = table.remove(start.shuffleStages[id])
 	start.lastStageIdx = idx
-	local result = pool[idx]
-
-	-- ensure result is a valid stage string (handles numeric refs)
-	if type(result) == "number" and main.t_selectableStages and main.t_selectableStages[result] then
-		result = main.t_selectableStages[result]
-	end
-	return result
+	-- Pool entries are already resolved stage refs
+	return pool[idx]
 end
 
 --sets stage
