@@ -2462,7 +2462,7 @@ function start.updateDrawList()
 					table.insert(drawList, item)
 				end
 
-				if charData and charData.char_ref ~= nil and charData.hidden == 0 then
+				if charData and charData.char_ref ~= nil and charData.hidden == 0 and charData.char ~= 'randomselect' then
 					local portrait = motif.select_info.portrait
 					local loadingPortrait = false
 					if getCharPreloadStatus(charData.char_ref) ~= 'ready' and hasPortraitAnim(portrait.loading) then
