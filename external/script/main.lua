@@ -1250,6 +1250,8 @@ function main.f_drawInput(textData, text, sec, background, overlay, defaultInput
 		--end loop
 		refresh()
 	end
+	resetKey()
+	resetTokenGuard()
 	return input
 end
 
