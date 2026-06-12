@@ -940,6 +940,7 @@ end
 --; COMMAND LINE QUICK VS
 --;===========================================================
 function main.f_commandLine()
+	setGameMode('quickvs')
 	setCredits(-1)
 	local ref = #main.t_selChars
 	local t_teamMode = {0, 0}

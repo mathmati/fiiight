@@ -1478,7 +1478,7 @@ func (s *System) escExit() bool {
 			}
 		}
 	}
-	return s.esc && (s.netplay() || !s.cfg.Config.EscOpensMenu || s.gameMode == "" ||
+	return s.esc && (s.netplay() || !s.cfg.Config.EscOpensMenu || s.gameMode == "quickvs" ||
 		(s.motif.AttractMode.Enabled && s.credits == 0))
 }
 
