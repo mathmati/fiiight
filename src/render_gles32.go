@@ -1457,13 +1457,13 @@ func (r *Renderer_GLES32) prepareModelPipeline(bufferIndex uint32, env *Environm
 	gl.BindFramebuffer(gl.FRAMEBUFFER, r.fbo)
 
 	gl.Viewport(0, 0, sys.scrrect[2], sys.scrrect[3])
+	r.SetDepthMask(true)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	//gl.Enable(gl.TEXTURE_2D)
 	gl.Enable(gl.TEXTURE_CUBE_MAP)
 	// Set global state
 	r.EnableBlending(r.blendEquation, r.blendSrc, r.blendDst)
 	r.SetDepthTest(true)
-	r.SetDepthMask(true)
 	r.SetFrontFace(r.invertFrontFace)
 	r.SetCullFace(r.doubleSided)
 
