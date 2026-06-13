@@ -940,6 +940,7 @@ end
 --; COMMAND LINE QUICK VS
 --;===========================================================
 function main.f_commandLine()
+	setGameMode('quickvs')
 	setCredits(-1)
 	local ref = #main.t_selChars
 	local t_teamMode = {0, 0}
@@ -1250,6 +1251,8 @@ function main.f_drawInput(textData, text, sec, background, overlay, defaultInput
 		--end loop
 		refresh()
 	end
+	resetKey()
+	resetTokenGuard()
 	return input
 end
 
@@ -3479,8 +3482,9 @@ end
 
 --randomtest
 function main.f_randomtest()
-	main.f_default()
 	while true do
+		clearSelected()
+		resetGameParams()
 		local palState = {}
 		local teamMode = math.random(0, 3)
 		local numChars = 1
@@ -3492,6 +3496,11 @@ function main.f_randomtest()
 			numChars = math.random(gameOption('Options.Tag.Min'), gameOption('Options.Tag.Max'))
 		end
 		for side = 1, 2 do
+			start.p[side].teamMode = teamMode
+			start.p[side].numChars = numChars
+			start.p[side].turnsOffset = 0
+			start.p[side].t_selected = {}
+			start.p[side].t_selTemp = {}
 			setTeamMode(side, teamMode, numChars)
 			for i = 1, numChars do
 				local pn = (i - 1) * 2 + side
@@ -3501,10 +3510,16 @@ function main.f_randomtest()
 				local ch = main.t_randomChars[math.random(1, #main.t_randomChars)]
 				local pal = main.f_getUniquePalette(ch, palState)
 				selectChar(side, ch, pal)
+				table.insert(start.p[side].t_selected, {
+					ref = ch,
+					pal = pal,
+					pn = start.f_getPlayerNo(side, i),
+				})
 			end
 		end
+		start.f_setRounds(nil, {})
 		start.f_setStage()
-		loadStart()
+		loadStart(start.f_buildLoadStartParams({continue = main.motif.continuescreen}))
 		game()
 		refresh()
 		if getWinnerTeam() == -1 then
