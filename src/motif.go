@@ -4203,7 +4203,7 @@ func (di *MotifDialogue) clear(m *Motif) {
 	}
 	di.initialized = false
 	sys.dialogueForce = 0
-	sys.dialogueBarsFlg = false
+	sys.dialogueHideBars = false
 	m.DialogueInfo.P1.Face.AnimData.anim = nil
 	m.DialogueInfo.P2.Face.AnimData.anim = nil
 	if m.DialogueInfo.P1.Face.Active.AnimData != nil {

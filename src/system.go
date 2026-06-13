@@ -123,7 +123,7 @@ type SystemStateVars struct {
 	firstAttack     [3]int
 	home            int
 	stageLoop       bool
-	dialogueBarsFlg bool
+	dialogueHideBars bool
 	dialogueForce   int
 	playBgmFlg      bool
 
@@ -5971,6 +5971,9 @@ func (l *Loader) prepareTurnsFaces(pn int, fa *FightScreenFace, nm *FightScreenN
 	fa.teammate_face = make([]*Sprite, nsel)
 	fa.teammate_scale = make([]float32, nsel)
 	fa.teammate_face_pfx = make([]*PalFX, nsel)
+
+	// Wait for texture uploads before we clone the portraits. Fixes quick VS
+	sys.runMainThreadTask()
 
 	// Iterate all selected characters
 	for i, charIdx := range teamChars {

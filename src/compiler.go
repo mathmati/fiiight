@@ -5820,10 +5820,6 @@ func parseTriggerNumber(name string) (tn int32, isAll bool, ok bool) {
 func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSection, error) {
 	is := NewIniSection()
 
-	// Placeholder var to toggle all the nonsense Mugen's compiler allowed
-	// Maybe this could be sys.ignoreMostErrors. Or something configurable
-	strict := false
-
 	// Helper to find '=' only outside parentheses
 	findTopLevelEqual := func(s string) int {
 		uneven := 0
@@ -5854,7 +5850,7 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 		}
 
 		fn := lhs[:i]
-		if !strict {
+		if sys.ignoreMostErrors {
 			fn = strings.TrimSpace(fn) // Mugen tolerates "var ("
 		}
 
@@ -5882,8 +5878,9 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 			return "", false
 		}
 
-		if strict {
-			// When strict, only "var(...)" is valid. No "var (...)" and no trailing garbage
+		// When strict, only "var(...)" is valid. No "var (...)" and no trailing garbage
+		// Note: CNS normally has "sys.ignoreMostErrors" set to false, but that could be configurable in the future
+		if !sys.ignoreMostErrors {
 			if lhs[:i] != strings.TrimSpace(lhs[:i]) || end != len(lhs)-1 {
 				return "", false
 			}
@@ -5929,17 +5926,18 @@ func (c *CharCompiler) parseSection(sctrl func(name, data string) error) (IniSec
 				name = parsed
 			} else if strings.Index(lhs, "(") >= 0 {
 				// Looks like a special parameter, but wasn't valid
-				if strict {
-					if sys.ignoreMostErrors {
-						continue
-					}
-					return nil, Error("Invalid parameter syntax: " + line)
+				msg := "Invalid parameter syntax: " + line
+				if sys.ignoreMostErrors {
+					LogMessage(c.charWarn() + msg)
+					continue
+				} else {
+					return nil, Error(msg)
 				}
 			}
 
 			// Normal parameters
 			if name == "" {
-				if strict {
+				if !sys.ignoreMostErrors {
 					// If strict, only a single token is valid on the LHS
 					if strings.IndexAny(lhs, " \t") >= 0 {
 						if sys.ignoreMostErrors {
@@ -6004,16 +6002,26 @@ func (c *CharCompiler) stateSec(is IniSection, f func() error) error {
 	if err := f(); err != nil {
 		return err
 	}
-	if !sys.ignoreMostErrors {
-		var str string
-		for k := range is {
-			if len(str) > 0 {
-				str += ", "
+	// Check for leftover (unknown) parameters
+	var str string
+	for k := range is {
+		// Ignore CNS keywords
+		if !c.zssMode {
+			if k == "type" || k == "persistent" || k == "ignorehitpause" {
+				continue
 			}
-			str += k
 		}
 		if len(str) > 0 {
-			return Error("Invalid key name: " + str)
+			str += ", "
+		}
+		str += k
+	}
+	if len(str) > 0 {
+		msg := "Unknown state controller parameter(s): " + str
+		if sys.ignoreMostErrors {
+			LogMessage(c.charWarn() + msg)
+		} else {
+			return Error(msg)
 		}
 	}
 	return nil
@@ -7956,9 +7964,9 @@ func (c *CharCompiler) stateCompileZSS(states map[int32]StateBytecode, filename,
 			c.scan(&line)
 			if existInThisFile[c.stateNo] {
 				if c.stateNo == -10 {
-					return errmes(Error(fmt.Sprintf("State +1 overloaded")))
+					return errmes(Error(fmt.Sprintf("State +1 already defined in the same file")))
 				} else {
-					return errmes(Error(fmt.Sprintf("State %v overloaded", c.stateNo)))
+					return errmes(Error(fmt.Sprintf("State %v already defined in the same file", c.stateNo)))
 				}
 			}
 			existInThisFile[c.stateNo] = true

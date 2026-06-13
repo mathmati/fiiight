@@ -785,17 +785,16 @@ func renderWithBlending(
 				render(Blend, BlendZero, BlendOneMinusSrcAlpha, 1-float32(dst)/255)
 			}
 			if src > 0 {
-				// TODO: Wasn't this already done at the start of the function?
-				if invblend >= 1 { // && dst >= 255 {
+				if invblend >= 1 && dst >= 255 {
 					Blend = BlendReverseSubtract
+					if invblend >= 2 { // Not 1 here. TODO: Explain why in comment
+						invertColor()
+					}
+					if invblend == 3 {
+						disableNeg()
+					}
 				} else {
 					Blend = BlendAdd
-				}
-				if invblend >= 2 { // Not 1 here. TODO: Explain why in comment
-					invertColor()
-				}
-				if invblend == 3 {
-					disableNeg()
 				}
 				if !isrgba && (invblend <= -1 || invblend >= 2) && acolor != nil && mcolor != nil && src < 255 {
 					// Sum of add components

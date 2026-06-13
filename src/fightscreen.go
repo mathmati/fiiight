@@ -1005,17 +1005,23 @@ func (pb *PowerBar) step(charpn int, pbr *PowerBar, snd *Snd) {
 		pbr.midpower = pbr.midpowerMin
 	}
 
+	// Initialize "previous power" in the first frame of the round
+	// This prevents level sounds and similar actions from happening in that frame
+	if sys.matchTime == 0 {
+		pbr.prevLevel = level
+		pbr.prevPower = pbval
+	}
+
 	// Level sounds
 	// Skipped if the bar is invisible
-	canPlaySnd := !sys.gsf(GSF_nobardisplay) && !refChar.powerOwner().asf(ASF_nopowerbardisplay)
-	if pbval >= refChar.powerMax && pbr.prevPower < refChar.powerMax && pb.levelmax_snd[0] != -1 {
-		if canPlaySnd {
+	if !sys.gsf(GSF_nobardisplay) && !refChar.powerOwner().asf(ASF_nopowerbardisplay) {
+		if pbval >= refChar.powerMax && pbr.prevPower < refChar.powerMax && pb.levelmax_snd[0] != -1 {
 			snd.play(pb.levelmax_snd, 100, 0, 0, 0, 0)
-		}
-	} else if level > pbr.prevLevel && canPlaySnd {
-		i := int(level - 1)
-		if i >= 0 && i < len(pb.level_snd) {
-			snd.play(pb.level_snd[i], 100, 0, 0, 0, 0)
+		} else if level > pbr.prevLevel {
+			i := int(level - 1)
+			if i >= 0 && i < len(pb.level_snd) {
+				snd.play(pb.level_snd[i], 100, 0, 0, 0, 0)
+			}
 		}
 	}
 
@@ -1697,6 +1703,7 @@ type FightScreenFace struct {
 	face_lay               Layout
 	face_palshare          bool
 	face_palfxshare        bool
+	face_darkenshare       bool
 	teammate_pos           [2]int32
 	teammate_spacing       [2]int32
 	teammate_bg            AnimLayout
@@ -1728,6 +1735,11 @@ func newFightScreenFace() *FightScreenFace {
 		teammate_face_palshare: true,
 		teammate_face_pfx:      nil, // Allocated later
 	}
+	// Before Mugen 1.1, portraits used to share the character's palette in every way
+	// The equivalent of enabling face_palshare, face_palfxshare and face_darkenshare
+	// Mugen 1.1 has some bugs that broke all off that
+	// However, we will default face_palfxshare to disabled because it's no longer a common fighting game feature
+	// face_darkenshare has the same default as face_palfxshare because the two are related
 }
 
 func readFightScreenFace(pre string, is IniSection, sff *Sff, at AnimationTable) *FightScreenFace {
@@ -1745,6 +1757,7 @@ func readFightScreenFace(pre string, is IniSection, sff *Sff, at AnimationTable)
 	fa.face_lay = *ReadLayout(pre+"face.", is, 0)
 	is.ReadBool(pre+"face.palshare", &fa.face_palshare)
 	is.ReadBool(pre+"face.palfxshare", &fa.face_palfxshare)
+	is.ReadBool(pre+"face.darkenshare", &fa.face_darkenshare)
 	is.ReadBool("leaderontop", &fa.leaderontop)
 
 	// Teammates
@@ -1859,13 +1872,12 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 		}
 
 		// Save current brightness
-		//oldBright := sys.brightness
+		oldBright := sys.brightness
 
 		// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
-		// Update: This is an odd thing to do since the rest of the fight screen darkens
-		//if refChar.ignoreDarkenTime > 0 {
-		//	sys.brightness = 1.0
-		//}
+		if fa.face_darkenshare && refChar.ignoreDarkenTime > 0 {
+			sys.brightness = 1.0
+		}
 
 		// Draw the actual face sprite
 		fa.face_lay.DrawFaceSprite((float32(fa.pos[0])+sys.fightScreen.offsetX)*sys.fightScreen.scale, float32(fa.pos[1])*sys.fightScreen.scale, layerno,
@@ -1877,14 +1889,14 @@ func (fa *FightScreenFace) draw(layerno int16, charpn int, refFace *FightScreenF
 		}
 
 		// Restore original system brightness
-		//sys.brightness = oldBright
+		sys.brightness = oldBright
 	}
 
 	// Draw top layer
 	fa.top.Draw(float32(fa.pos[0])+sys.fightScreen.offsetX, float32(fa.pos[1]), layerno, sys.fightScreen.scale)
 }
 
-func (fa *FightScreenFace) drawTeammates(layerno int16, charpn int) {
+func (fa *FightScreenFace) drawTeammates(layerno int16) {
 	if len(fa.teammate_face) == 0 {
 		return
 	}
@@ -1898,6 +1910,7 @@ func (fa *FightScreenFace) drawTeammates(layerno int16, charpn int) {
 	oldBright := sys.brightness
 
 	// Reset system brightness if player initiated SuperPause (cancel "darken" parameter)
+	// Update: Mugen doesn't do this and it doesn't make much sense to begin with
 	//refChar := sys.chars[charpn][0]
 	//if refChar.ignoreDarkenTime > 0 {
 	//	sys.brightness = 1.0
@@ -2026,7 +2039,7 @@ func (nm *FightScreenName) draw(layerno int16, charpn int, f map[int]*Fnt, side 
 	nm.top.Draw(float32(nm.pos[0])+sys.fightScreen.offsetX, float32(nm.pos[1]), layerno, sys.fightScreen.scale)
 }
 
-func (nm *FightScreenName) drawTeammates(layerno int16, charpn int, f map[int]*Fnt, side int) {
+func (nm *FightScreenName) drawTeammates(layerno int16, f map[int]*Fnt, side int) {
 	if len(nm.teammate_name_strings) == 0 {
 		return
 	}
@@ -5527,7 +5540,7 @@ func (fs *FightScreen) visible() bool {
 	return fs.active &&
 		!sys.postMatchFlg &&
 		!sys.lifebarHide &&
-		!sys.dialogueBarsFlg &&
+		!(sys.dialogueHideBars || sys.motif.di.active) &&
 		!(sys.motif.me.active && sys.motif.PauseMenu["pause_menu"].HideBars &&
 			(!sys.motif.me.closeRequested || sys.paused))
 }
@@ -5643,7 +5656,7 @@ func (fs *FightScreen) draw(layerno int16) {
 					}
 					// Draw Turns teammates from the first bar only
 					if slot == 0 {
-						fs.faces[layout][side].drawTeammates(layerno, charpn)
+						fs.faces[layout][side].drawTeammates(layerno)
 					}
 					fs.faces[layout][barpn].bgDraw(layerno)
 					fs.faces[layout][barpn].draw(layerno, charpn, fs.faces[layout][charpn])
@@ -5667,7 +5680,7 @@ func (fs *FightScreen) draw(layerno int16) {
 					}
 					// Draw Turns teammates from the first bar only
 					if slot == 0 {
-						fs.names[layout][side].drawTeammates(layerno, charpn, fs.fnt, side)
+						fs.names[layout][side].drawTeammates(layerno, fs.fnt, side)
 					}
 					fs.names[layout][barpn].bgDraw(layerno)
 					fs.names[layout][barpn].draw(layerno, charpn, fs.fnt, side)

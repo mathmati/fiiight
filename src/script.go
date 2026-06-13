@@ -3206,7 +3206,7 @@ func systemScriptInit(l *lua.LState) {
 				sys.bgPalFX = newPalFX()
 				sys.resetGblEffect()
 				sys.dialogueForce = 0
-				sys.dialogueBarsFlg = false
+				sys.dialogueHideBars = false
 				sys.noSoundFlg = false
 				sys.postMatchFlg = false
 				sys.preMatchTime += sys.matchTime
@@ -8749,7 +8749,7 @@ func triggerFunctions(l *lua.LState) {
 		case "persistmusic":
 			l.Push(lua.LBool(sys.sel.gameParams.PersistMusic))
 		case "hidebars":
-			l.Push(lua.LBool(sys.lifebarHide || sys.dialogueBarsFlg))
+			l.Push(lua.LBool(sys.lifebarHide || sys.dialogueHideBars || sys.motif.di.active))
 		default:
 			l.RaiseError("\nInvalid argument: %v\n", strArg(l, 1))
 		}
