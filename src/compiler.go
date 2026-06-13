@@ -4518,7 +4518,7 @@ func (c *CharCompiler) expValue(out *BytecodeExp, in *string,
 		default:
 			return bvNone(), Error("Invalid EnvShakeVar argument: " + c.token)
 		}
-		out.append(OC_ex_, opc)
+		out.append(OC_ex2_, opc)
 		c.token = c.tokenizer(in)
 		if err := c.checkClosingParenthesis(); err != nil {
 			return bvNone(), err
@@ -6784,9 +6784,18 @@ func (c *CharCompiler) stateCompileCNS(states map[int32]StateBytecode, filename,
 			return errmes(err)
 		}
 
-		// Skip if this state has already been added
+		// Duplicate StateDef check. CNS tolerates it
 		if existInThisFile[c.stateNo] {
-			continue
+			msg := fmt.Sprintf("State %v already defined in this file. Skipping duplicate", c.stateNo)
+			if c.stateNo == -10 {
+				msg = "State +1 already defined in this file. Skipping duplicate"
+			}
+			if sys.ignoreMostErrors { // Normally true but might be configurable at some point
+				LogMessage(c.charWarn() + msg)
+				continue
+			} else {
+				return Error(msg)
+			}
 		}
 		existInThisFile[c.stateNo] = true
 
@@ -7965,6 +7974,8 @@ func (c *CharCompiler) stateCompileZSS(states map[int32]StateBytecode, filename,
 				return errmes(err)
 			}
 			c.scan(&line)
+
+			// Duplicate StateDef check. ZSS crashes
 			if existInThisFile[c.stateNo] {
 				if c.stateNo == -10 {
 					return errmes(Error(fmt.Sprintf("State +1 already defined in the same file")))
@@ -7973,6 +7984,7 @@ func (c *CharCompiler) stateCompileZSS(states map[int32]StateBytecode, filename,
 				}
 			}
 			existInThisFile[c.stateNo] = true
+
 			is := NewIniSection()
 			for c.token != "]" {
 				switch c.token {
