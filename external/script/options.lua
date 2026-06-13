@@ -1374,7 +1374,7 @@ options.t_itemname = {
 	--Save and Return
 	['savereturn'] = function(t, item, cursorPosY, moveTxt)
 		if getInput(-1, motif.option_info.menu.done.key) then
-			sndPlay(motif.Snd, motif.option_info.cancel.snd[1], motif.option_info.cancel.snd[2])
+			sndPlay(motif.Snd, motif.option_info.cursor.done.snd[1], motif.option_info.cursor.done.snd[2])
 			if options.modified then
 				options.f_saveCfg(options.needReload)
 			end
