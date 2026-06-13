@@ -942,6 +942,8 @@ end
 function main.f_commandLine()
 	setGameMode('quickvs')
 	setCredits(-1)
+    -- No need for asynchronous loading when running from command line. Fixes race conditions with Turns teammate faces
+    modifyGameOption('Config.BootLoadingMode', 0)
 	local ref = #main.t_selChars
 	local t_teamMode = {0, 0}
 	local t_numChars = {0, 0}
