@@ -763,8 +763,11 @@ function start.f_animGet(ref, side, member, params, velParams, loop, srcAnim)
 end
 
 --calculate portraits x pos
-local function f_portraitsXCalc(side, member, paramsSide, params)
-	local x = paramsSide.pos[1] + params.offset[1]
+local function f_portraitsXCalc(side, member, paramsSide, params, skipOffset)
+	local x = paramsSide.pos[1]
+	if not skipOffset then
+		x = x + params.offset[1]
+	end
 	if paramsSide.padding then
 		return x + (2 * member - 1) * paramsSide.spacing[1] * paramsSide.num / (2 * math.min(paramsSide.num, math.max(start.p[side].numChars, #start.p[side].t_selected)))
 	end
@@ -817,7 +820,7 @@ local function getPortraitDrawData(v, side, member, params, dataField)
 			drawParams = params.loading
 		end
 	end
-	return data, drawParams
+	return data, drawParams, drawParams == params.loading
 end
 
 local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
@@ -827,12 +830,12 @@ local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
 	local paramsSide, params = getParams(side, idx, t, subname)
 	if paramsSide.num == 1 and last then
 		local v = t_portraits[idx]
-		local data, drawParams = getPortraitDrawData(v, side, idx, params, dataField)
+		local data, drawParams, skipOffset = getPortraitDrawData(v, side, idx, params, dataField)
 		if not v.skipCurrent and data ~= nil then
 			main.f_animPosDraw(
 				data,
-				f_portraitsXCalc(side, 1, paramsSide, drawParams),
-				paramsSide.pos[2] + drawParams.offset[2]
+				f_portraitsXCalc(side, 1, paramsSide, drawParams, skipOffset),
+				paramsSide.pos[2] + (skipOffset and 0 or drawParams.offset[2])
 			)
 		end
 		-- we're done for this layer in this mode
@@ -854,12 +857,12 @@ local function drawPortraitLayer(t_portraits, side, t, subname, last, dataField)
 		local member = it.m
 		local paramsSide, params = getParams(side, member, t, subname)
 		local v = t_portraits[member]
-		local data, drawParams = getPortraitDrawData(v, side, member, params, dataField)
+		local data, drawParams, skipOffset = getPortraitDrawData(v, side, member, params, dataField)
 		if member <= paramsSide.num and not v.skipCurrent and data ~= nil then
 			main.f_animPosDraw(
 				data,
-				f_portraitsXCalc(side, member, paramsSide, drawParams),
-				paramsSide.pos[2] + drawParams.offset[2] + (member - 1) * paramsSide.spacing[2]
+				f_portraitsXCalc(side, member, paramsSide, drawParams, skipOffset),
+				paramsSide.pos[2] + (skipOffset and 0 or drawParams.offset[2]) + (member - 1) * paramsSide.spacing[2]
 			)
 		end
 	end
@@ -2471,8 +2474,12 @@ function start.updateDrawList()
 					end
 					local item = getTransforms(portrait)
 					item.anim = loadingPortrait and portrait.AnimData or charData.cell_data
-					item.x = motif.select_info.pos[1] + t.x + portrait.offset[1]
-					item.y = motif.select_info.pos[2] + t.y + portrait.offset[2]
+					item.x = motif.select_info.pos[1] + t.x
+					item.y = motif.select_info.pos[2] + t.y
+					if not loadingPortrait then
+						item.x = item.x + portrait.offset[1]
+						item.y = item.y + portrait.offset[2]
+					end
 					-- apply cell scale override while preserving portrait resolution factor
 					-- loading portrait comes from system.sff, so don't apply character localcoord scaling to it
 					if item.scale ~= nil and not loadingPortrait then
@@ -2782,15 +2789,19 @@ function start.f_selectScreen()
 					local stageRef = main.t_selectableStages[stageListNo]
 					local portrait = motif.select_info.stage.portrait
 					local anim = main.t_selStages[stageRef].anim_data
+					local loadingPortrait = false
 					if getStagePreloadStatus(stageRef) ~= 'ready' and hasPortraitAnim(portrait.loading) then
 						portrait = portrait.loading
 						anim = portrait.AnimData
+						loadingPortrait = true
 					end
-					main.f_animPosDraw(
-						anim,
-						motif.select_info.stage.pos[1] + portrait.offset[1],
-						motif.select_info.stage.pos[2] + portrait.offset[2]
-					)
+					local x = motif.select_info.stage.pos[1]
+					local y = motif.select_info.stage.pos[2]
+					if not loadingPortrait then
+						x = x + portrait.offset[1]
+						y = y + portrait.offset[2]
+					end
+					main.f_animPosDraw(anim, x, y)
 				end
 				if not stageEnd then
 					local canConfirmStage = (getInput(-1, motif.select_info.done.key) and not screenDelayInterrupted) or timerSelect == -1
@@ -4086,16 +4097,20 @@ function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 			--draw stage portrait loaded from stage SFF
 			local portrait = motif.vs_screen.stage.portrait
 			local anim = main.t_selStages[selStageNo].vs_anim_data
+			local loadingPortrait = false
 			if getStagePreloadStatus(selStageNo) ~= 'ready' and hasPortraitAnim(portrait.loading) then
 				portrait = portrait.loading
 				anim = portrait.AnimData
+				loadingPortrait = true
 			end
 			if anim then
-				main.f_animPosDraw(
-					anim,
-					motif.vs_screen.stage.pos[1] + portrait.offset[1],
-					motif.vs_screen.stage.pos[2] + portrait.offset[2]
-				)
+				local x = motif.vs_screen.stage.pos[1]
+				local y = motif.vs_screen.stage.pos[2]
+				if not loadingPortrait then
+					x = x + portrait.offset[1]
+					y = y + portrait.offset[2]
+				end
+				main.f_animPosDraw(anim, x, y)
 			end
 		end
 		--draw stage name
