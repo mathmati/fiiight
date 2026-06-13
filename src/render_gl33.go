@@ -1501,6 +1501,7 @@ func (r *Renderer_GL33) prepareModelPipeline(bufferIndex uint32, env *Environmen
 	gl.BindFramebuffer(gl.FRAMEBUFFER, r.fbo)
 
 	gl.Viewport(0, 0, sys.scrrect[2], sys.scrrect[3])
+	r.SetDepthMask(true)
 	gl.Clear(gl.DEPTH_BUFFER_BIT)
 	//gl.Enable(gl.TEXTURE_2D) // Causes OpenGL error
 	//gl.Enable(gl.TEXTURE_CUBE_MAP) // Causes OpenGL error
@@ -1508,7 +1509,6 @@ func (r *Renderer_GL33) prepareModelPipeline(bufferIndex uint32, env *Environmen
 	// Set global state
 	r.EnableBlending(r.blendEquation, r.blendSrc, r.blendDst)
 	r.SetDepthTest(true)
-	r.SetDepthMask(true)
 	r.SetFrontFace(r.invertFrontFace)
 	r.SetCullFace(r.doubleSided)
 
