@@ -119,13 +119,13 @@ type SystemStateVars struct {
 	decisiveRound           [2]bool
 	gameMode                string
 
-	consecutiveWins [2]int32
-	firstAttack     [3]int
-	home            int
-	stageLoop       bool
+	consecutiveWins  [2]int32
+	firstAttack      [3]int
+	home             int
+	stageLoop        bool
 	dialogueHideBars bool
-	dialogueForce   int
-	playBgmFlg      bool
+	dialogueForce    int
+	playBgmFlg       bool
 
 	keyInput            Key
 	keyString           string
