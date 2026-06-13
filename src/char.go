@@ -749,7 +749,7 @@ func (hd *HitDef) reset(c *Char, proj *Projectile) {
 		zaccel: 0,
 
 		p1sprpriority:       IErr, // 1 in Mugen
-		p2sprpriority:       IErr, // 0 in Mugen
+		p2sprpriority:       0,
 		p1stateno:           -1,
 		p2stateno:           -1,
 		missonoverride:      -1,
@@ -1004,11 +1004,10 @@ func (hd *HitDef) finalizeParams(c *Char, proj *Projectile) {
 		c.juggle = hd.air_juggle
 	}
 
-	// Mugen defaults to changing p1 and p2 sprpriority, but you have to work around that more often than not
-	// The new defaults should be harmless or even beneficial, so we won't lock them behind a version check just yet
+	// Mugen defaults to changing p1sprpriority, but you have to work around that more often than not
+	// The new default should be harmless or even beneficial, so we won't lock it behind a version check just yet
 	//if c.stWgi().ikemenver[0] == 0 && c.stWgi().ikemenver[1] == 0 {
 	//	ifierrset(&hd.p1sprpriority, 1)
-	//	ifierrset(&hd.p2sprpriority, 0)
 	//}
 }
 
@@ -10764,9 +10763,7 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 		if !isProjectile && hd.p1sprpriority != IErr {
 			c.sprPriority = hd.p1sprpriority
 		}
-		if hd.p2sprpriority != IErr {
-			getter.sprPriority = hd.p2sprpriority
-		}
+		getter.sprPriority = hd.p2sprpriority
 	}
 
 	// Attacker facing
