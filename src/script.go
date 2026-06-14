@@ -2608,6 +2608,53 @@ func systemScriptInit(l *lua.LState) {
 		@treturn Fade fade Fade userdata.
 		function fadeNew(fade) end*/
 		f := newFade()
+
+		// if no table return the Fade as is
+		if !nilArg(l, 1) {
+			// from here apply parameters by key-value
+			tableArg(l, 1).ForEach(func(key, value lua.LValue){
+				switch k := key.(type) {
+				case lua.LString:
+					switch strings.ToLower(string(k)) {
+					case "time":
+						f.time = int32(lua.LVAsNumber(value))
+					case "color":
+						var s [3]int32
+						switch v := value.(type){
+						case *lua.LTable:
+							v.ForEach(func(key2, value2 lua.LValue){
+								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
+							})
+						}
+						f.col[0] = s[0] & 0xff
+						f.col[1] = s[1] & 0xff
+						f.col[2] = s[2] & 0xff
+					case "anim":
+						// if I can't convert to *Anim, that's okay, just leave it nil
+						if ud, ok := value.(*lua.LUserData); ok{
+							if anim, ok := ud.Value.(*Anim); ok{
+								f.animData = anim
+							}
+						}
+					case "sound":
+						var s [2]int32
+						switch v := value.(type){
+						case *lua.LTable:
+							v.ForEach(func(key2, value2 lua.LValue){
+								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
+							})
+						}
+						f.snd[0] = s[0]
+						f.snd[1] = s[1]
+					default:
+						l.RaiseError("\nInvalid table key: %v\n", k)
+					}
+				default:
+					l.RaiseError("\nInvalid table key type: %v\n", fmt.Sprintf("%T\n", key))
+				}
+			})
+		}
+
 		l.Push(newUserData(l, f))
 		return 1
 	})
@@ -2668,19 +2715,6 @@ func systemScriptInit(l *lua.LState) {
 		}
 		f.snd[0] = int32(numArg(l, 2))
 		f.snd[1] = int32(numArg(l, 3))
-		return 0
-	})
-	luaRegister(l, "fadeSetFadeIn", func(*lua.LState) int {
-		/*Sets the flag for fadein for a Fade userdata.
-		@function fadeSetFadeIn
-		@tparam Fade fade The Fade userdata to modify.
-		@tparam boolean fadeIn If `true`, will specify the fade as fadein. Fadeout otherwise.
-		function fadeSetFadeIn(fade, fadeIn) end*/
-		f, ok := toUserData(l, 1).(*Fade)
-		if !ok {
-			userDataError(l, 1, f)
-		}
-		f.isFadeIn = boolArg(l, 2)
 		return 0
 	})
 	luaRegister(l, "fadeActive", func(*lua.LState) int {
