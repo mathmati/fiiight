@@ -2605,8 +2605,13 @@ func systemScriptInit(l *lua.LState) {
 	luaRegister(l, "fadeNew", func(*lua.LState) int {
 		/*Instantiates a Fade userdata for use with fadeInInit and fadeOutInit.
 		@function fadeNew
+		@tparam[opt] table params Parameter table (keys are case-insenstive) :
+		  - `time` (int, opt) Duration in ticks
+		  - `color` (int[3], opt) RGB values (0–255)
+		  - `anim` (*Anim, opt) Animation to play in the fade. If nil or invalid, will play no animation
+		  - `sound` (int[2], opt) Sound to play in the fade. Uses motif SND.
 		@treturn Fade fade Fade userdata.
-		function fadeNew(fade) end*/
+		function fadeNew(params) end*/
 		f := newFade()
 
 		// if no table return the Fade as is
