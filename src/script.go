@@ -2617,7 +2617,7 @@ func systemScriptInit(l *lua.LState) {
 		// if no table return the Fade as is
 		if !nilArg(l, 1) {
 			// from here apply parameters by key-value
-			tableArg(l, 1).ForEach(func(key, value lua.LValue){
+			tableArg(l, 1).ForEach(func(key, value lua.LValue) {
 				switch k := key.(type) {
 				case lua.LString:
 					switch strings.ToLower(string(k)) {
@@ -2625,9 +2625,9 @@ func systemScriptInit(l *lua.LState) {
 						f.time = int32(lua.LVAsNumber(value))
 					case "color":
 						var s [3]int32
-						switch v := value.(type){
+						switch v := value.(type) {
 						case *lua.LTable:
-							v.ForEach(func(key2, value2 lua.LValue){
+							v.ForEach(func(key2, value2 lua.LValue) {
 								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
 							})
 						}
@@ -2636,16 +2636,16 @@ func systemScriptInit(l *lua.LState) {
 						f.col[2] = s[2] & 0xff
 					case "anim":
 						// if I can't convert to *Anim, that's okay, just leave it nil
-						if ud, ok := value.(*lua.LUserData); ok{
-							if anim, ok := ud.Value.(*Anim); ok{
+						if ud, ok := value.(*lua.LUserData); ok {
+							if anim, ok := ud.Value.(*Anim); ok {
 								f.animData = anim
 							}
 						}
 					case "sound":
 						var s [2]int32
-						switch v := value.(type){
+						switch v := value.(type) {
 						case *lua.LTable:
-							v.ForEach(func(key2, value2 lua.LValue){
+							v.ForEach(func(key2, value2 lua.LValue) {
 								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
 							})
 						}
