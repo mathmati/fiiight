@@ -2658,65 +2658,6 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(newUserData(l, f))
 		return 1
 	})
-	luaRegister(l, "fadeSetTime", func(*lua.LState) int {
-		/*Sets the duration of a Fade userdata.
-		@function fadeSetTime
-		@tparam Fade fade The Fade userdata to modify.
-		@tparam int32 ticks The new length of the Fade in ticks.
-		function fadeSetTime(fade, ticks) end*/
-		f, ok := toUserData(l, 1).(*Fade)
-		if !ok {
-			userDataError(l, 1, f)
-		}
-		f.time = int32(numArg(l, 2))
-		return 0
-	})
-	luaRegister(l, "fadeSetColor", func(*lua.LState) int {
-		/*Sets the color of a Fade userdata.
-		@function fadeSetColor
-		@tparam Fade fade The Fade userdata to modify.
-		@tparam int32 r Red component (0–255).
-		@tparam int32 g Green component (0–255).
-		@tparam int32 b Blue component (0–255).
-		function fadeSetColor(fade, r, g, b) end*/
-		f, ok := toUserData(l, 1).(*Fade)
-		if !ok {
-			userDataError(l, 1, f)
-		}
-		f.col[0] = int32(numArg(l, 2)) & 0xff
-		f.col[1] = int32(numArg(l, 3)) & 0xff
-		f.col[2] = int32(numArg(l, 4)) & 0xff
-		return 0
-	})
-	luaRegister(l, "fadeSetAnim", func(*lua.LState) int {
-		/*Sets the Anim associated with a Fade userdata.
-		@function fadeSetAnim
-		@tparam Fade fade The Fade userdata to modify.
-		@tparam[opt] Anim anim The Anim to assign to the fade. If nil or invalid, will remove the anim from the fade.
-		function fadeSetAnim(fade, anim) end*/
-		f, ok := toUserData(l, 1).(*Fade)
-		if !ok {
-			userDataError(l, 1, f)
-		}
-		anim := toUserData(l, 2).(*Anim)
-		f.animData = anim
-		return 0
-	})
-	luaRegister(l, "fadeSetSound", func(*lua.LState) int {
-		/*Sets the sound associated with a Fade userdata.
-		@function fadeSetSound
-		@tparam Fade fade The Fade userdata to modify.
-		@tparam int32 group The group number of the sound, from the motif's SND file.
-		@tparam int32 index The index number of the sound, from the motif's SND file.
-		function fadeSetSound(fade, group, index) end*/
-		f, ok := toUserData(l, 1).(*Fade)
-		if !ok {
-			userDataError(l, 1, f)
-		}
-		f.snd[0] = int32(numArg(l, 2))
-		f.snd[1] = int32(numArg(l, 3))
-		return 0
-	})
 	luaRegister(l, "fadeActive", func(*lua.LState) int {
 		/*Check whether any global motif fade is active.
 		@function fadeActive
