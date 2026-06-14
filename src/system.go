@@ -2716,8 +2716,16 @@ func (s *System) action() {
 	}
 
 	s.charList.cueDraw()
+
+	// Note: Explod update must happen after hit detection. Because hit sparks are also explods
 	s.explodUpdate()
 	s.charTextsUpdate()
+
+	for i := range s.explods {
+		for _, e := range s.explods[i] {
+			e.cueDraw()
+		}
+	}
 
 	// Adjust game speed
 	if s.tickNextFrame() {
