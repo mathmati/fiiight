@@ -1417,10 +1417,8 @@ func (r *Renderer_VK) CreateRenderTarget(renderpass vk.RenderPass, width, height
 
 func (r *Renderer_VK) CreateRenderTargetTexture(width, height uint32, numSamples int32, main bool) *Texture_VK {
 	t := &Texture_VK{int32(width), int32(height), 32, false, 1, [2]int32{0, 0}, [4]float32{0, 0, 1, 1}, nil, nil, nil}
-	usage := vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit)
-	if main {
-		usage = usage | vk.ImageUsageFlags(vk.ImageUsageTransferSrcBit)
-	} else {
+	usage := vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit | vk.ImageUsageTransferSrcBit)
+	if !main {
 		usage = usage | vk.ImageUsageFlags(vk.ImageUsageSampledBit) | vk.ImageUsageFlags(vk.ImageUsageTransferDstBit)
 	}
 	t.img = r.CreateImage(width, height, r.swapchains[0].format, 1, 1, usage, numSamples, vk.ImageTilingOptimal, false)
@@ -5522,18 +5520,31 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 	//Make sure the rendering is finished
 	vk.WaitForFences(r.device, 1, r.fences[:1], vk.True, 10*1000*1000*1000)
 	cmd := r.BeginSingleTimeCommands()
-	imageIndex := r.swapchains[0].currentImageIndex
-	//Create a temporary texture in host visible memory
-	img := r.CreateImage(r.swapchains[0].extent.Width, r.swapchains[0].extent.Height, vk.FormatR8g8b8a8Unorm, 1, 1, vk.ImageUsageFlags(vk.ImageUsageTransferDstBit), 1, vk.ImageTilingLinear, false)
-	imageMemory := r.AllocateImageMemory(img, vk.MemoryPropertyHostVisibleBit|vk.MemoryPropertyHostCachedBit)
+
+	// Create intermediate image with optimal tiling for blitting
+	intermediateImg := r.CreateImage(uint32(width), uint32(height), vk.FormatR8g8b8a8Unorm, 1, 1, vk.ImageUsageFlags(vk.ImageUsageTransferDstBit|vk.ImageUsageTransferSrcBit), 1, vk.ImageTilingOptimal, false)
+	intermediateMemory := r.AllocateImageMemory(intermediateImg, vk.MemoryPropertyDeviceLocalBit)
+
+	// Create staging buffer
+	bufferSize := vk.DeviceSize(width * height * 4)
+	var stagingBufferMemory vk.DeviceMemory
+	stagingBuffer, err := r.CreateBuffer(bufferSize, vk.BufferUsageFlags(vk.BufferUsageTransferDstBit), vk.MemoryPropertyHostVisibleBit|vk.MemoryPropertyHostCoherentBit, &stagingBufferMemory)
+	if err != nil {
+		fmt.Printf("ReadPixels: failed to create staging buffer: %v\n", err)
+		vk.DestroyImage(r.device, intermediateImg, nil)
+		vk.FreeMemory(r.device, intermediateMemory, nil)
+		return
+	}
+
+	// Transition source render target and intermediate image
 	imgBarriers := []vk.ImageMemoryBarrier{
 		{
 			SType:         vk.StructureTypeImageMemoryBarrier,
-			OldLayout:     vk.ImageLayoutUndefined,
-			NewLayout:     vk.ImageLayoutTransferDstOptimal,
-			SrcAccessMask: vk.AccessFlags(vk.AccessNone),
-			DstAccessMask: vk.AccessFlags(vk.AccessTransferWriteBit),
-			Image:         img,
+			OldLayout:     vk.ImageLayoutShaderReadOnlyOptimal,
+			NewLayout:     vk.ImageLayoutTransferSrcOptimal,
+			SrcAccessMask: vk.AccessFlags(vk.AccessShaderReadBit),
+			DstAccessMask: vk.AccessFlags(vk.AccessTransferReadBit),
+			Image:         r.renderTargets[(len(r.postProcessingProgram.pipelines)+1)%2].texture.img,
 			SubresourceRange: vk.ImageSubresourceRange{
 				AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
 				BaseMipLevel:   0,
@@ -5544,11 +5555,11 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 		},
 		{
 			SType:         vk.StructureTypeImageMemoryBarrier,
-			OldLayout:     vk.ImageLayoutPresentSrc,
-			NewLayout:     vk.ImageLayoutTransferSrcOptimal,
+			OldLayout:     vk.ImageLayoutUndefined,
+			NewLayout:     vk.ImageLayoutTransferDstOptimal,
 			SrcAccessMask: vk.AccessFlags(vk.AccessNone),
-			DstAccessMask: vk.AccessFlags(vk.AccessTransferReadBit),
-			Image:         r.swapchains[0].images[imageIndex],
+			DstAccessMask: vk.AccessFlags(vk.AccessTransferWriteBit),
+			Image:         intermediateImg,
 			SubresourceRange: vk.ImageSubresourceRange{
 				AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
 				BaseMipLevel:   0,
@@ -5558,8 +5569,9 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 			},
 		},
 	}
-	vk.CmdPipelineBarrier(cmd, vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit), vk.PipelineStageFlags(vk.PipelineStageTransferBit), 0, 0, nil, 0, nil, 2, imgBarriers)
+	vk.CmdPipelineBarrier(cmd, vk.PipelineStageFlags(vk.PipelineStageFragmentShaderBit), vk.PipelineStageFlags(vk.PipelineStageTransferBit), 0, 0, nil, 0, nil, 2, imgBarriers)
 
+	// Blit from render target to intermediate image
 	imageBlits := []vk.ImageBlit{{
 		SrcSubresource: vk.ImageSubresourceLayers{
 			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
@@ -5568,16 +5580,8 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 			LayerCount:     1,
 		},
 		SrcOffsets: [2]vk.Offset3D{
-			{
-				X: 0,
-				Y: 0,
-				Z: 0,
-			},
-			{
-				X: int32(r.swapchains[0].extent.Width),
-				Y: int32(r.swapchains[0].extent.Height),
-				Z: 1,
-			},
+			{X: 0, Y: 0, Z: 0},
+			{X: int32(width), Y: int32(height), Z: 1},
 		},
 		DstSubresource: vk.ImageSubresourceLayers{
 			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
@@ -5586,27 +5590,36 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 			LayerCount:     1,
 		},
 		DstOffsets: [2]vk.Offset3D{
-			{
-				X: 0,
-				Y: 0,
-				Z: 0,
-			},
-			{
-				X: int32(r.swapchains[0].extent.Width),
-				Y: int32(r.swapchains[0].extent.Height),
-				Z: 1,
-			},
+			{X: 0, Y: 0, Z: 0},
+			{X: int32(width), Y: int32(height), Z: 1},
 		},
 	}}
-	vk.CmdBlitImage(cmd, r.swapchains[0].images[imageIndex], vk.ImageLayoutTransferSrcOptimal, img, vk.ImageLayoutTransferDstOptimal, uint32(len(imageBlits)), imageBlits, vk.FilterLinear)
+	vk.CmdBlitImage(cmd, r.renderTargets[(len(r.postProcessingProgram.pipelines)+1)%2].texture.img, vk.ImageLayoutTransferSrcOptimal, intermediateImg, vk.ImageLayoutTransferDstOptimal, uint32(len(imageBlits)), imageBlits, vk.FilterNearest)
+
+	// Transition intermediate image for copying
 	imgBarriers = []vk.ImageMemoryBarrier{
 		{
 			SType:         vk.StructureTypeImageMemoryBarrier,
 			OldLayout:     vk.ImageLayoutTransferDstOptimal,
-			NewLayout:     vk.ImageLayoutGeneral,
+			NewLayout:     vk.ImageLayoutTransferSrcOptimal,
 			SrcAccessMask: vk.AccessFlags(vk.AccessTransferWriteBit),
-			DstAccessMask: vk.AccessFlags(vk.AccessNone),
-			Image:         img,
+			DstAccessMask: vk.AccessFlags(vk.AccessTransferReadBit),
+			Image:         intermediateImg,
+			SubresourceRange: vk.ImageSubresourceRange{
+				AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
+				BaseMipLevel:   0,
+				LevelCount:     1,
+				BaseArrayLayer: 0,
+				LayerCount:     1,
+			},
+		},
+		{
+			SType:         vk.StructureTypeImageMemoryBarrier,
+			OldLayout:     vk.ImageLayoutTransferSrcOptimal,
+			NewLayout:     vk.ImageLayoutShaderReadOnlyOptimal,
+			SrcAccessMask: vk.AccessFlags(vk.AccessTransferReadBit),
+			DstAccessMask: vk.AccessFlags(vk.AccessShaderReadBit),
+			Image:         r.renderTargets[(len(r.postProcessingProgram.pipelines)+1)%2].texture.img,
 			SubresourceRange: vk.ImageSubresourceRange{
 				AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
 				BaseMipLevel:   0,
@@ -5616,32 +5629,38 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 			},
 		},
 	}
-	vk.CmdPipelineBarrier(cmd, vk.PipelineStageFlags(vk.PipelineStageTransferBit), vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit), 0, 0, nil, 0, nil, 1, imgBarriers)
+	vk.CmdPipelineBarrier(cmd, vk.PipelineStageFlags(vk.PipelineStageTransferBit), vk.PipelineStageFlags(vk.PipelineStageTransferBit|vk.PipelineStageFragmentShaderBit), 0, 0, nil, 0, nil, 2, imgBarriers)
+
+	// Copy from intermediate image to staging buffer
+	region := vk.BufferImageCopy{
+		BufferOffset:      0,
+		BufferRowLength:   0,
+		BufferImageHeight: 0,
+		ImageSubresource: vk.ImageSubresourceLayers{
+			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
+			MipLevel:       0,
+			BaseArrayLayer: 0,
+			LayerCount:     1,
+		},
+		ImageOffset: vk.Offset3D{X: 0, Y: 0, Z: 0},
+		ImageExtent: vk.Extent3D{Width: uint32(width), Height: uint32(height), Depth: 1},
+	}
+	vk.CmdCopyImageToBuffer(cmd, intermediateImg, vk.ImageLayoutTransferSrcOptimal, stagingBuffer, 1, []vk.BufferImageCopy{region})
 
 	r.EndSingleTimeCommands(cmd)
-	subResource := vk.ImageSubresource{
-		AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit),
-		MipLevel:   0,
-		ArrayLayer: 0,
-	}
-	var subResourceLayout vk.SubresourceLayout
-	vk.GetImageSubresourceLayout(r.device, img, &subResource, &subResourceLayout)
-	//subResourceLayout.Deref()
-	var mappedData unsafe.Pointer
-	vk.MapMemory(r.device, imageMemory, subResourceLayout.Offset, vk.DeviceSize(width*height*4), 0, &mappedData)
-	const m = 0x7fffffff
-	imageData := (*[m]byte)(mappedData)
-	if int(subResourceLayout.RowPitch) == width*4 {
-		copy(data, imageData[:width*height*4])
-	} else {
-		for y := 0; y < height; y++ {
-			copy(data[y*width*4:(y+1)*width*4], imageData[y*int(subResourceLayout.RowPitch):y*int(subResourceLayout.RowPitch)+width*4])
-		}
-	}
 
-	vk.UnmapMemory(r.device, imageMemory)
-	vk.DestroyImage(r.device, img, nil)
-	vk.FreeMemory(r.device, imageMemory, nil)
+	// Map staging buffer and copy data
+	var mappedData unsafe.Pointer
+	vk.MapMemory(r.device, stagingBufferMemory, 0, bufferSize, 0, &mappedData)
+	imageData := (*[1 << 30]byte)(mappedData)
+	copy(data, imageData[:width*height*4])
+	vk.UnmapMemory(r.device, stagingBufferMemory)
+
+	// Cleanup
+	vk.DestroyBuffer(r.device, stagingBuffer, nil)
+	vk.FreeMemory(r.device, stagingBufferMemory, nil)
+	vk.DestroyImage(r.device, intermediateImg, nil)
+	vk.FreeMemory(r.device, intermediateMemory, nil)
 }
 
 func (r *Renderer_VK) EnableScissor(x, y, width, height int32) {

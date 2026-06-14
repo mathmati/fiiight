@@ -878,9 +878,59 @@ type TextureAtlas struct {
 	skyline *list.List //[][2]uint32
 }
 
+func (ta *TextureAtlas) bytesPerPixel() int32 {
+	bpp := ta.depth / 8
+	if bpp < 1 {
+		bpp = 1
+	}
+	return bpp
+}
+
+func (ta *TextureAtlas) clearTexture(tex Texture, width, height int32) {
+	bpp := ta.bytesPerPixel()
+	clearData := make([]byte, int(width*height*bpp))
+	tex.SetSubData(clearData, 0, 0, width, height, width*bpp)
+}
+
+func extrudeAtlasImage(data []byte, width, height, stride, bpp int32) ([]byte, int32, bool) {
+	if width <= 0 || height <= 0 || bpp <= 0 {
+		return nil, 0, false
+	}
+	if stride <= 0 {
+		stride = width * bpp
+	}
+	if int(stride*height) > len(data) {
+		return nil, 0, false
+	}
+
+	outWidth := width + 2
+	outHeight := height + 2
+	outStride := outWidth * bpp
+	out := make([]byte, int(outStride*outHeight))
+
+	for y := int32(0); y < height; y++ {
+		srcRow := data[y*stride : y*stride+width*bpp]
+		dstRow := out[(y+1)*outStride+1*bpp : (y+1)*outStride+1*bpp+width*bpp]
+		copy(dstRow, srcRow)
+
+		leftPx := srcRow[:bpp]
+		rightPx := srcRow[(width-1)*bpp : width*bpp]
+		copy(out[(y+1)*outStride:(y+1)*outStride+bpp], leftPx)
+		copy(out[(y+1)*outStride+(outWidth-1)*bpp:(y+1)*outStride+outWidth*bpp], rightPx)
+	}
+
+	firstRow := out[outStride : outStride+outStride]
+	lastRow := out[(outHeight-2)*outStride : (outHeight-2)*outStride+outStride]
+	copy(out[0:outStride], firstRow)
+	copy(out[(outHeight-1)*outStride:(outHeight-1)*outStride+outStride], lastRow)
+
+	return out, outStride, true
+}
+
 func CreateTextureAtlas(width, height int32, depth int32, filter bool) *TextureAtlas {
 	ta := &TextureAtlas{width: width, height: height, texture: gfx.newTexture(width, height, depth, filter), depth: depth, filter: filter, skyline: list.New(), resize: false}
-	ta.texture.SetData(nil) // ALLOCATE STORAGE NOW
+	ta.texture.SetData(nil) // Allocate storage where supported.
+	ta.clearTexture(ta.texture, width, height)
 	ta.skyline.PushBack([2]int32{0, 0})
 	return ta
 }
@@ -937,7 +987,12 @@ func (ta *TextureAtlas) AddImage(width, height, stride int32, data []byte) ([4]f
 	}
 
 	// Otherwise upload and return
-	ta.texture.SetSubData(data, x, y, width, height, stride)
+	bpp := ta.bytesPerPixel()
+	paddedData, paddedStride, ok := extrudeAtlasImage(data, width, height, stride, bpp)
+	if !ok {
+		return [4]float32{}, false
+	}
+	ta.texture.SetSubData(paddedData, x-1, y-1, width+2, height+2, paddedStride)
 
 	return [4]float32{
 		float32(x) / float32(ta.width),
@@ -1013,6 +1068,7 @@ func (ta *TextureAtlas) Resize(width, height int32) {
 		panic("New height cannot be smaller than old height")
 	}
 	t := gfx.newTexture(width, height, ta.depth, ta.filter)
+	ta.clearTexture(t, width, height)
 	t.CopyData(&ta.texture)
 	ta.skyline.PushBack([2]int32{ta.width, 0})
 	ta.width = width
