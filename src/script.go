@@ -2602,6 +2602,67 @@ func systemScriptInit(l *lua.LState) {
 		sys.uiResetTokenGuard()
 		return 0
 	})
+	luaRegister(l, "fadeNew", func(*lua.LState) int {
+		/*Instantiates a Fade userdata for use with fadeInInit and fadeOutInit.
+		@function fadeNew
+		@tparam[opt] table params Parameter table (keys are case-insenstive) :
+		  - `time` (int, opt) Duration in ticks
+		  - `color` (int[3], opt) RGB values (0–255)
+		  - `anim` (*Anim, opt) Animation to play in the fade. If nil or invalid, will play no animation
+		  - `sound` (int[2], opt) Sound to play in the fade. Uses motif SND.
+		@treturn Fade fade Fade userdata.
+		function fadeNew(params) end*/
+		f := newFade()
+
+		// if no table return the Fade as is
+		if !nilArg(l, 1) {
+			// from here apply parameters by key-value
+			tableArg(l, 1).ForEach(func(key, value lua.LValue){
+				switch k := key.(type) {
+				case lua.LString:
+					switch strings.ToLower(string(k)) {
+					case "time":
+						f.time = int32(lua.LVAsNumber(value))
+					case "color":
+						var s [3]int32
+						switch v := value.(type){
+						case *lua.LTable:
+							v.ForEach(func(key2, value2 lua.LValue){
+								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
+							})
+						}
+						f.col[0] = s[0] & 0xff
+						f.col[1] = s[1] & 0xff
+						f.col[2] = s[2] & 0xff
+					case "anim":
+						// if I can't convert to *Anim, that's okay, just leave it nil
+						if ud, ok := value.(*lua.LUserData); ok{
+							if anim, ok := ud.Value.(*Anim); ok{
+								f.animData = anim
+							}
+						}
+					case "sound":
+						var s [2]int32
+						switch v := value.(type){
+						case *lua.LTable:
+							v.ForEach(func(key2, value2 lua.LValue){
+								s[int(lua.LVAsNumber(key2))-1] = int32(lua.LVAsNumber(value2))
+							})
+						}
+						f.snd[0] = s[0]
+						f.snd[1] = s[1]
+					default:
+						l.RaiseError("\nInvalid table key: %v\n", k)
+					}
+				default:
+					l.RaiseError("\nInvalid table key type: %v\n", fmt.Sprintf("%T\n", key))
+				}
+			})
+		}
+
+		l.Push(newUserData(l, f))
+		return 1
+	})
 	luaRegister(l, "fadeActive", func(*lua.LState) int {
 		/*Check whether any global motif fade is active.
 		@function fadeActive
