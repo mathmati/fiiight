@@ -4079,51 +4079,50 @@ func (ro *FightScreenRound) draw(layerno int16, f map[int]*Fnt) {
 
 	// Restore system brightness
 	sys.brightness = oldBright
+}
 
-	// Screen fading
-	if layerno == 2 {
-		if ro.fadeOut.isActive() {
-			ro.fadeOut.draw()
-		} else if ro.fadeIn.isActive() {
-			ro.fadeIn.draw()
-		} else if sys.clsnDisplay && sys.cfg.Debug.ClsnDarken {
-			ro.fadeIn.drawRect(sys.scrrect, 0, 0)
-		}
+func (ro *FightScreenRound) drawFade() {
+	if ro.fadeOut.isActive() {
+		ro.fadeOut.draw()
+	} else if ro.fadeIn.isActive() {
+		ro.fadeIn.draw()
+	} else if sys.clsnDisplay && sys.cfg.Debug.ClsnDarken {
+		ro.fadeIn.drawRect(sys.scrrect, 0, 0)
+	}
 
-		if ro.shutterTimer > 0 {
-			// shutterTimer is a countdown from (shutter_time*2) to 0:
-			// 2T -> open, T -> fully closed, 0 -> open
-			rect := sys.scrrect
-			half := (sys.scrrect[3] + 1) >> 1
-			var cover int32
-			if ro.shutter_time > 0 {
-				if ro.shutterTimer > ro.shutter_time {
-					// Closing phase
-					t := ro.shutter_time*2 - ro.shutterTimer
-					if t < 0 {
-						t = 0
-					}
-					if t > ro.shutter_time {
-						t = ro.shutter_time
-					}
-					cover = t * half / ro.shutter_time
-				} else {
-					// Opening phase
-					t := ro.shutterTimer
-					if t < 0 {
-						t = 0
-					}
-					if t > ro.shutter_time {
-						t = ro.shutter_time
-					}
-					cover = t * half / ro.shutter_time
+	if ro.shutterTimer > 0 {
+		// shutterTimer is a countdown from (shutter_time*2) to 0:
+		// 2T -> open, T -> fully closed, 0 -> open
+		rect := sys.scrrect
+		half := (sys.scrrect[3] + 1) >> 1
+		var cover int32
+		if ro.shutter_time > 0 {
+			if ro.shutterTimer > ro.shutter_time {
+				// Closing phase
+				t := ro.shutter_time*2 - ro.shutterTimer
+				if t < 0 {
+					t = 0
 				}
+				if t > ro.shutter_time {
+					t = ro.shutter_time
+				}
+				cover = t * half / ro.shutter_time
+			} else {
+				// Opening phase
+				t := ro.shutterTimer
+				if t < 0 {
+					t = 0
+				}
+				if t > ro.shutter_time {
+					t = ro.shutter_time
+				}
+				cover = t * half / ro.shutter_time
 			}
-			rect[3] = cover
-			ro.fadeIn.drawRect(rect, ro.shutter_col, 255)
-			rect[1] = sys.scrrect[3] - rect[3]
-			ro.fadeIn.drawRect(rect, ro.shutter_col, 255)
 		}
+		rect[3] = cover
+		ro.fadeIn.drawRect(rect, ro.shutter_col, 255)
+		rect[1] = sys.scrrect[3] - rect[3]
+		ro.fadeIn.drawRect(rect, ro.shutter_col, 255)
 	}
 }
 
@@ -5751,6 +5750,12 @@ func (fs *FightScreen) draw(layerno int16) {
 	if fs.active && !sys.postMatchFlg {
 		// Round
 		fs.round.draw(layerno, fs.fnt)
+	}
+}
+
+func (fs *FightScreen) drawFade() {
+	if fs.active && !sys.postMatchFlg {
+		fs.round.drawFade()
 	}
 }
 

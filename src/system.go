@@ -3556,6 +3556,9 @@ func (s *System) draw(x, y, scl float32) {
 	// Draw motif layer 2
 	s.motif.draw(2)
 
+	// Draw system fade/shutter over top-layer texts
+	s.fightScreen.drawFade()
+
 	// Draw motif layer 3
 	s.motif.draw(3)
 }
