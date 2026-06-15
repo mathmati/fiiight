@@ -198,6 +198,7 @@ type Animation struct {
 	isVideo                    bool // Because videos are rendered through Animation.Draw()
 	phantomPixel               bool
 	copyAction                 int32
+	warnMissing                bool
 }
 
 func newAnimation(sff *Sff, pal *PaletteList) *Animation {
@@ -216,6 +217,7 @@ func newAnimation(sff *Sff, pal *PaletteList) *Animation {
 		start_scale:                [...]float32{1, 1},
 		lastActionFrame:            -1,
 		copyAction:                 -1,
+		warnMissing:                true,
 	}
 }
 
@@ -607,15 +609,17 @@ func (a *Animation) UpdateSprite() {
 		if group != -1 && number != -1 {
 			a.spr = a.sff.GetSprite(uint16(group), uint16(number))
 			if a.spr == nil {
-				// Log missing sprites
-				// We will save the history in the SFF itself so that each sprite is only mentioned once
-				key := [2]uint16{uint16(group), uint16(number)}
-				if a.sff.debugMissing == nil {
-					a.sff.debugMissing = make(map[[2]uint16]bool)
-				}
-				if !a.sff.debugMissing[key] {
-					LogMessage("WARNING: Animation missing sprite %v,%v from %v", group, number, a.sff.filename)
-					a.sff.debugMissing[key] = true
+				if a.warnMissing {
+					// Log missing sprites
+					// We will save the history in the SFF itself so that each sprite is only mentioned once
+					key := [2]uint16{uint16(group), uint16(number)}
+					if a.sff.debugMissing == nil {
+						a.sff.debugMissing = make(map[[2]uint16]bool)
+					}
+					if !a.sff.debugMissing[key] {
+						LogMessage("WARNING: Animation missing sprite %v,%v from %v", group, number, a.sff.filename)
+						a.sff.debugMissing[key] = true
+					}
 				}
 			}
 		} else {
