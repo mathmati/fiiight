@@ -415,7 +415,7 @@ type FaceProperties struct {
 		AnimationCharPreloadProperties `skipinit:"true"`
 		Key                            []string `ini:"key"` // only used by [VS Screen]
 	} `ini:"done"`
-	Random   AnimationProperties `ini:"random"`  // only used by [Select Info]
+	Random   AnimationProperties `ini:"random"`               // only used by [Select Info]
 	Loading  AnimationProperties `ini:"loading" warn:"false"` // only used by [Select Info] and [VS Screen]
 	Velocity [2]float32          `ini:"velocity"`
 	MaxDist  [2]float32          `ini:"maxdist"`
