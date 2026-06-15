@@ -4706,11 +4706,12 @@ func (di *MotifDialogue) step(m *Motif) {
 
 	// Check if we haven't reached StartTime yet
 	if di.counter < m.DialogueInfo.StartTime {
-		// Before dialogue starts, keep both portraits in a neutral pose.
 		di.resetPortraitIdle(m.DialogueInfo.P1.Face.AnimData)
 		di.resetPortraitIdle(m.DialogueInfo.P2.Face.AnimData)
 		di.counter++
-		return
+		if di.counter < m.DialogueInfo.StartTime {
+			return
+		}
 	}
 
 	// Check if we've gone past all lines
