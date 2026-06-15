@@ -843,8 +843,8 @@ function main.f_preloadTick(limit)
 				if state == 'ready' then
 					--print("Char preload ready ref=" .. tostring(ch.char_ref) .. " row=" .. tostring(row))
 					main.f_syncCharPaletteData(ch.char_ref)
-				elseif state == 'error' then
-					print("Char preload error ref=" .. tostring(ch.char_ref) .. " row=" .. tostring(row) .. ": " .. tostring(err))
+				-- elseif state == 'error' then
+					-- print("Char preload error ref=" .. tostring(ch.char_ref) .. " row=" .. tostring(row) .. ": " .. tostring(err))
 				end
 			end
 			if state == 'ready' then
@@ -864,8 +864,8 @@ function main.f_preloadTick(limit)
 				main.preload.stageState[stageNo] = state
 				if state == 'ready' then
 					--print("Stage preload ready stage=" .. tostring(stageNo))
-				elseif state == 'error' then
-					print("Stage preload error stage=" .. tostring(stageNo) .. ": " .. tostring(err))
+				-- elseif state == 'error' then
+					-- print("Stage preload error stage=" .. tostring(stageNo) .. ": " .. tostring(err))
 				end
 			end
 			if state == 'ready' then

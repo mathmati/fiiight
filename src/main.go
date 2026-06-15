@@ -387,11 +387,21 @@ func handlePanic(r interface{}) {
 
 	// Show popup message
 	displayErr := errStr
+
+	// Remove stack traces from the popup to keep it concise. The full details already go to the log file
+	// Remove the Lua stack trace
 	if _, ok := r.(*lua.ApiError); ok {
-		parts := strings.SplitN(errStr, "stack traceback:", 2)
-		displayErr = strings.TrimSpace(parts[0]) // Remove the Lua traceback from this one
+		if idx := strings.Index(displayErr, "\nstack traceback:"); idx >= 0 {
+			displayErr = displayErr[:idx]
+		}
+		displayErr = strings.TrimSpace(displayErr)
+	}
+	// Also remove any Go stack trace that may have appeared
+	if idx := strings.Index(displayErr, "\ngoroutine "); idx >= 0 {
+		displayErr = displayErr[:idx]
 	}
 
+	// Limit message to 1000 characters just in case
 	if len(displayErr) > 1000 {
 		displayErr = displayErr[:1000] + "..."
 	}

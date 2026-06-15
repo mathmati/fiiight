@@ -3476,13 +3476,11 @@ func systemScriptInit(l *lua.LState) {
 		/*Query the background preload state of a character slot.
 		@function getCharPreloadStatus
 		@tparam int charRef 0-based character index in the select list.
-		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
-		@treturn string err Error message (empty string if no error).
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, or `"ready"`.
 		function getCharPreloadStatus(charRef) end*/
-		state, err := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
+		state := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
 		l.Push(lua.LString(state.String()))
-		l.Push(lua.LString(err))
-		return 2
+		return 1
 	})
 	luaRegister(l, "getCharRandomPalette", func(*lua.LState) int {
 		/*Get a random valid palette number for a character slot.
@@ -4096,13 +4094,11 @@ func systemScriptInit(l *lua.LState) {
 		/*Query the background preload state of a stage slot.
 		@function getStagePreloadStatus
 		@tparam int stageRef Stage index as used by the select system.
-		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
-		@treturn string err Error message (empty string if no error).
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, or `"ready"`.
 		function getStagePreloadStatus(stageRef) end*/
-		state, err := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
+		state := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
 		l.Push(lua.LString(state.String()))
-		l.Push(lua.LString(err))
-		return 2
+		return 1
 	})
 	luaRegister(l, "getStageSelectParams", func(*lua.LState) int {
 		/*Get parsed select parameters for a stage entry.

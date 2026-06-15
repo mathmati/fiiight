@@ -4415,7 +4415,7 @@ const (
 	PS_Queued
 	PS_Loading
 	PS_Ready
-	PS_Error
+	//PS_Error // We simply crash when preloading invalid assets
 )
 
 func (ps PreloadState) String() string {
@@ -4428,8 +4428,8 @@ func (ps PreloadState) String() string {
 		return "loading"
 	case PS_Ready:
 		return "ready"
-	case PS_Error:
-		return "error"
+	// case PS_Error:
+		// return "error"
 	}
 	return "idle"
 }
@@ -4443,7 +4443,7 @@ type PreloadEntry struct {
 	State    PreloadState
 	Priority int
 	Order    int64
-	Err      string
+	//Err      string
 }
 
 func newSelect() *Select {
@@ -4525,7 +4525,7 @@ func (s *Select) QueueCharPreload(ref int, priority int) {
 		e.Priority = priority
 		return
 	}
-	if e.State == PS_Idle || e.State == PS_Error {
+	if e.State == PS_Idle {// || e.State == PS_Error {
 		e.State = PS_Queued
 	}
 	if e.Priority == priority {
@@ -4563,7 +4563,7 @@ func (s *Select) QueueStagePreload(ref int, priority int) {
 		e.Priority = priority
 		return
 	}
-	if e.State == PS_Idle || e.State == PS_Error {
+	if e.State == PS_Idle {// || e.State == PS_Error {
 		e.State = PS_Queued
 	}
 	if e.Priority == priority {
@@ -4578,30 +4578,30 @@ func (s *Select) QueueStagePreload(ref int, priority int) {
 	}
 }
 
-func (s *Select) CharPreloadStatus(ref int) (PreloadState, string) {
+func (s *Select) CharPreloadStatus(ref int) (PreloadState) {// (PreloadState, string) {
 	if sys.cfg.Config.BootLoadingMode == 0 {
-		return PS_Ready, ""
+		return PS_Ready//, ""
 	}
 	s.initPreloadSync()
 	s.preloadMu.Lock()
 	defer s.preloadMu.Unlock()
 	if ref < 0 || ref >= len(s.charPreload) {
-		return PS_Idle, ""
+		return PS_Idle//, ""
 	}
-	return s.charPreload[ref].State, s.charPreload[ref].Err
+	return s.charPreload[ref].State //, s.charPreload[ref].Err
 }
 
-func (s *Select) StagePreloadStatus(ref int) (PreloadState, string) {
+func (s *Select) StagePreloadStatus(ref int) (PreloadState) {// (PreloadState, string) {
 	if sys.cfg.Config.BootLoadingMode == 0 {
-		return PS_Ready, ""
+		return PS_Ready//, ""
 	}
 	s.initPreloadSync()
 	s.preloadMu.Lock()
 	defer s.preloadMu.Unlock()
 	if ref <= 0 || ref-1 >= len(s.stagePreload) {
-		return PS_Idle, ""
+		return PS_Idle//, ""
 	}
-	return s.stagePreload[ref-1].State, s.stagePreload[ref-1].Err
+	return s.stagePreload[ref-1].State//, s.stagePreload[ref-1].Err
 }
 
 func (s *Select) AllPreloadsReady() bool {
@@ -4660,10 +4660,10 @@ func (s *Select) preloadWorkerLoop() {
 			if ref >= 0 {
 				if kind == "char" {
 					s.charPreload[ref].State = PS_Loading
-					s.charPreload[ref].Err = ""
+					//s.charPreload[ref].Err = ""
 				} else {
 					s.stagePreload[ref-1].State = PS_Loading
-					s.stagePreload[ref-1].Err = ""
+					//s.stagePreload[ref-1].Err = ""
 				}
 				s.preloadMu.Unlock()
 
@@ -4675,22 +4675,13 @@ func (s *Select) preloadWorkerLoop() {
 				}
 
 				s.preloadMu.Lock()
-				if kind == "char" {
-					if err != nil {
-						s.charPreload[ref].State = PS_Error
-						s.charPreload[ref].Err = err.Error()
-					} else {
-						s.charPreload[ref].State = PS_Ready
-						s.charPreload[ref].Err = ""
-					}
+
+				if err != nil {
+					panic(fmt.Sprintf("Preloading error: %s", err))
+				} else if kind == "char" {
+					s.charPreload[ref].State = PS_Ready
 				} else {
-					if err != nil {
-						s.stagePreload[ref-1].State = PS_Error
-						s.stagePreload[ref-1].Err = err.Error()
-					} else {
-						s.stagePreload[ref-1].State = PS_Ready
-						s.stagePreload[ref-1].Err = ""
-					}
+					s.stagePreload[ref-1].State = PS_Ready
 				}
 				s.preloadCond.Broadcast()
 				break
@@ -4757,7 +4748,9 @@ func (s *Select) preloadCharAssets(ref int) error {
 		for k := range s.charSpritePreload {
 			localAnims.addSprite(localSff, k[0], k[1])
 		}
+		// Determine the character's selectable palettes based on the return from preloadSff()
 		if localSff.header.Version[0] != 1 {
+			// Merge SFF and ACT indexes
 			defPals := make(map[int32]bool)
 			for _, p := range sc.pal {
 				defPals[p] = true
@@ -4787,9 +4780,11 @@ func (s *Select) preloadCharAssets(ref int) error {
 			sc.pal = newPal
 			sc.pal_files = newPalFilesOut
 		} else if len(sc.pal) == 0 {
+			// Just use selPal directly
 			sc.pal = selPal
 		}
 	} else {
+		// Make a dummy SFF
 		localSff = newSff()
 		localAnims.updateSff(localSff)
 		for k := range s.charSpritePreload {
