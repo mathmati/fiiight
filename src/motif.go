@@ -415,8 +415,8 @@ type FaceProperties struct {
 		AnimationCharPreloadProperties `skipinit:"true"`
 		Key                            []string `ini:"key"` // only used by [VS Screen]
 	} `ini:"done"`
-	Random   AnimationProperties `ini:"random"`               // only used by [Select Info]
-	Loading  AnimationProperties `ini:"loading" warn:"false"` // only used by [Select Info] and [VS Screen]
+	Random   AnimationProperties `ini:"random"`  // only used by [Select Info]
+	Loading  AnimationProperties `ini:"loading"` // only used by [Select Info] and [VS Screen]
 	Velocity [2]float32          `ini:"velocity"`
 	MaxDist  [2]float32          `ini:"maxdist"`
 	Accel    [2]float32          `ini:"accel"`
@@ -736,7 +736,7 @@ type SelectInfoProperties struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg                              AnimationProperties `ini:"bg"`
 			Random                          AnimationProperties `ini:"random"`
-			Loading                         AnimationProperties `ini:"loading" warn:"false"`
+			Loading                         AnimationProperties `ini:"loading"`
 		} `ini:"portrait"`
 	} `ini:"stage"`
 	Done struct {
@@ -748,7 +748,7 @@ type SelectInfoProperties struct {
 	} `ini:"cancel"`
 	Portrait struct {
 		AnimationCharPreloadProperties `skipinit:"true"`
-		Loading                        AnimationProperties `ini:"loading" warn:"false"`
+		Loading                        AnimationProperties `ini:"loading"`
 	} `ini:"portrait"`
 	Title    TextMapProperties `ini:"title"`
 	Record   TextMapProperties `ini:"record"`
@@ -795,7 +795,7 @@ type VsScreenProperties struct {
 		Portrait struct {
 			AnimationStagePreloadProperties `skipinit:"true"`
 			Bg                              AnimationProperties `ini:"bg"`
-			Loading                         AnimationProperties `ini:"loading" warn:"false"`
+			Loading                         AnimationProperties `ini:"loading"`
 		} `ini:"portrait"`
 		Snd [2]int32 `ini:"snd" default:"-1,0"`
 	} `ini:"stage"`
@@ -1342,6 +1342,7 @@ type Motif struct {
 	WarningInfo     WarningInfoProperties               `ini:"warning_info"`
 	Glyphs          map[string]*GlyphProperties         `ini:"glyphs" literal:"true" insensitivekeys:"false" sff:"GlyphsSff"`
 	fntIndexByKey   map[string]int                      // filepath|height -> index
+	inheritedKeys   map[string]bool                     // normalized .anim/.spr paths assigned by overrideParams inheritance
 	ch              MotifChallenger
 	co              MotifContinue
 	de              MotifDemo
@@ -2008,6 +2009,9 @@ func (m *Motif) mergeWithInheritance(specs []InheritSpec) {
 	if m == nil || m.IniFile == nil {
 		return
 	}
+	if m.inheritedKeys == nil {
+		m.inheritedKeys = make(map[string]bool)
+	}
 	user := m.UserIniFile
 	defs := m.DefaultOnlyIni
 	merged := m.IniFile
@@ -2152,6 +2156,18 @@ func (m *Motif) mergeWithInheritance(specs []InheritSpec) {
 			query := strings.ToLower(secPath + "." + dstKey)
 			if err := m.SetValueUpdate(query, val); err != nil {
 				//fmt.Printf("Warning: inheritance set failed for %s = %q: %v\n", query, val, err)
+			}
+
+			// Remember only anim/spr values that were actually inherited into the destination.
+			// Direct destination values from system.def must keep warning on missing sprites.
+			switch strings.ToLower(suf) {
+			case "anim", "spr":
+				switch src {
+				case srcUserSrc, srcDefSrc:
+					m.inheritedKeys[query] = true
+				default:
+					delete(m.inheritedKeys, query)
+				}
 			}
 
 			// If a value comes from the user INI (directly or via src), copy it into m.UserIniFile
@@ -2345,6 +2361,7 @@ func (m *Motif) initStruct() {
 	m.fadeOut = newFade()
 	m.fadePolicy = FadeContinue
 	m.fntIndexByKey = make(map[string]int)
+	m.inheritedKeys = make(map[string]bool)
 }
 
 func (m *Motif) loadBgDefProperties(bgDef *BgDefProperties, bgname, spr string) {
