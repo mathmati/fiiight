@@ -1969,15 +1969,6 @@ func SetAnim(obj interface{}, fVal, structVal, parent reflect.Value, sffOverride
 		anim = int32(fv.Int())
 	}
 	if fv, ok := get("Spr"); ok && fv.Kind() == reflect.Array && fv.Len() == 2 {
-		if warnMissing {
-			if _, sf, ok := findFieldByINITag(structVal, "spr"); ok &&
-				strings.EqualFold(strings.TrimSpace(sf.Tag.Get("warn")), "false") {
-				warnMissing = false
-			} else if _, sf, ok := findFieldByINITag(parent, "spr"); ok &&
-				strings.EqualFold(strings.TrimSpace(sf.Tag.Get("warn")), "false") {
-				warnMissing = false
-			}
-		}
 		spr[0] = int32(fv.Index(0).Int())
 		spr[1] = int32(fv.Index(1).Int())
 		hasSpr = true
@@ -2610,9 +2601,13 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 			rootSff = s
 		}
 	}
+	var inheritedKeys map[string]bool
+	if m, ok := obj.(*Motif); ok {
+		inheritedKeys = m.inheritedKeys
+	}
 
 	// Thread both localcoord and effective SFF through recursion.
-	var populate func(v reflect.Value, parent reflect.Value, currentLocalCoord [2]int32, currentSff *Sff, skipInit bool, warnMissing bool)
+	var populate func(v reflect.Value, parent reflect.Value, currentLocalCoord [2]int32, currentSff *Sff, skipInit bool, warnMissing bool, path string)
 
 	// Types we look for
 	animPtrType := reflect.TypeOf((*Anim)(nil))
@@ -2622,7 +2617,7 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 	fadePtrType := reflect.TypeOf((*Fade)(nil))
 
 	// The recursive function
-	populate = func(v reflect.Value, parent reflect.Value, currentLocalCoord [2]int32, currentSff *Sff, skipInit bool, warnMissing bool) {
+	populate = func(v reflect.Value, parent reflect.Value, currentLocalCoord [2]int32, currentSff *Sff, skipInit bool, warnMissing bool, path string) {
 		if !v.IsValid() {
 			return
 		}
@@ -2630,7 +2625,7 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 			if v.IsNil() {
 				return
 			}
-			populate(v.Elem(), parent, currentLocalCoord, currentSff, skipInit, warnMissing)
+			populate(v.Elem(), parent, currentLocalCoord, currentSff, skipInit, warnMissing, path)
 			return
 		}
 
@@ -2642,6 +2637,17 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 			localCoordForThisStruct := currentLocalCoord
 			// Effective SFF for this struct (may be overridden by the field tag of children)
 			effectiveSffForThisStruct := currentSff
+
+			joinPath := func(base, elem string) string {
+				elem = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(elem), " ", "_"))
+				if elem == "" {
+					return base
+				}
+				if base == "" {
+					return elem
+				}
+				return base + "." + elem
+			}
 
 			for i := 0; i < v.NumField(); i++ {
 				fVal := v.Field(i)
@@ -2672,13 +2678,19 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 					}
 				}
 
+				fieldPath := path
+				if tag := strings.TrimSpace(fType.Tag.Get("ini")); tag != "" &&
+					!strings.HasPrefix(strings.ToLower(tag), "map:") {
+					fieldPath = joinPath(path, tag)
+				}
+
 				// Check for skipInit tag on this field
 				childSkipInit := skipInit
 				if fType.Tag.Get("skipinit") == "true" {
 					childSkipInit = true
 				}
 				childWarnMissing := warnMissing
-				if strings.EqualFold(strings.TrimSpace(fType.Tag.Get("warn")), "false") {
+				if inheritedKeys != nil && fieldPath != "" && (inheritedKeys[fieldPath+".anim"] || inheritedKeys[fieldPath+".spr"]) {
 					childWarnMissing = false
 				}
 
@@ -2686,13 +2698,13 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 
 				// Recurse for struct or non-nil ptr
 				if kind == reflect.Struct || (kind == reflect.Ptr && !fVal.IsNil()) {
-					populate(fVal, v, localCoordForThisStruct, nextSff, childSkipInit, childWarnMissing)
+					populate(fVal, v, localCoordForThisStruct, nextSff, childSkipInit, childWarnMissing, fieldPath)
 					continue
 				}
 				// If it's a map, recurse as well
 				if kind == reflect.Map {
 					// Pass along the possibly overridden SFF from this field's tag.
-					populate(fVal, parent, localCoordForThisStruct, nextSff, childSkipInit, childWarnMissing)
+					populate(fVal, parent, localCoordForThisStruct, nextSff, childSkipInit, childWarnMissing, fieldPath)
 					continue
 				}
 				// If it's *Anim
@@ -2743,12 +2755,19 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 		// If we have a slice or array, recurse into each element
 		case reflect.Slice, reflect.Array:
 			for i := 0; i < v.Len(); i++ {
-				populate(v.Index(i), parent, currentLocalCoord, currentSff, skipInit, warnMissing)
+				populate(v.Index(i), parent, currentLocalCoord, currentSff, skipInit, warnMissing, path)
 			}
 		case reflect.Map:
 			for _, key := range v.MapKeys() {
 				val := v.MapIndex(key)
-				populate(val, parent, currentLocalCoord, currentSff, skipInit, warnMissing)
+				childPath := path
+				if key.Kind() == reflect.String {
+					k := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(key.String()), " ", "_"))
+					if k != "" {
+						childPath = k
+					}
+				}
+				populate(val, parent, currentLocalCoord, currentSff, skipInit, warnMissing, childPath)
 			}
 		default:
 			// basic types: do nothing
@@ -2761,7 +2780,7 @@ func PopulateDataPointers(obj interface{}, rootLocalcoord [2]int32) {
 		return
 	}
 	// Start recursion with the original user-supplied localcoord
-	populate(v.Elem(), v.Elem(), rootLocalcoord, rootSff, false, true)
+	populate(v.Elem(), v.Elem(), rootLocalcoord, rootSff, false, true, "")
 }
 
 // Split a [Music] key into (prefix, property) while allowing dots in prefix.
