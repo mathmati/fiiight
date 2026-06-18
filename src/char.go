@@ -6277,12 +6277,11 @@ func (c *Char) getOwnChannels(chNo int32) (found []*SoundChannel) {
 	return found
 }
 
-func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, chNo, vol int32,
-	p, freqmul, ls float32, x *float32, log bool, priority int32, loopstart, loopend, startposition int, stopgh, stopcs bool) {
-	if g < 0 {
+func (c *Char) playSound(params *PlaySndParams) {
+	if params.group < 0 {
 		return
 	}
-	current_ffx := ffx
+	current_ffx := params.ffx
 	if current_ffx == "f" {
 		if c.gi().fightfxPrefix != "" {
 			current_ffx = c.gi().fightfxPrefix
@@ -6293,22 +6292,24 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 		return
 	}
 
+	// Get sound from self or common sounds
 	var s *Sound
 	if current_ffx == "" || current_ffx == "s" {
 		if c.gi().snd != nil {
-			s = c.gi().snd.Get([...]int32{g, n})
+			s = c.gi().snd.Get([...]int32{params.group, params.number})
 		}
 	} else {
 		if sys.ffx[current_ffx] != nil && sys.ffx[current_ffx].snd != nil {
-			s = sys.ffx[current_ffx].snd.Get([...]int32{g, n})
+			s = sys.ffx[current_ffx].snd.Get([...]int32{params.group, params.number})
 		}
 	}
+
 	if s == nil {
-		if log {
+		if params.log {
 			if current_ffx != "" {
-				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v %v,%v doesn't exist", strings.ToUpper(current_ffx), g, n))
+				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v %v,%v doesn't exist", strings.ToUpper(current_ffx), params.group, params.number))
 			} else {
-				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v,%v doesn't exist", g, n))
+				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v,%v doesn't exist", params.group, params.number))
 			}
 		}
 		if !sys.ignoreMostErrors {
@@ -6318,7 +6319,7 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 			} else {
 				str += fmt.Sprintf("P%v:", c.playerNo+1)
 			}
-			LogMessage("%v%v,%v", str, g, n)
+			LogMessage("%v%v,%v", str, params.group, params.number)
 		}
 		return
 	}
@@ -6332,12 +6333,12 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 	}
 
 	// Request a sound channel
-	ch := sys.charSoundChannels[crun.playerNo].Request(crun.id, chNo, lowpriority, priority)
+	ch := sys.charSoundChannels[crun.playerNo].Request(crun.id, params.channel, params.lowPriority, params.priority)
 
 	// Play the sound in it
 	if ch != nil {
-		ch.Play(s, g, n, loopCount, freqmul, loopstart, loopend, startposition)
-		vol = Clamp(vol, -25600, 25600)
+		ch.Play(s, params.group, params.number, params.loopCount, params.freqMul, params.loopStart, params.loopEnd, params.startPosition)
+		vol := Clamp(params.volume, -25600, 25600)
 
 		//ch.channelNo = chNo // Handled by Request()
 
@@ -6348,9 +6349,9 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 			ch.SetVolume(float32(c.gi().data.volume * vol / 100))
 		}
 
-		if chNo >= 0 {
-			if priority != 0 {
-				ch.SetPriority(priority) // TODO: We can probably allow priority in channel -1 now
+		if params.channel >= 0 {
+			if params.priority != 0 {
+				ch.SetPriority(params.priority) // TODO: We can probably allow priority in channel -1 now
 			}
 		}
 
@@ -6362,9 +6363,9 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 		//	}
 		//}
 
-		ch.stopOnGetHit = stopgh
-		ch.stopOnChangeState = stopcs
-		ch.SetPan(p*c.facing, ls, x)
+		ch.stopOnGetHit = params.stopOnGetHit
+		ch.stopOnChangeState = params.stopOnChangeState
+		ch.SetPan(params.pan*c.facing, params.localScale, params.xPos)
 	}
 }
 
@@ -11322,9 +11323,15 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 			hitspark(c, getter, hd.sparkno, hd.sparkno_ffx, hd.sparkangle, hd.sparkscale)
 		}
 		if hd.hitsound[0] >= 0 && hd.hitsound[1] >= 0 {
-			vo := int32(100)
-			c.playSound(hd.hitsound_ffx, false, 0, hd.hitsound[0], hd.hitsound[1],
-				hd.hitsound_channel, vo, 0, 1, getter.localscl, &getter.pos[0], true, 0, 0, 0, 0, false, false)
+			params := newPlaySndParams()
+			params.ffx = hd.hitsound_ffx
+			params.group = hd.hitsound[0]
+			params.number = hd.hitsound[1]
+			params.channel = hd.hitsound_channel
+			params.localScale = getter.localscl
+			params.xPos = &getter.pos[0]
+			params.log = true
+			c.playSound(params)
 		}
 	} else {
 		if hd.reversal_attr > 0 {
@@ -11333,9 +11340,15 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 			hitspark(c, getter, hd.guard_sparkno, hd.guard_sparkno_ffx, hd.guard_sparkangle, hd.guard_sparkscale)
 		}
 		if hd.guardsound[0] >= 0 && hd.guardsound[1] >= 0 {
-			vo := int32(100)
-			c.playSound(hd.guardsound_ffx, false, 0, hd.guardsound[0], hd.guardsound[1],
-				hd.guardsound_channel, vo, 0, 1, getter.localscl, &getter.pos[0], true, 0, 0, 0, 0, false, false)
+			params := newPlaySndParams()
+			params.ffx = hd.guardsound_ffx
+			params.group = hd.guardsound[0]
+			params.number = hd.guardsound[1]
+			params.channel = hd.guardsound_channel
+			params.localScale = getter.localscl
+			params.xPos = &getter.pos[0]
+			params.log = true
+			c.playSound(params)
 		}
 	}
 
@@ -11964,7 +11977,12 @@ func (c *Char) actionFinish() {
 		if c.alive() && c.life <= 0 && !sys.gsf(GSF_globalnoko) && !c.asf(ASF_noko) && (!c.ghv.guarded || !c.asf(ASF_noguardko)) {
 			// KO sound
 			if !sys.gsf(GSF_nokosnd) {
-				c.playSound("", false, 0, 11, 0, -1, 100, 0, 1, c.localscl, &c.pos[0], false, 0, 0, 0, 0, false, false)
+				params := newPlaySndParams()
+				params.group = 11
+				params.localScale = c.localscl
+				params.xPos = &c.pos[0]
+				c.playSound(params)
+				// Start echo timer
 				if c.gi().data.ko.echo != 0 {
 					c.koEchoTimer = 1
 				}
@@ -12168,8 +12186,13 @@ func (c *Char) update() {
 			c.koEchoTimer = 0
 		} else {
 			if c.koEchoTimer == 60 || c.koEchoTimer == 120 {
-				vo := int32(100 * (240 - (c.koEchoTimer + 60)) / 240)
-				c.playSound("", false, 0, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0, 0, 0, 0, false, false)
+				vol := int32(100 * (240 - (c.koEchoTimer + 60)) / 240)
+				params := newPlaySndParams()
+				params.group = 11
+				params.volume = vol
+				params.localScale = c.localscl
+				params.xPos = &c.pos[0]
+				c.playSound(params)
 			}
 			c.koEchoTimer++
 		}

@@ -1336,3 +1336,35 @@ func (s *SoundChannels) Tick() {
 		}
 	}
 }
+
+// Maybe this should be in char.go?
+type PlaySndParams struct {
+	ffx               string
+	group             int32
+	number            int32
+	channel           int32
+	volume            int32
+	pan               float32
+	xPos              *float32
+	localScale        float32
+	freqMul           float32
+	lowPriority       bool
+	priority          int32
+	startPosition     int
+	loopCount         int32
+	loopStart         int
+	loopEnd           int
+	stopOnGetHit      bool
+	stopOnChangeState bool
+	log               bool
+}
+
+func newPlaySndParams() *PlaySndParams {
+	return &PlaySndParams{
+		group:      -1,
+		channel:    -1,
+		volume:     100,
+		freqMul:    1.0,
+		localScale: 1.0,
+	}
+}
