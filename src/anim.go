@@ -42,14 +42,24 @@ func newAnimFrame() *AnimFrame {
 	}
 }
 
-func ReadAnimFrame(line string) *AnimFrame {
+func ReadAnimFrame(line string) (*AnimFrame, error) {
+	// Valid lines must start with a number or '-'
 	if len(line) == 0 || (line[0] < '0' || '9' < line[0]) && line[0] != '-' {
-		return nil
+		return nil, nil
 	}
-	ary := strings.SplitN(line, ",", 10)
+
+	// Split by commas then trim spaces
+	raw := strings.SplitN(line, ",", 10)
+	ary := make([]string, len(raw))
+	for i, s := range raw {
+		ary[i] = strings.TrimSpace(s)
+	}
+
 	if len(ary) < 5 {
-		return nil
+		return nil, Error("Invalid animation element definition")
 	}
+
+	var err error
 
 	// Read required parameters
 	af := newAnimFrame()
@@ -60,21 +70,23 @@ func ReadAnimFrame(line string) *AnimFrame {
 	af.Time = Atoi(ary[4])
 
 	// Read H and V flags
-	if len(ary) >= 6 {
-		for i := range ary[5] {
-			switch ary[5][i] {
+	if len(ary) >= 6 && ary[5] != "" {
+		for _, ch := range ary[5] {
+			switch ch {
 			case 'H', 'h':
 				af.Hscale = -1
 				af.Xoffset *= -1
 			case 'V', 'v':
 				af.Vscale = -1
 				af.Yoffset *= -1
+			default:
+				err = Error(fmt.Sprintf("Invalid animation element flip flag: %c", ch))
 			}
 		}
 	}
 
 	// Read alpha
-	if len(ary) >= 7 {
+	if len(ary) >= 7 && ary[6] != "" {
 		// Helper to read source and destination
 		parseAlphaNumbers := func(a string, start int, defSrc, defDst byte) (src, dst byte) {
 			src, dst = defSrc, defDst
@@ -110,7 +122,7 @@ func ReadAnimFrame(line string) *AnimFrame {
 		if ia >= 0 {
 			ary[6] = ary[6][ia:]
 		}
-		a := strings.ToLower(SplitAndTrim(ary[6], ",")[0])
+		a := strings.ToLower(ary[6])
 		switch {
 		case a == "a1":
 			af.TransType = TT_add
@@ -129,44 +141,59 @@ func ReadAnimFrame(line string) *AnimFrame {
 			af.TransType = TT_sub
 			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0)
 
-		// The first letter is enough in Mugen
-		// https://github.com/ikemen-engine/Ikemen-GO/issues/3717
-		case len(a) > 0 && a[0] == 'a': // Plain Add
+		case len(a) >= 1 && a[0] == 'a': // Plain Add
 			af.TransType = TT_add
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
+			// The first letter is enough in Mugen, but we will warn to encourage proper syntax
+			// https://github.com/ikemen-engine/Ikemen-GO/issues/3717
+			if len(a) > 1 {
+				err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
+			}
 
-		case len(a) > 0 && a[0] == 's': // Plain sub
+		case len(a) >= 1 && a[0] == 's': // Plain sub
 			af.TransType = TT_sub
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
+			if len(a) > 1 {
+				err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
+			}
+
+		default:
+			err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
 		}
 	}
 
 	// Read X scale
 	// In Mugen 1.1 a blank parameter means 0
 	// In Ikemen it means no change, like the other optional parameters
-	if len(ary) >= 8 {
+	if len(ary) >= 8 && ary[7] != "" {
 		if IsNumeric(ary[7]) {
 			af.Xscale = float32(Atof(ary[7]))
+		} else {
+			err = Error(fmt.Sprintf("Invalid animation element x-scale: %v", ary[7]))
 		}
 	}
 
 	// Read Y scale
-	if len(ary) >= 9 {
+	if len(ary) >= 9 && ary[8] != "" {
 		if IsNumeric(ary[8]) {
 			af.Yscale = float32(Atof(ary[8]))
+		} else {
+			err = Error(fmt.Sprintf("Invalid animation element y-scale: %v", ary[8]))
 		}
 	}
 
 	// Read angle
-	if len(ary) >= 10 {
+	if len(ary) >= 10 && ary[9] != "" {
 		if IsNumeric(ary[9]) {
 			af.Angle = float32(Atof(ary[9]))
+		} else {
+			err = Error(fmt.Sprintf("Invalid animation element angle: %v", ary[9]))
 		}
 	}
 
-	return af
+	return af, err
 }
 
 type Animation struct {
@@ -231,13 +258,15 @@ func newAnimation(sff *Sff, pal *PaletteList) *Animation {
 	}
 }
 
-func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animation {
+func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) (*Animation, error) {
 	a := newAnimation(sff, pal)
 
 	a.mask = 0
 	ols := int32(0)
+	var err error
 	var clsn1, clsn1d, clsn2, clsn2d [][4]float32
 	def1, def2 := true, true
+
 	for ; *i < len(lines); (*i)++ {
 		if len(lines[*i]) > 0 && lines[*i][0] == '[' {
 			break
@@ -255,10 +284,17 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 			} else {
 				a.copyAction = int32(id)
 			}
-			return a
+			return a, nil
 		}
 
-		af := ReadAnimFrame(line)
+		var af *AnimFrame
+		af, lerr := ReadAnimFrame(line)
+
+		// Use a local error to prevent overwriting the outer one with nil
+		if lerr != nil {
+			err = lerr
+		}
+
 		switch {
 		case af != nil:
 			ols = a.loopstart
@@ -284,16 +320,18 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 		case len(line) >= 17 && line[:17] == "interpolate blend":
 			a.interpolate_blend = append(a.interpolate_blend, int32(len(a.frames)))
 		case len(line) >= 5 && line[:4] == "clsn":
+			// Read Clsn boxes
 			ii := strings.Index(line, ":")
 			if ii < 0 {
 				break
 			}
-			size := Atoi(line[ii+1:])
+			size := Atoi(line[ii+1:]) // Number of expected boxes
 			if size < 0 {
 				break
 			}
 			var clsn [][4]float32
 			if line[4] == '1' {
+				// Clsn1
 				clsn1 = make([][4]float32, size)
 				clsn = clsn1
 				if len(line) >= 12 && line[5:12] == "default" {
@@ -301,6 +339,7 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 				}
 				def1 = false
 			} else if line[4] == '2' {
+				// Clsn2
 				clsn2 = make([][4]float32, size)
 				clsn = clsn2
 				if len(line) >= 12 && line[5:12] == "default" {
@@ -313,17 +352,22 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 			if size == 0 {
 				break
 			}
+			// Move past the "Clsn:" line to the first rectangle line
 			(*i)++
+			// Read exactly 'size' number rectangle lines
+			// TODO: Mugen seems less strict about this
 			for n := int32(0); n < size && *i < len(lines); {
 				line := strings.ToLower(strings.TrimSpace(
 					strings.SplitN(lines[*i], ";", 2)[0]))
 				if len(line) == 0 {
 					(*i)++
-					continue
+					continue // Skip blank lines
 				}
+				// Stop if we encounter a line that doesn't start with "clsn"
 				if len(line) < 4 || line[:4] != "clsn" {
 					break
 				}
+				// Extract the coordinates after "="
 				ii := strings.Index(line, "=")
 				if ii < 0 {
 					break
@@ -333,6 +377,7 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 					break
 				}
 				l, t, r, b := Atoi(ary[0]), Atoi(ary[1]), Atoi(ary[2]), Atoi(ary[3])
+				// Normalize rectangle
 				if l > r {
 					l, r = r, l
 				}
@@ -344,9 +389,11 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 				n++
 				(*i)++
 			}
+			// Back up one step to avoid skipping the line after the last rectangle
 			(*i)--
 		}
 	}
+
 	if int(a.loopstart) >= len(a.frames) {
 		a.loopstart = ols
 	}
@@ -373,10 +420,10 @@ func ReadAnimation(sff *Sff, pal *PaletteList, lines []string, i *int) *Animatio
 			a.prelooptime = 0
 		}
 	}
-	return a
+	return a, err
 }
 
-func ReadAction(sff *Sff, pal *PaletteList, lines []string, i *int) (no int32, a *Animation) {
+func ReadAction(sff *Sff, pal *PaletteList, lines []string, i *int) (no int32, a *Animation, err error) {
 	var name, subname string
 	for ; *i < len(lines); (*i)++ {
 		name, subname = SectionName(lines[*i])
@@ -395,7 +442,11 @@ func ReadAction(sff *Sff, pal *PaletteList, lines []string, i *int) (no int32, a
 		return
 	}
 	(*i)++
-	return Atoi(subname[spi+1:]), ReadAnimation(sff, pal, lines, i)
+
+	no = Atoi(subname[spi+1:])
+	a, err = ReadAnimation(sff, pal, lines, i)
+
+	return
 }
 
 func (a *Animation) Reset() {
@@ -1094,7 +1145,11 @@ func NewAnimationTable() AnimationTable {
 
 func (at AnimationTable) readAction(sff *Sff, pal *PaletteList, lines []string, i *int, log bool) *Animation {
 	for *i < len(lines) {
-		no, a := ReadAction(sff, pal, lines, i)
+		no, a, err := ReadAction(sff, pal, lines, i)
+		// Animation errors do not crash Mugen. But we can log them
+		if log && err != nil {
+			LogMessage("WARNING: Action %v in %v: %v", no, at.filename, err.Error())
+		}
 		if a != nil {
 			// In case of duplicate action numbers, just use the first one
 			// Even if first one is "Copy Action"
@@ -1108,7 +1163,12 @@ func (at AnimationTable) readAction(sff *Sff, pal *PaletteList, lines []string, 
 			at.anims[no] = a
 			// Recursive logic until we find a non-empty animation
 			// If the current action is empty, we attempt to copy the very next action found in the file
+			logged := false
 			for len(a.frames) == 0 && *i < len(lines) && a.copyAction < 0 {
+				if !logged && log {
+					LogMessage("WARNING: Action %v in %v has no valid frames", no, at.filename)
+					logged = true
+				}
 				if a2 := at.readAction(sff, pal, lines, i, log); a2 != nil {
 					*a = *a2
 					break
@@ -1124,13 +1184,18 @@ func (at AnimationTable) readAction(sff *Sff, pal *PaletteList, lines []string, 
 	return nil
 }
 
-func ReadAnimationTable(filename string, sff *Sff, pal *PaletteList,
-	lines []string, i *int, log bool) AnimationTable {
+func ReadAnimationTable(filename string, sff *Sff,
+	pal *PaletteList, lines []string, i *int, log bool) AnimationTable {
+
 	at := NewAnimationTable()
 	at.filename = filename
+
+	// Continue reading actions until none are left
 	for at.readAction(sff, pal, lines, i, log) != nil {
 	}
+
 	at.resolveCopyAction()
+
 	return at
 }
 
@@ -1958,7 +2023,7 @@ func NewAnim(sff *Sff, action string) *Anim {
 	}
 	if action != "" {
 		lines, i := SplitAndTrim(action, "\n"), 0
-		a.anim = ReadAnimation(sff, &sff.palList, lines, &i)
+		a.anim, _ = ReadAnimation(sff, &sff.palList, lines, &i)
 		if len(a.anim.frames) == 0 {
 			return nil
 		}
