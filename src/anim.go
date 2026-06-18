@@ -79,13 +79,16 @@ func ReadAnimFrame(line string) *AnimFrame {
 		parseAlphaNumbers := func(a string, start int, defSrc, defDst byte) (src, dst byte) {
 			src, dst = defSrc, defDst
 			i, alp := start, 0
+			// Parse source alpha
 			for ; i < len(a) && a[i] >= '0' && a[i] <= '9'; i++ {
 				alp = alp*10 + int(a[i]-'0')
 			}
-			alp &= 0x3fff
-			if alp < 255 {
-				src = byte(alp)
+			alp &= 0x3fff // Kind of redundant with the next step, but harmless
+			if alp > 255 {
+				alp = 255
 			}
+			src = byte(alp)
+			// Parse destination alpha
 			if i < len(a) && a[i] == 'd' {
 				i++
 				if i < len(a) && a[i] >= '0' && a[i] <= '9' {
@@ -94,9 +97,10 @@ func ReadAnimFrame(line string) *AnimFrame {
 						alp = alp*10 + int(a[i]-'0')
 					}
 					alp &= 0x3fff
-					if alp < 255 {
-						dst = byte(alp)
+					if alp > 255 {
+						alp = 255
 					}
+					dst = byte(alp)
 				}
 			}
 			return
@@ -115,22 +119,24 @@ func ReadAnimFrame(line string) *AnimFrame {
 
 		case len(a) >= 3 && a[:3] == "sas": // SubAdd
 			af.TransType = TT_subadd
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 3, 255, 255)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 3, 255, 0)
 
 		case len(a) >= 2 && a[:2] == "as": // Add with alpha
 			af.TransType = TT_add
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0)
 
 		case len(a) >= 2 && a[:2] == "ss": // Sub with alpha
 			af.TransType = TT_sub
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0)
 
+		// The first letter is enough in Mugen
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3717
 		case len(a) > 0 && a[0] == 'a': // Plain Add
 			af.TransType = TT_add
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
 
-		case len(a) == 1 && a[0] == 's': // Plain sub
+		case len(a) > 0 && a[0] == 's': // Plain sub
 			af.TransType = TT_sub
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
