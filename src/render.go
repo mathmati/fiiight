@@ -770,29 +770,49 @@ func renderWithBlending(
 		}
 	// SubAdd
 	case blendMode == TT_subadd:
+		// Save original state for later restoration
+		origState := *pfxstate
+
+		// Helper to set PalFX parameters to grayscale for the first pass
+		makeFxGrayscale := func() {
+			avgAdd := (origState.add[0] + origState.add[1] + origState.add[2]) / 3
+			pfxstate.add = [3]float32{avgAdd, avgAdd, avgAdd}
+			avgMult := (origState.mult[0] + origState.mult[1] + origState.mult[2]) / 3
+			pfxstate.mult = [3]float32{avgMult, avgMult, avgMult}
+		}
 		if pfxstate.neg {
 			// With invertall we invert the passes. Add then sub
 			// This is kind of like "invblend = 3"
 			// But adding "invertblend" support here would force people to have to use it to get the expected results
-			disableNeg()
+			// We avoid "neg" entirely because it turns black edges into white auras. But maybe allowing that would be more consistent?
+			disableNeg() // pfxstate.neg = false
 			//invertAColor()
+
+			// Pass 1: additive with gray PalFX
 			if dst > 0 {
+				makeFxGrayscale()
+				// Set gray uniform manually because render() doesn't set it (and doesn't need to most of the time)
 				gfx.SetUniformF("gray", 1.0)
 				render(BlendAdd, blendSourceFactor, BlendOne, dst)
 			}
+			// Pass 2: subtractive with original PalFX
 			if src > 0 {
+				*pfxstate = origState
+				disableNeg() // Disable neg again because of the restore
 				gfx.SetUniformF("gray", pfxstate.gray)
 				render(BlendReverseSubtract, blendSourceFactor, BlendOne, src)
 			}
 		} else {
 			// Normal behavior
-			// Pass 1: subtractive, forced grayscale, intensity = dst
+			// Pass 1: subtractive with gray PalFX
 			if dst > 0 {
+				makeFxGrayscale()
 				gfx.SetUniformF("gray", 1.0)
 				render(BlendReverseSubtract, blendSourceFactor, BlendOne, dst)
 			}
-			// Pass 2: additive, original grayscale, intensity = src
+			// Pass 2: additive with original PalFX
 			if src > 0 {
+				*pfxstate = origState
 				gfx.SetUniformF("gray", pfxstate.gray)
 				render(BlendAdd, blendSourceFactor, BlendOne, src)
 			}
