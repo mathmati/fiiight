@@ -4640,13 +4640,13 @@ func (di *MotifDialogue) applyToken(m *Motif, line *DialogueParsedLine, token Di
 
 			// Loop logic (currently unused since all loop variables remain at defaults)
 			// if lc == 0 {
-				// if lp {
-					// params.loopCount = -1
-				// } else {
-					// params.loopCount = 0
-				// }
+			// if lp {
+			// params.loopCount = -1
 			// } else {
-				// params.loopCount = lc
+			// params.loopCount = 0
+			// }
+			// } else {
+			// params.loopCount = lc
 			// }
 
 			c.playSound(params)

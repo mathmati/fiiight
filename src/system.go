@@ -4428,7 +4428,7 @@ func (ps PreloadState) String() string {
 		return "loading"
 	case PS_Ready:
 		return "ready"
-	// case PS_Error:
+		// case PS_Error:
 		// return "error"
 	}
 	return "idle"
@@ -4525,7 +4525,7 @@ func (s *Select) QueueCharPreload(ref int, priority int) {
 		e.Priority = priority
 		return
 	}
-	if e.State == PS_Idle {// || e.State == PS_Error {
+	if e.State == PS_Idle { // || e.State == PS_Error {
 		e.State = PS_Queued
 	}
 	if e.Priority == priority {
@@ -4563,7 +4563,7 @@ func (s *Select) QueueStagePreload(ref int, priority int) {
 		e.Priority = priority
 		return
 	}
-	if e.State == PS_Idle {// || e.State == PS_Error {
+	if e.State == PS_Idle { // || e.State == PS_Error {
 		e.State = PS_Queued
 	}
 	if e.Priority == priority {
@@ -4578,30 +4578,30 @@ func (s *Select) QueueStagePreload(ref int, priority int) {
 	}
 }
 
-func (s *Select) CharPreloadStatus(ref int) (PreloadState) {// (PreloadState, string) {
+func (s *Select) CharPreloadStatus(ref int) PreloadState { // (PreloadState, string) {
 	if sys.cfg.Config.BootLoadingMode == 0 {
-		return PS_Ready//, ""
+		return PS_Ready //, ""
 	}
 	s.initPreloadSync()
 	s.preloadMu.Lock()
 	defer s.preloadMu.Unlock()
 	if ref < 0 || ref >= len(s.charPreload) {
-		return PS_Idle//, ""
+		return PS_Idle //, ""
 	}
 	return s.charPreload[ref].State //, s.charPreload[ref].Err
 }
 
-func (s *Select) StagePreloadStatus(ref int) (PreloadState) {// (PreloadState, string) {
+func (s *Select) StagePreloadStatus(ref int) PreloadState { // (PreloadState, string) {
 	if sys.cfg.Config.BootLoadingMode == 0 {
-		return PS_Ready//, ""
+		return PS_Ready //, ""
 	}
 	s.initPreloadSync()
 	s.preloadMu.Lock()
 	defer s.preloadMu.Unlock()
 	if ref <= 0 || ref-1 >= len(s.stagePreload) {
-		return PS_Idle//, ""
+		return PS_Idle //, ""
 	}
-	return s.stagePreload[ref-1].State//, s.stagePreload[ref-1].Err
+	return s.stagePreload[ref-1].State //, s.stagePreload[ref-1].Err
 }
 
 func (s *Select) AllPreloadsReady() bool {
