@@ -365,6 +365,11 @@ func readBackGround(is IniSection, link *backGround,
 			bg.anim.transType = TT_sub
 			bg.anim.srcAlpha = 255
 			bg.anim.dstAlpha = 255
+		case "subadd":
+			bg.anim.mask = 0
+			bg.anim.transType = TT_subadd
+			bg.anim.srcAlpha = 255
+			bg.anim.dstAlpha = 255
 		case "none":
 			// In Mugen this does the same as Default
 			// TODO: Make ikemenversion fix it

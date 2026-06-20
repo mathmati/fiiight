@@ -3476,13 +3476,11 @@ func systemScriptInit(l *lua.LState) {
 		/*Query the background preload state of a character slot.
 		@function getCharPreloadStatus
 		@tparam int charRef 0-based character index in the select list.
-		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
-		@treturn string err Error message (empty string if no error).
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, or `"ready"`.
 		function getCharPreloadStatus(charRef) end*/
-		state, err := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
+		state := sys.sel.CharPreloadStatus(int(numArg(l, 1)))
 		l.Push(lua.LString(state.String()))
-		l.Push(lua.LString(err))
-		return 2
+		return 1
 	})
 	luaRegister(l, "getCharRandomPalette", func(*lua.LState) int {
 		/*Get a random valid palette number for a character slot.
@@ -4096,13 +4094,11 @@ func systemScriptInit(l *lua.LState) {
 		/*Query the background preload state of a stage slot.
 		@function getStagePreloadStatus
 		@tparam int stageRef Stage index as used by the select system.
-		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, `"ready"`, or `"error"`.
-		@treturn string err Error message (empty string if no error).
+		@treturn string state Preload state: `"idle"`, `"queued"`, `"loading"`, or `"ready"`.
 		function getStagePreloadStatus(stageRef) end*/
-		state, err := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
+		state := sys.sel.StagePreloadStatus(int(numArg(l, 1)))
 		l.Push(lua.LString(state.String()))
-		l.Push(lua.LString(err))
-		return 2
+		return 1
 	})
 	luaRegister(l, "getStageSelectParams", func(*lua.LState) int {
 		/*Get parsed select parameters for a stage entry.
@@ -5463,75 +5459,72 @@ func systemScriptInit(l *lua.LState) {
 		function playSnd(group, sound, volumescale, commonSnd, channel, lowpriority, freqmul,
 		  loop, pan, priority, loopstart, loopend, startposition, loopcount,
 		  stopOnGetHit, stopOnChangeState) end*/
-		f, lw, lp, stopgh, stopcs := false, false, false, false, false
-		var g, n, ch, vo, priority, lc int32 = -1, 0, -1, 100, 0, 0
-		var loopstart, loopend, startposition int = 0, 0, 0
-		var p, fr float32 = 0, 1
-		x := &sys.debugWC.pos[0]
-		ls := sys.debugWC.localscl
-		if !nilArg(l, 1) { // group_no
-			g = int32(numArg(l, 1))
+
+		params := newPlaySndParams()
+		params.xPos = &sys.debugWC.pos[0]
+		params.localScale = sys.debugWC.localscl
+
+		var lp bool
+
+		if !nilArg(l, 1) {
+			params.group = int32(numArg(l, 1))
 		}
-		if !nilArg(l, 2) { // sound_no
-			n = int32(numArg(l, 2))
+		if !nilArg(l, 2) {
+			params.number = int32(numArg(l, 2))
 		}
-		if !nilArg(l, 3) { // volumescale
-			vo = int32(numArg(l, 3))
+		if !nilArg(l, 3) {
+			params.volume = int32(numArg(l, 3))
 		}
-		if !nilArg(l, 4) { // commonSnd
-			f = boolArg(l, 4)
+		if !nilArg(l, 4) {
+			if boolArg(l, 4) {
+				params.ffx = "f"
+			}
 		}
-		if !nilArg(l, 5) { // channel
-			ch = int32(numArg(l, 5))
+		if !nilArg(l, 5) {
+			params.channel = int32(numArg(l, 5))
 		}
-		if !nilArg(l, 6) { // lowpriority
-			lw = boolArg(l, 6)
+		if !nilArg(l, 6) {
+			params.lowPriority = boolArg(l, 6)
 		}
-		if !nilArg(l, 7) { // freqmul
-			fr = float32(numArg(l, 7))
+		if !nilArg(l, 7) {
+			params.freqMul = float32(numArg(l, 7))
 		}
-		if !nilArg(l, 8) { // loop
+		if !nilArg(l, 8) {
 			lp = boolArg(l, 8)
 		}
-		if !nilArg(l, 9) { // pan
-			p = float32(numArg(l, 9))
+		if !nilArg(l, 9) {
+			params.pan = float32(numArg(l, 9))
 		}
-		if !nilArg(l, 10) { // priority
-			priority = int32(numArg(l, 10))
+		if !nilArg(l, 10) {
+			params.priority = int32(numArg(l, 10))
 		}
-		if !nilArg(l, 11) { // loopstart
-			loopstart = int(numArg(l, 11))
+		if !nilArg(l, 11) {
+			params.loopStart = int(numArg(l, 11))
 		}
-		if !nilArg(l, 12) { // loopend
-			loopend = int(numArg(l, 12))
+		if !nilArg(l, 12) {
+			params.loopEnd = int(numArg(l, 12))
 		}
-		if !nilArg(l, 13) { // startposition
-			startposition = int(numArg(l, 13))
+		if !nilArg(l, 13) {
+			params.startPosition = int(numArg(l, 13))
 		}
-		if !nilArg(l, 14) { // loopcount
-			lc = int32(numArg(l, 14))
+		if !nilArg(l, 14) {
+			params.loopCount = int32(numArg(l, 14))
 		}
-		if !nilArg(l, 15) { // StopOnGetHit
-			stopgh = boolArg(l, 15)
+		if !nilArg(l, 15) {
+			params.stopOnGetHit = boolArg(l, 15)
 		}
-		if !nilArg(l, 16) { // StopOnChangeState
-			stopcs = boolArg(l, 16)
+		if !nilArg(l, 16) {
+			params.stopOnChangeState = boolArg(l, 16)
 		}
-		prefix := ""
-		if f {
-			prefix = "f"
-		}
-		// If the loopcount is 0, then read the loop parameter
-		if lc == 0 {
+
+		// If loopcount is 0, use the loop parameter
+		if params.loopCount == 0 {
 			if lp {
-				sys.debugWC.playSound(prefix, lw, -1, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
-			} else {
-				sys.debugWC.playSound(prefix, lw, 0, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
+				params.loopCount = -1
 			}
-			// Otherwise, read the loopcount parameter directly
-		} else {
-			sys.debugWC.playSound(prefix, lw, lc, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
 		}
+
+		sys.debugWC.playSound(params)
 		return 0
 	})
 	luaRegister(l, "postMatch", func(*lua.LState) int {

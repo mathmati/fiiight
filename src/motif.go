@@ -4620,37 +4620,36 @@ func (di *MotifDialogue) applyToken(m *Motif, line *DialogueParsedLine, token Di
 			if !di.isValidPlayerNo(token.pn) {
 				return true
 			}
-			f, lw, lp, stopgh, stopcs := false, false, false, false, false
-			var g, n, ch, vo, priority, lc int32 = -1, 0, -1, 100, 0, 0
-			var loopstart, loopend, startposition int = 0, 0, 0
-			var p, fr float32 = 0, 1
-			x := &sys.chars[token.pn-1][0].pos[0]
-			ls := sys.chars[token.pn-1][0].localscl
-			prefix := ""
-			if f {
-				prefix = "f"
-			}
+			params := newPlaySndParams()
+			c := sys.chars[token.pn-1][0]
+			params.xPos = &c.pos[0]
+			params.localScale = c.localscl
+			params.log = false
+
 			if v1, ok1 := token.value[0].(float32); ok1 {
-				g = int32(v1)
+				params.group = int32(v1)
 				if v2, ok2 := token.value[1].(float32); ok2 {
-					n = int32(v2)
+					params.number = int32(v2)
 					if len(token.value) >= 3 {
 						if v3, ok3 := token.value[2].(float32); ok3 {
-							vo = int32(v3)
+							params.volume = int32(v3)
 						}
 					}
 				}
 			}
-			if lc == 0 {
-				if lp {
-					sys.chars[token.pn-1][0].playSound(prefix, lw, -1, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
-				} else {
-					sys.chars[token.pn-1][0].playSound(prefix, lw, 0, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
-				}
-				// Otherwise, read the loopcount parameter directly
-			} else {
-				sys.chars[token.pn-1][0].playSound(prefix, lw, lc, g, n, ch, vo, p, fr, ls, x, false, priority, loopstart, loopend, startposition, stopgh, stopcs)
-			}
+
+			// Loop logic (currently unused since all loop variables remain at defaults)
+			// if lc == 0 {
+				// if lp {
+					// params.loopCount = -1
+				// } else {
+					// params.loopCount = 0
+				// }
+			// } else {
+				// params.loopCount = lc
+			// }
+
+			c.playSound(params)
 		}
 		return true
 	case "anim":

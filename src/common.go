@@ -1767,7 +1767,10 @@ func SafeGo(f func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				handlePanic(r)
+				// Forward the panic to the main thread, where dialogs and shutdown are safe
+				sys.mainThreadTask <- func() {
+					panic(r)
+				}
 			}
 		}()
 		f()

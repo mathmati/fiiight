@@ -749,7 +749,7 @@ func (hd *HitDef) reset(c *Char, proj *Projectile) {
 		zaccel: 0,
 
 		p1sprpriority:       IErr, // 1 in Mugen
-		p2sprpriority:       IErr, // 0 in Mugen
+		p2sprpriority:       0,
 		p1stateno:           -1,
 		p2stateno:           -1,
 		missonoverride:      -1,
@@ -1004,11 +1004,10 @@ func (hd *HitDef) finalizeParams(c *Char, proj *Projectile) {
 		c.juggle = hd.air_juggle
 	}
 
-	// Mugen defaults to changing p1 and p2 sprpriority, but you have to work around that more often than not
-	// The new defaults should be harmless or even beneficial, so we won't lock them behind a version check just yet
+	// Mugen defaults to changing p1sprpriority, but you have to work around that more often than not
+	// The new default should be harmless or even beneficial, so we won't lock it behind a version check just yet
 	//if c.stWgi().ikemenver[0] == 0 && c.stWgi().ikemenver[1] == 0 {
 	//	ifierrset(&hd.p1sprpriority, 1)
-	//	ifierrset(&hd.p2sprpriority, 0)
 	//}
 }
 
@@ -1901,6 +1900,33 @@ func (e *Explod) setAnimElem() {
 	}
 }
 
+func (e *Explod) canAct() bool {
+	// Challenger screen also pauses the explod
+	// https://github.com/ikemen-engine/Ikemen-GO/issues/3684
+	if sys.motif.ch.active && sys.pausetime > 0 {
+		return false
+	}
+
+	// Determine pause state
+	paused := false
+	if sys.supertime > 0 {
+		paused = (e.supermovetime >= 0 && e.time >= e.supermovetime) || e.supermovetime < -2
+	} else if sys.pausetime > 0 {
+		paused = (e.pausemovetime >= 0 && e.time >= e.pausemovetime) || e.pausemovetime < -2
+	}
+
+	act := !paused
+
+	// Apply ignorehitpause
+	if act && !e.ignorehitpause {
+		if parent := sys.playerID(e.ownerId); parent != nil {
+			act = parent.acttmp%2 >= 0
+		}
+	}
+
+	return act
+}
+
 func (e *Explod) update() {
 	if e.id == IErr || e.anim == nil {
 		e.id = IErr
@@ -1912,10 +1938,6 @@ func (e *Explod) update() {
 	root := sys.chars[e.playerno][0]
 
 	if root.scf(SCF_disabled) {
-		return
-	}
-
-	if e.hidewithbars && sys.shouldHideWithBars() {
 		return
 	}
 
@@ -1932,20 +1954,7 @@ func (e *Explod) update() {
 		return
 	}
 
-	paused := sys.motif.ch.active && sys.pausetime > 0
-	if !paused {
-		if sys.supertime > 0 {
-			paused = (e.supermovetime >= 0 && e.time >= e.supermovetime) || e.supermovetime < -2
-		} else if sys.pausetime > 0 {
-			paused = (e.pausemovetime >= 0 && e.time >= e.pausemovetime) || e.pausemovetime < -2
-		}
-	}
-
-	act := !paused
-
-	if act && !e.ignorehitpause {
-		act = parent == nil || parent.acttmp%2 >= 0
-	}
+	act := e.canAct()
 
 	if sys.tickFrame() {
 		if e.removetime >= 0 && e.time >= e.removetime ||
@@ -1979,6 +1988,8 @@ func (e *Explod) update() {
 			e.pos[i] = e.newPos[i] - (e.newPos[i]-e.oldPos[i])*(1-spd)
 		}
 	}
+
+	// Sync parameters
 	if e.syncId > 0 {
 		if syncChar := sys.playerID(e.syncId); syncChar != nil {
 			syncChar.enableSyncId = true // Enable sync layering for this char
@@ -2036,14 +2047,82 @@ func (e *Explod) update() {
 		}
 	}
 
-	facing := e.trueFacing()
-	//if e.lockSpriteFacing {
-	//	facing = -1
-	//}
-
 	if sys.tickFrame() && act {
 		e.anim.UpdateSprite()
 	}
+
+	// Interpolated position
+	// With z-axis it's important that we don't use localscl here yet
+	e.interPos = [3]float32{
+		e.pos[0] + e.offset[0] + off[0] + e.interpolate_pos[0],
+		e.pos[1] + e.offset[1] + off[1] + e.interpolate_pos[1],
+		e.pos[2] + e.offset[2] + off[2] + e.interpolate_pos[2],
+	}
+
+	if sys.tickNextFrame() {
+
+		//if e.space == Space_screen && e.bindtime == 0 {
+		//	if e.space <= Space_none {
+		//		switch e.postype {
+		//		case PT_Left:
+		//			for i := range e.pos {
+		//				e.pos[i] = sys.cam.ScreenPos[i] + e.offset[i]/sys.cam.Scale
+		//			}
+		//		case PT_Right:
+		//			e.pos[0] = sys.cam.ScreenPos[0] +
+		//				(float32(sys.gameWidth)+e.offset[0])/sys.cam.Scale
+		//			e.pos[1] = sys.cam.ScreenPos[1] + e.offset[1]/sys.cam.Scale
+		//		}
+		//	} else if e.space == Space_screen {
+		//		for i := range e.pos {
+		//			e.pos[i] = sys.cam.ScreenPos[i] + e.offset[i]/sys.cam.Scale
+		//		}
+		//	}
+		//}
+
+		if act {
+			if e.palfx != nil && e.ownpal {
+				e.palfx.step()
+			}
+			e.oldPos = e.pos
+			e.newPos[0] = e.pos[0] + e.velocity[0]*e.facing
+			e.newPos[1] = e.pos[1] + e.velocity[1]
+			e.newPos[2] = e.pos[2] + e.velocity[2]
+			for i := range e.velocity {
+				e.velocity[i] *= e.friction[i]
+				e.velocity[i] += e.accel[i]
+				if math.Abs(float64(e.velocity[i])) < 0.1 && math.Abs(float64(e.friction[i])) < 1 {
+					e.velocity[i] = 0
+				}
+			}
+			eleminterpolate := e.interpolate && e.interpolate_time[1] > 0 && e.interpolate_animelem[1] >= 0
+			if e.animfreeze || eleminterpolate {
+				e.setAnimElem()
+			} else {
+				e.anim.Action()
+			}
+			e.time++
+			if e.bindtime > 0 {
+				e.bindtime--
+			}
+		} else {
+			e.setAllPosX(e.pos[0])
+			e.setAllPosY(e.pos[1])
+			e.setAllPosZ(e.pos[2])
+		}
+	}
+}
+
+func (e *Explod) cueDraw() {
+	if e.hidewithbars && sys.shouldHideWithBars() {
+		return
+	}
+	if e.anim == nil {
+		return
+	}
+
+	parent := sys.playerID(e.ownerId)
+	act := e.canAct()
 
 	var pfx *PalFX
 	if e.palfx != nil && (!e.anim.isCommonFX() || e.ownpal) {
@@ -2059,36 +2138,33 @@ func (e *Explod) update() {
 	fLength := e.fLength
 	scale := e.scale
 	xshear := e.xshear
+
 	if e.interpolate {
 		e.Interpolate(act, &scale, &alp, &anglerot, &fLength, &xshear)
 	}
+
 	if alp[0] < 0 {
 		alp[0] = -1
 	}
+
+	facing := e.trueFacing()
+	//if e.lockSpriteFacing {
+	//	facing = -1
+	//}
 	if (facing < 0) != (e.vfacing < 0) {
 		anglerot[0] *= -1
 		anglerot[2] *= -1
 	}
-	sdwalp := 255 - alp[1]
-	if sdwalp < 0 {
-		sdwalp = 256
-	}
+
 	if fLength <= 0 {
 		fLength = 2048
 	}
 	fLength = fLength * e.localscl
+
 	rot := e.rot
 	rot.angle = anglerot[0]
 	rot.xangle = anglerot[1]
 	rot.yangle = anglerot[2]
-
-	// Interpolated position
-	// With z-axis it's important that we don't use localscl here yet
-	e.interPos = [3]float32{
-		e.pos[0] + e.offset[0] + off[0] + e.interpolate_pos[0],
-		e.pos[1] + e.offset[1] + off[1] + e.interpolate_pos[1],
-		e.pos[2] + e.offset[2] + off[2] + e.interpolate_pos[2],
-	}
 
 	// Set drawing position
 	drawpos := [2]float32{e.interPos[0] * e.localscl, e.interPos[1] * e.localscl}
@@ -2117,7 +2193,7 @@ func (e *Explod) update() {
 	}
 
 	// Calculate window scale
-	var ewin = [4]float32{
+	ewin := [4]float32{
 		e.window[0] * basescale[0],
 		e.window[1] * basescale[1],
 		e.window[2] * basescale[0],
@@ -2186,6 +2262,8 @@ func (e *Explod) update() {
 		// Add shadow to list
 		sys.shadowList.add(ss)
 	}
+
+	// Add reflection
 	if (e.reflection < 0 && sdwclr != 0) || e.reflection > 0 {
 		drawZoff := sys.posZtoYoffset(e.interPos[2], e.localscl)
 
@@ -2197,59 +2275,6 @@ func (e *Explod) update() {
 
 		// Add reflection to list
 		sys.reflectionList.add(rs)
-	}
-
-	if sys.tickNextFrame() {
-
-		//if e.space == Space_screen && e.bindtime == 0 {
-		//	if e.space <= Space_none {
-		//		switch e.postype {
-		//		case PT_Left:
-		//			for i := range e.pos {
-		//				e.pos[i] = sys.cam.ScreenPos[i] + e.offset[i]/sys.cam.Scale
-		//			}
-		//		case PT_Right:
-		//			e.pos[0] = sys.cam.ScreenPos[0] +
-		//				(float32(sys.gameWidth)+e.offset[0])/sys.cam.Scale
-		//			e.pos[1] = sys.cam.ScreenPos[1] + e.offset[1]/sys.cam.Scale
-		//		}
-		//	} else if e.space == Space_screen {
-		//		for i := range e.pos {
-		//			e.pos[i] = sys.cam.ScreenPos[i] + e.offset[i]/sys.cam.Scale
-		//		}
-		//	}
-		//}
-
-		if act {
-			if e.palfx != nil && e.ownpal {
-				e.palfx.step()
-			}
-			e.oldPos = e.pos
-			e.newPos[0] = e.pos[0] + e.velocity[0]*e.facing
-			e.newPos[1] = e.pos[1] + e.velocity[1]
-			e.newPos[2] = e.pos[2] + e.velocity[2]
-			for i := range e.velocity {
-				e.velocity[i] *= e.friction[i]
-				e.velocity[i] += e.accel[i]
-				if math.Abs(float64(e.velocity[i])) < 0.1 && math.Abs(float64(e.friction[i])) < 1 {
-					e.velocity[i] = 0
-				}
-			}
-			eleminterpolate := e.interpolate && e.interpolate_time[1] > 0 && e.interpolate_animelem[1] >= 0
-			if e.animfreeze || eleminterpolate {
-				e.setAnimElem()
-			} else {
-				e.anim.Action()
-			}
-			e.time++
-			if e.bindtime > 0 {
-				e.bindtime--
-			}
-		} else {
-			e.setAllPosX(e.pos[0])
-			e.setAllPosY(e.pos[1])
-			e.setAllPosZ(e.pos[2])
-		}
 	}
 }
 
@@ -6252,12 +6277,11 @@ func (c *Char) getOwnChannels(chNo int32) (found []*SoundChannel) {
 	return found
 }
 
-func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, chNo, vol int32,
-	p, freqmul, ls float32, x *float32, log bool, priority int32, loopstart, loopend, startposition int, stopgh, stopcs bool) {
-	if g < 0 {
+func (c *Char) playSound(params *PlaySndParams) {
+	if params.group < 0 {
 		return
 	}
-	current_ffx := ffx
+	current_ffx := params.ffx
 	if current_ffx == "f" {
 		if c.gi().fightfxPrefix != "" {
 			current_ffx = c.gi().fightfxPrefix
@@ -6268,22 +6292,24 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 		return
 	}
 
+	// Get sound from self or common sounds
 	var s *Sound
 	if current_ffx == "" || current_ffx == "s" {
 		if c.gi().snd != nil {
-			s = c.gi().snd.Get([...]int32{g, n})
+			s = c.gi().snd.Get([...]int32{params.group, params.number})
 		}
 	} else {
 		if sys.ffx[current_ffx] != nil && sys.ffx[current_ffx].snd != nil {
-			s = sys.ffx[current_ffx].snd.Get([...]int32{g, n})
+			s = sys.ffx[current_ffx].snd.Get([...]int32{params.group, params.number})
 		}
 	}
+
 	if s == nil {
-		if log {
+		if params.log {
 			if current_ffx != "" {
-				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v %v,%v doesn't exist", strings.ToUpper(current_ffx), g, n))
+				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v %v,%v doesn't exist", strings.ToUpper(current_ffx), params.group, params.number))
 			} else {
-				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v,%v doesn't exist", g, n))
+				sys.appendToConsole(c.warn() + fmt.Sprintf("sound %v,%v doesn't exist", params.group, params.number))
 			}
 		}
 		if !sys.ignoreMostErrors {
@@ -6293,7 +6319,7 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 			} else {
 				str += fmt.Sprintf("P%v:", c.playerNo+1)
 			}
-			LogMessage("%v%v,%v", str, g, n)
+			LogMessage("%v%v,%v", str, params.group, params.number)
 		}
 		return
 	}
@@ -6307,12 +6333,12 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 	}
 
 	// Request a sound channel
-	ch := sys.charSoundChannels[crun.playerNo].Request(crun.id, chNo, lowpriority, priority)
+	ch := sys.charSoundChannels[crun.playerNo].Request(crun.id, params.channel, params.lowPriority, params.priority)
 
 	// Play the sound in it
 	if ch != nil {
-		ch.Play(s, g, n, loopCount, freqmul, loopstart, loopend, startposition)
-		vol = Clamp(vol, -25600, 25600)
+		ch.Play(s, params.group, params.number, params.loopCount, params.freqMul, params.loopStart, params.loopEnd, params.startPosition)
+		vol := Clamp(params.volume, -25600, 25600)
 
 		//ch.channelNo = chNo // Handled by Request()
 
@@ -6323,9 +6349,9 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 			ch.SetVolume(float32(c.gi().data.volume * vol / 100))
 		}
 
-		if chNo >= 0 {
-			if priority != 0 {
-				ch.SetPriority(priority) // TODO: We can probably allow priority in channel -1 now
+		if params.channel >= 0 {
+			if params.priority != 0 {
+				ch.SetPriority(params.priority) // TODO: We can probably allow priority in channel -1 now
 			}
 		}
 
@@ -6337,9 +6363,9 @@ func (c *Char) playSound(ffx string, lowpriority bool, loopCount int32, g, n, ch
 		//	}
 		//}
 
-		ch.stopOnGetHit = stopgh
-		ch.stopOnChangeState = stopcs
-		ch.SetPan(p*c.facing, ls, x)
+		ch.stopOnGetHit = params.stopOnGetHit
+		ch.stopOnChangeState = params.stopOnChangeState
+		ch.SetPan(params.pan*c.facing, params.localScale, params.xPos)
 	}
 }
 
@@ -10764,9 +10790,7 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 		if !isProjectile && hd.p1sprpriority != IErr {
 			c.sprPriority = hd.p1sprpriority
 		}
-		if hd.p2sprpriority != IErr {
-			getter.sprPriority = hd.p2sprpriority
-		}
+		getter.sprPriority = hd.p2sprpriority
 	}
 
 	// Attacker facing
@@ -11299,9 +11323,15 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 			hitspark(c, getter, hd.sparkno, hd.sparkno_ffx, hd.sparkangle, hd.sparkscale)
 		}
 		if hd.hitsound[0] >= 0 && hd.hitsound[1] >= 0 {
-			vo := int32(100)
-			c.playSound(hd.hitsound_ffx, false, 0, hd.hitsound[0], hd.hitsound[1],
-				hd.hitsound_channel, vo, 0, 1, getter.localscl, &getter.pos[0], true, 0, 0, 0, 0, false, false)
+			params := newPlaySndParams()
+			params.ffx = hd.hitsound_ffx
+			params.group = hd.hitsound[0]
+			params.number = hd.hitsound[1]
+			params.channel = hd.hitsound_channel
+			params.localScale = getter.localscl
+			params.xPos = &getter.pos[0]
+			params.log = true
+			c.playSound(params)
 		}
 	} else {
 		if hd.reversal_attr > 0 {
@@ -11310,9 +11340,15 @@ func (c *Char) hitResultCheck(getter *Char, proj *Projectile) (hitResult int32) 
 			hitspark(c, getter, hd.guard_sparkno, hd.guard_sparkno_ffx, hd.guard_sparkangle, hd.guard_sparkscale)
 		}
 		if hd.guardsound[0] >= 0 && hd.guardsound[1] >= 0 {
-			vo := int32(100)
-			c.playSound(hd.guardsound_ffx, false, 0, hd.guardsound[0], hd.guardsound[1],
-				hd.guardsound_channel, vo, 0, 1, getter.localscl, &getter.pos[0], true, 0, 0, 0, 0, false, false)
+			params := newPlaySndParams()
+			params.ffx = hd.guardsound_ffx
+			params.group = hd.guardsound[0]
+			params.number = hd.guardsound[1]
+			params.channel = hd.guardsound_channel
+			params.localScale = getter.localscl
+			params.xPos = &getter.pos[0]
+			params.log = true
+			c.playSound(params)
 		}
 	}
 
@@ -11941,7 +11977,12 @@ func (c *Char) actionFinish() {
 		if c.alive() && c.life <= 0 && !sys.gsf(GSF_globalnoko) && !c.asf(ASF_noko) && (!c.ghv.guarded || !c.asf(ASF_noguardko)) {
 			// KO sound
 			if !sys.gsf(GSF_nokosnd) {
-				c.playSound("", false, 0, 11, 0, -1, 100, 0, 1, c.localscl, &c.pos[0], false, 0, 0, 0, 0, false, false)
+				params := newPlaySndParams()
+				params.group = 11
+				params.localScale = c.localscl
+				params.xPos = &c.pos[0]
+				c.playSound(params)
+				// Start echo timer
 				if c.gi().data.ko.echo != 0 {
 					c.koEchoTimer = 1
 				}
@@ -12145,8 +12186,13 @@ func (c *Char) update() {
 			c.koEchoTimer = 0
 		} else {
 			if c.koEchoTimer == 60 || c.koEchoTimer == 120 {
-				vo := int32(100 * (240 - (c.koEchoTimer + 60)) / 240)
-				c.playSound("", false, 0, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0, 0, 0, 0, false, false)
+				vol := int32(100 * (240 - (c.koEchoTimer + 60)) / 240)
+				params := newPlaySndParams()
+				params.group = 11
+				params.volume = vol
+				params.localScale = c.localscl
+				params.xPos = &c.pos[0]
+				c.playSound(params)
 			}
 			c.koEchoTimer++
 		}

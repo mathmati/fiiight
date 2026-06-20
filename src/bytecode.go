@@ -5077,75 +5077,79 @@ func (sc playSnd) Run(c *Char, _ []int32) bool {
 		return false
 	}
 
-	x := &crun.pos[0]
-	ls := crun.localscl
-	f, lw, lp, stopgh, stopcs, vscaleflg := "", false, false, false, false, false
-	var g, n, ch, vo, pri, lc int32 = -1, 0, -1, 100, 0, 0
-	var loopstart, loopend, startposition = 0, 0, 0
-	var p, fr float32 = 0, 1
+	params := newPlaySndParams()
+	params.localScale = crun.localscl
+	params.xPos = &crun.pos[0]
+	params.log = true
+
+	var vscaleflg bool
+	var lp bool
+	var lc int32
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case playSnd_value:
-			f = exp[0].evalS()
-			g = exp[1].evalI(c)
+			params.ffx = exp[0].evalS()
+			params.group = exp[1].evalI(c)
 			if len(exp) > 2 {
-				n = exp[2].evalI(c)
+				params.number = exp[2].evalI(c)
 			}
 		case playSnd_channel:
-			ch = exp[0].evalI(c)
-			if ch == 0 {
-				stopgh = true
+			params.channel = exp[0].evalI(c)
+			if params.channel == 0 {
+				params.stopOnGetHit = true
 			}
 		case playSnd_lowpriority:
-			lw = exp[0].evalB(c)
+			params.lowPriority = exp[0].evalB(c)
 		case playSnd_pan:
-			p = exp[0].evalF(c)
+			params.pan = exp[0].evalF(c)
 		case playSnd_abspan:
-			x = nil
-			ls = 1
-			p = exp[0].evalF(c)
+			params.xPos = nil
+			params.localScale = 1
+			params.pan = exp[0].evalF(c)
 		case playSnd_volume:
-			vo = vo + int32(float64(exp[0].evalI(c))*(25.0/128.0))
+			params.volume = params.volume + int32(float64(exp[0].evalI(c))*(25.0/128.0))
 		case playSnd_volumescale:
-			vo = exp[0].evalI(c)
+			params.volume = exp[0].evalI(c)
 			vscaleflg = true
 		case playSnd_freqmul:
-			fr = Clamp(exp[0].evalF(c), 0.01, 5)
+			params.freqMul = Clamp(exp[0].evalF(c), 0.01, 5)
 		case playSnd_loop:
 			lp = exp[0].evalB(c)
 		case playSnd_priority:
-			pri = exp[0].evalI(c)
+			params.priority = exp[0].evalI(c)
 		case playSnd_loopstart:
-			loopstart = int(exp[0].evalI64(c))
+			params.loopStart = int(exp[0].evalI64(c))
 		case playSnd_loopend:
-			loopend = int(exp[0].evalI64(c))
+			params.loopEnd = int(exp[0].evalI64(c))
 		case playSnd_startposition:
-			startposition = int(exp[0].evalI64(c))
+			params.startPosition = int(exp[0].evalI64(c))
 		case playSnd_loopcount:
 			lc = exp[0].evalI(c)
 		case playSnd_stopongethit:
-			stopgh = exp[0].evalB(c)
+			params.stopOnGetHit = exp[0].evalB(c)
 		case playSnd_stoponchangestate:
-			stopcs = exp[0].evalB(c)
+			params.stopOnChangeState = exp[0].evalB(c)
 		}
 		return true
 	})
-	// Read the loop parameter if loopcount not specified
+
+	// Determine loopCount
 	if lc == 0 {
 		if lp {
-			// WINMUGEN has a bug where the volume parameter is disabled when loop is specified
+			// WINMUGEN bug: volume is disabled when loop is specified (unless volumescale used)
 			if !vscaleflg && c.stWgi().ikemenver[0] == 0 && c.stWgi().ikemenver[1] == 0 {
-				vo = 100
+				params.volume = 100
 			}
-			crun.playSound(f, lw, -1, g, n, ch, vo, p, fr, ls, x, true, pri, loopstart, loopend, startposition, stopgh, stopcs)
+			params.loopCount = -1
 		} else {
-			crun.playSound(f, lw, 0, g, n, ch, vo, p, fr, ls, x, true, pri, loopstart, loopend, startposition, stopgh, stopcs)
+			params.loopCount = 0
 		}
-		// Use the loopcount directly if it's been specified
 	} else {
-		crun.playSound(f, lw, lc, g, n, ch, vo, p, fr, ls, x, true, pri, loopstart, loopend, startposition, stopgh, stopcs)
+		params.loopCount = lc
 	}
+
+	crun.playSound(params)
 	return false
 }
 
@@ -6377,7 +6381,12 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 		case explod_window:
 			e.window = [4]float32{exp[0].evalF(c) * redirscale, exp[1].evalF(c) * redirscale, exp[2].evalF(c) * redirscale, exp[3].evalF(c) * redirscale}
 		case explod_shader:
-			e.shader = exp[0].evalS()
+			shader := exp[0].evalS()
+			if shader == "" || sys.isValidCustomShader(shader) {
+				e.shader = shader
+			} else {
+				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid explod shader name: %s", shader))
+			}
 		case explod_shaderparam:
 			numParams := int(exp[0].evalI(c))
 			for j := 0; j < numParams; j++ {
@@ -10303,14 +10312,13 @@ func (sc superPause) Run(c *Char, _ []int32) bool {
 		case superPause_unhittable:
 			uh = exp[0].evalB(c)
 		case superPause_sound:
-			n := int32(0)
+			params := newPlaySndParams()
+			params.ffx = exp[0].evalS()
+			params.group = exp[1].evalI(c)
 			if len(exp) > 2 {
-				n = exp[2].evalI(c)
+				params.number = exp[2].evalI(c)
 			}
-			vo := int32(100)
-			ffx := exp[0].evalS()
-			crun.playSound(ffx, false, 0, exp[1].evalI(c), n, -1,
-				vo, 0, 1, 1, nil, false, 0, 0, 0, 0, false, false)
+			crun.playSound(params)
 		}
 		return true
 	})
@@ -11977,6 +11985,7 @@ const (
 	lifebarAction_fontbank
 	lifebarAction_fontalign
 	lifebarAction_fontcolor
+	lifebarAction_refreshtype
 	lifebarAction_redirectid
 )
 
@@ -11986,20 +11995,17 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 		return false
 	}
 
-	var top bool
-	var timemul float32 = 1
-	var anim int32 = -1
-	s_ffx, a_ffx := "", ""
-	spr := [2]int32{-1, 0}
-	snd := [2]int32{-1, 0}
-
 	// Initialize a text message with defaults
 	msg := newFSMsg(crun.teamside)
+	timemul := float32(1.0)
+
+	// Default to no duplicates and making an identical message reappear
+	refresh := int32(2)
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
 		case lifebarAction_top:
-			top = exp[0].evalB(c)
+			msg.top = exp[0].evalB(c)
 		case lifebarAction_timemul:
 			timemul = exp[0].evalF(c)
 		case lifebarAction_time:
@@ -12018,20 +12024,26 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 			}
 			msg.fontColorSet = true
 		case lifebarAction_anim:
-			a_ffx = exp[0].evalS()
-			anim = exp[1].evalI(c)
+			msg.anim_ffx = exp[0].evalS()
+			msg.animNo = exp[1].evalI(c)
+			msg.spr = [2]int32{-1, -1}
 		case lifebarAction_spr:
-			a_ffx = exp[0].evalS()
-			spr[0] = exp[1].evalI(c)
+			msg.spr[0] = exp[1].evalI(c)
 			if len(exp) > 2 {
-				spr[1] = exp[2].evalI(c)
+				msg.spr[1] = exp[2].evalI(c)
+			} else {
+				msg.spr[1] = 0
 			}
+			msg.animNo = -1
+			msg.anim_ffx = ""
 		case lifebarAction_snd:
-			s_ffx = exp[0].evalS()
-			snd[0] = exp[1].evalI(c)
+			msg.snd_ffx = exp[0].evalS()
+			msg.snd[0] = exp[1].evalI(c)
 			if len(exp) > 2 {
-				snd[1] = exp[2].evalI(c)
+				msg.snd[1] = exp[2].evalI(c)
 			}
+		case lifebarAction_refreshtype:
+			refresh = exp[0].evalI(c)
 		default:
 			if isPalFXParam(paramID) {
 				if msg.palfx == nil {
@@ -12050,7 +12062,7 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 	}
 	msg.resttime = int32(float32(msg.resttime) * timemul)
 
-	sys.fightScreen.appendAction(crun, msg, s_ffx, a_ffx, snd, spr, anim, top)
+	sys.fightScreen.appendAction(crun, msg, refresh)
 	return false
 }
 
@@ -12652,7 +12664,12 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 		case shaderSet_time:
 			st = exp[0].evalI(c)
 		case shaderSet_shader:
-			crun.shader = exp[0].evalS()
+			shader := exp[0].evalS()
+			if shader == "" || sys.isValidCustomShader(shader) {
+				crun.shader = shader
+			} else {
+				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid shader name: %s", shader))
+			}
 		case shaderSet_shaderparam:
 			numParams := int(exp[0].evalI(c))
 			for j := 0; j < numParams; j++ {
