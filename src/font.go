@@ -20,7 +20,7 @@ type FontRenderer interface {
 
 type Font interface {
 	SetColor(red float32, green float32, blue float32, alpha float32)
-	SetPalFX(neg bool, gray float32, add, mul [3]float32, hue float32)
+	SetPalFX(pfxstate PalFXState)
 	UpdateResolution(windowWidth int, windowHeight int)
 	Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
 		rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
@@ -64,7 +64,7 @@ type FntCharImage struct {
 // TtfFont implements TTF font rendering on supported platforms
 type TtfFont interface {
 	SetColor(red float32, green float32, blue float32, alpha float32)
-	SetPalFX(neg bool, gray float32, add, mul [3]float32, hue float32)
+	SetPalFX(pfxstate PalFXState)
 	Width(scale float32, spacingXAdd float32, fs string, argv ...interface{}) float32
 	Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
 		rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
@@ -735,12 +735,16 @@ func (f *Fnt) DrawTtf(txt string, x, y, xscl, yscl, rxadd float32, rot Rotation,
 		blendMode = TT_add
 	}
 	alphaVal := int32(255 * Clamp(frgba[3], float32(0), float32(1)))
+
+	var pfxstate PalFXState
+
 	if palfx != nil {
-		neg, grayscale, add, mul, _, hue := palfx.getFinalPalFx(blendMode, [2]int32{alphaVal, 255 - alphaVal})
-		f.ttf.SetPalFX(neg, grayscale, add, mul, hue)
+		pfxstate = palfx.getFinalPalFx(blendMode, [2]int32{alphaVal, 255 - alphaVal})
 	} else {
-		f.ttf.SetPalFX(false, 0, [3]float32{0, 0, 0}, [3]float32{1, 1, 1}, 0)
+		pfxstate = NewPalFXState()
 	}
+	f.ttf.SetPalFX(pfxstate)
+
 	f.ttf.SetColor(frgba[0], frgba[1], frgba[2], frgba[3])
 	f.ttf.Printf(x, y, xscl, yscl, spacingXAdd, align, blend, *window,
 		rxadd, rot, projectionMode, fLength, x, y,
