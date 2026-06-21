@@ -25,7 +25,7 @@ type Font_GL33 struct {
 	windowHeight int
 	textures     []*TextureAtlas
 	color        color
-	palfxState   PalFXState
+	shaderPalFX  ShaderPalFX
 }
 
 type FontRenderer_GL33 struct {
@@ -93,8 +93,8 @@ func (f *Font_GL33) SetColor(red float32, green float32, blue float32, alpha flo
 	f.color.a = alpha
 }
 
-func (f *Font_GL33) SetPalFX(state PalFXState) {
-    f.palfxState = state
+func (f *Font_GL33) SetPalFX(state ShaderPalFX) {
+    f.shaderPalFX = state
 }
 
 func (f *Font_GL33) UpdateResolution(windowWidth int, windowHeight int) {
@@ -159,11 +159,11 @@ func (f *Font_GL33) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32
 	r.SetUniformFSub(program.uniforms["textColor"], f.color.r, f.color.g, f.color.b, f.color.a)
 
 	// Set PalFX uniforms
-	r.SetUniformFSub(program.uniforms["palAdd"], f.palfxState.add[0], f.palfxState.add[1], f.palfxState.add[2])
-	r.SetUniformFSub(program.uniforms["palMul"], f.palfxState.mult[0], f.palfxState.mult[1], f.palfxState.mult[2])
-	r.SetUniformFSub(program.uniforms["palGray"], f.palfxState.gray)
-	r.SetUniformFSub(program.uniforms["palHue"], f.palfxState.hue)
-	r.SetUniformISub(program.uniforms["palNeg"], int32(Btoi(f.palfxState.neg)))
+	r.SetUniformFSub(program.uniforms["palAdd"], f.shaderPalFX.add[0], f.shaderPalFX.add[1], f.shaderPalFX.add[2])
+	r.SetUniformFSub(program.uniforms["palMul"], f.shaderPalFX.mult[0], f.shaderPalFX.mult[1], f.shaderPalFX.mult[2])
+	r.SetUniformFSub(program.uniforms["palGray"], f.shaderPalFX.gray)
+	r.SetUniformFSub(program.uniforms["palHue"], f.shaderPalFX.hue)
+	r.SetUniformISub(program.uniforms["palNeg"], int32(Btoi(f.shaderPalFX.neg)))
 
 	//set screen resolution
 	r.SetUniformFSub(program.uniforms["resolution"], float32(f.windowWidth), float32(f.windowHeight))
@@ -495,7 +495,7 @@ func (r *FontRenderer_GL33) LoadTrueTypeFont(reader io.Reader, scale int32, low,
 	f.ttf = ttf
 	f.scale = scale
 	f.SetColor(1.0, 1.0, 1.0, 1.0) //set default white
-	f.SetPalFX(NewPalFXState())
+	f.SetPalFX(NewShaderPalFX())
 	f.textures = append(f.textures, CreateTextureAtlas(256, 256, 32, true))
 
 	err = f.GenerateGlyphs(low, high)

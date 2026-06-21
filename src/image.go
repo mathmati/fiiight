@@ -167,7 +167,7 @@ func (pf *PalFX) getFxPal(blendMode TransType, pal []uint32, neg bool) []uint32 
 	return sys.workpal
 }
 
-func (pf *PalFX) getFinalPalFx(blendMode TransType, alpha [2]int32) (state PalFXState) {
+func (pf *PalFX) getFinalPalFx(blendMode TransType, alpha [2]int32) (state ShaderPalFX) {
 	p := pf.getSynFx(blendMode, alpha)
 
 	if !p.enable {

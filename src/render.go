@@ -606,7 +606,7 @@ func RenderSprite(rp RenderParams) {
 	initRenderSpriteQuad(&rp)
 
 	// PalFX and color setup
-	pfxstate := PalFXState{
+	spfx := ShaderPalFX{
 		neg:      false,
 		add:      [3]float32{0, 0, 0},
 		mult:     [3]float32{1, 1, 1},
@@ -615,7 +615,7 @@ func RenderSprite(rp RenderParams) {
 		invblend: 0,
 	}
 	if rp.pfx != nil {
-		pfxstate = rp.pfx.getFinalPalFx(rp.blendMode, rp.blendAlpha)
+		spfx = rp.pfx.getFinalPalFx(rp.blendMode, rp.blendAlpha)
 	}
 
 	tint := [4]float32{
@@ -640,8 +640,8 @@ func RenderSprite(rp RenderParams) {
 	gfx.SetUniformI("mask", int(rp.mask))
 	gfx.SetUniformI("isTrapez", int(Btoi(Abs(Abs(rp.xts)-Abs(rp.xbs)) > 0.001)))
 
-	gfx.SetUniformF("gray", pfxstate.gray)
-	gfx.SetUniformF("hue", pfxstate.hue)
+	gfx.SetUniformF("gray", spfx.gray)
+	gfx.SetUniformF("hue", spfx.hue)
 	gfx.SetUniformFv("tint", tint[:])
 
 	if rp.paltex == nil {
@@ -683,15 +683,15 @@ func RenderSprite(rp RenderParams) {
 
 		// Dynamic uniforms
 		// We must include the parameters that renderWithBlending() may have changed
-		gfx.SetUniformI("neg", int(Btoi(pfxstate.neg)))
-		gfx.SetUniformFv("add", pfxstate.add[:])
-		gfx.SetUniformFv("mult", pfxstate.mult[:])
+		gfx.SetUniformI("neg", int(Btoi(spfx.neg)))
+		gfx.SetUniformFv("add", spfx.add[:])
+		gfx.SetUniformFv("mult", spfx.mult[:])
 		gfx.SetUniformF("alpha", a)
 
 		renderSpriteQuad(modelview, rp)
 	}
 
-	renderWithBlending(renderPass, rp.blendMode, rp.blendAlpha, rp.paltex != nil, &pfxstate, rp.paltex == nil)
+	renderWithBlending(renderPass, rp.blendMode, rp.blendAlpha, rp.paltex != nil, &spfx, rp.paltex == nil)
 
 	gfx.DisableScissor()
 }
@@ -699,7 +699,7 @@ func RenderSprite(rp RenderParams) {
 func renderWithBlending(
 	render func(eq BlendEquation, src, dst BlendFunc, a float32),
 	blendMode TransType, blendAlpha [2]int32, correctAlpha bool,
-	pfxstate *PalFXState, isrgba bool) {
+	spfx *ShaderPalFX, isrgba bool) {
 
 	blendSourceFactor := BlendSrcAlpha
 	if !correctAlpha {
@@ -708,7 +708,7 @@ func renderWithBlending(
 
 	Blend := BlendAdd
 	BlendInv := BlendReverseSubtract
-	if pfxstate.invblend >= 1 {
+	if spfx.invblend >= 1 {
 		Blend = BlendReverseSubtract
 		BlendInv = BlendAdd
 	}
@@ -729,12 +729,12 @@ func renderWithBlending(
 	// Helpers for invertblend
 	// Invert PalFX add
 	invertAColor := func() {
-		pfxstate.add[0], pfxstate.add[1], pfxstate.add[2] = -pfxstate.add[0], -pfxstate.add[1], -pfxstate.add[2]
+		spfx.add[0], spfx.add[1], spfx.add[2] = -spfx.add[0], -spfx.add[1], -spfx.add[2]
 	}
 	// Disable the "neg" uniform, which the shader uses to invert colors
 	// We sometimes use this because subtractive transparency already inverts colors on its own, so it'd be a double negation
 	disableNeg := func() {
-		pfxstate.neg = false
+		spfx.neg = false
 	}
 
 	// Proceed with the render calls
@@ -746,10 +746,10 @@ func renderWithBlending(
 			// Fully transparent. Skip render
 		case src == 1 && dst == 1:
 			// Fast path for full subtraction
-			if pfxstate.invblend >= 1 {
+			if spfx.invblend >= 1 {
 				invertAColor()
 			}
-			if pfxstate.invblend == 3 {
+			if spfx.invblend == 3 {
 				disableNeg()
 			}
 			render(BlendInv, blendSourceFactor, BlendOne, 1)
@@ -759,10 +759,10 @@ func renderWithBlending(
 				render(BlendAdd, BlendZero, BlendOneMinusSrcAlpha, 1-dst)
 			}
 			if src > 0 {
-				if pfxstate.invblend >= 1 {
+				if spfx.invblend >= 1 {
 					invertAColor()
 				}
-				if pfxstate.invblend == 3 {
+				if spfx.invblend == 3 {
 					disableNeg()
 				}
 				render(BlendInv, blendSourceFactor, BlendOne, src)
@@ -771,21 +771,21 @@ func renderWithBlending(
 	// SubAdd
 	case blendMode == TT_subadd:
 		// Save original state for later restoration
-		origState := *pfxstate
+		origState := *spfx
 
 		// Helper to set PalFX parameters to grayscale for the first pass
 		makeFxGrayscale := func() {
 			avgAdd := (origState.add[0] + origState.add[1] + origState.add[2]) / 3
-			pfxstate.add = [3]float32{avgAdd, avgAdd, avgAdd}
+			spfx.add = [3]float32{avgAdd, avgAdd, avgAdd}
 			avgMult := (origState.mult[0] + origState.mult[1] + origState.mult[2]) / 3
-			pfxstate.mult = [3]float32{avgMult, avgMult, avgMult}
+			spfx.mult = [3]float32{avgMult, avgMult, avgMult}
 		}
-		if pfxstate.neg {
+		if spfx.neg {
 			// With invertall we invert the passes. Add then sub
 			// This is kind of like "invblend = 3"
 			// But adding "invertblend" support here would force people to have to use it to get the expected results
 			// We avoid "neg" entirely because it turns black edges into white auras. But maybe allowing that would be more consistent?
-			disableNeg() // pfxstate.neg = false
+			disableNeg() // spfx.neg = false
 			//invertAColor()
 
 			// Pass 1: additive with gray PalFX
@@ -797,9 +797,9 @@ func renderWithBlending(
 			}
 			// Pass 2: subtractive with original PalFX
 			if src > 0 {
-				*pfxstate = origState
+				*spfx = origState
 				disableNeg() // Disable neg again because of the restore
-				gfx.SetUniformF("gray", pfxstate.gray)
+				gfx.SetUniformF("gray", spfx.gray)
 				render(BlendReverseSubtract, blendSourceFactor, BlendOne, src)
 			}
 		} else {
@@ -812,8 +812,8 @@ func renderWithBlending(
 			}
 			// Pass 2: additive with original PalFX
 			if src > 0 {
-				*pfxstate = origState
-				gfx.SetUniformF("gray", pfxstate.gray)
+				*spfx = origState
+				gfx.SetUniformF("gray", spfx.gray)
 				render(BlendAdd, blendSourceFactor, BlendOne, src)
 			}
 		}
@@ -829,10 +829,10 @@ func renderWithBlending(
 			render(BlendAdd, blendSourceFactor, BlendOneMinusSrcAlpha, 1)
 		case src == 1 && dst == 1:
 			// Fast path for full Add
-			if pfxstate.invblend >= 1 {
+			if spfx.invblend >= 1 {
 				invertAColor()
 			}
-			if pfxstate.invblend == 3 {
+			if spfx.invblend == 3 {
 				disableNeg()
 			}
 			render(Blend, blendSourceFactor, BlendOne, 1)
@@ -842,23 +842,23 @@ func renderWithBlending(
 				render(Blend, BlendZero, BlendOneMinusSrcAlpha, 1-dst)
 			}
 			if src > 0 {
-				if pfxstate.invblend >= 1 && dst == 1 {
+				if spfx.invblend >= 1 && dst == 1 {
 					Blend = BlendReverseSubtract
-					if pfxstate.invblend >= 2 { // Not 1 here. TODO: Explain why in comment
+					if spfx.invblend >= 2 { // Not 1 here. TODO: Explain why in comment
 						invertAColor()
 					}
-					if pfxstate.invblend == 3 {
+					if spfx.invblend == 3 {
 						disableNeg()
 					}
 				} else {
 					Blend = BlendAdd
 				}
-				if !isrgba && (pfxstate.invblend <= -1 || pfxstate.invblend >= 2) && src < 1 {
+				if !isrgba && (spfx.invblend <= -1 || spfx.invblend >= 2) && src < 1 {
 					// Sum of add components
-					gc := Abs(pfxstate.add[0]) + Abs(pfxstate.add[1]) + Abs(pfxstate.add[2])
+					gc := Abs(spfx.add[0]) + Abs(spfx.add[1]) + Abs(spfx.add[2])
 					v3, ml, al := Max(255*(gc-(src+dst)), 512)/128, src, src+dst
-					rM, gM, bM := pfxstate.mult[0]*ml, pfxstate.mult[1]*ml, pfxstate.mult[2]*ml
-					pfxstate.mult[0], pfxstate.mult[1], pfxstate.mult[2] = rM, gM, bM
+					rM, gM, bM := spfx.mult[0]*ml, spfx.mult[1]*ml, spfx.mult[2]*ml
+					spfx.mult[0], spfx.mult[1], spfx.mult[2] = rM, gM, bM
 					render(Blend, blendSourceFactor, BlendOne, al*Pow(v3, 3))
 				} else {
 					render(Blend, blendSourceFactor, BlendOne, src)
@@ -874,7 +874,7 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 	b := float32(color&0xff) / 255
 
 	// PalFX setup
-	pfxstate := PalFXState{
+	spfx := ShaderPalFX{
 		neg:      false,
 		add:      [3]float32{0, 0, 0},
 		mult:     [3]float32{1, 1, 1},
@@ -884,7 +884,7 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 	}
 
 	// This call is safe even if fx is nil. Defaults to just AllPalFX
-	pfxstate = fx.getFinalPalFx(TT_add, alpha)
+	spfx = fx.getFinalPalFx(TT_add, alpha)
 
 	modelview := mgl.Translate3D(0, float32(sys.scrrect[3]), 0)
 	proj := gfx.OrthographicProjectionMatrix(0, float32(sys.scrrect[2]), 0, float32(sys.scrrect[3]), -65535, 65535)
@@ -910,8 +910,8 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 	gfx.SetUniformI("isTrapez", 0)
 	gfx.SetUniformI("mask", 0)
 	gfx.SetUniformI("isRgba", 1)
-	gfx.SetUniformF("gray", pfxstate.gray)
-	gfx.SetUniformF("hue", pfxstate.hue)
+	gfx.SetUniformF("gray", spfx.gray)
+	gfx.SetUniformF("hue", spfx.hue)
 
 	// Alpha is determined by tint, so we reset it here
 	// TODO: Maybe the shader shouldn't have a duplicate alpha component inside "tint"
@@ -922,14 +922,14 @@ func FillRect(rect [4]int32, color uint32, alpha [2]int32, fx *PalFX) {
 		// Update only the dynamic state
 		gfx.EnableBlending(eq, src, dst)
 		gfx.SetUniformF("tint", r, g, b, a)
-		gfx.SetUniformI("neg", int(Btoi(pfxstate.neg)))
-		gfx.SetUniformFv("add", pfxstate.add[:])
-		gfx.SetUniformFv("mult", pfxstate.mult[:])
+		gfx.SetUniformI("neg", int(Btoi(spfx.neg)))
+		gfx.SetUniformFv("add", spfx.add[:])
+		gfx.SetUniformFv("mult", spfx.mult[:])
 
 		gfx.RenderQuad()
 	}
 
-	renderWithBlending(renderPass, TT_add, alpha, true, &pfxstate, true)
+	renderWithBlending(renderPass, TT_add, alpha, true, &spfx, true)
 }
 
 type TextureAtlas struct {
@@ -1141,8 +1141,8 @@ func (ta *TextureAtlas) Resize(width, height int32) {
 	return
 }
 
-// The PalFX parameters sent to the shaders
-type PalFXState struct {
+// The PalFX parameters sent to the shader uniforms
+type ShaderPalFX struct {
 	neg      bool
 	add      [3]float32
 	mult     [3]float32
@@ -1151,8 +1151,8 @@ type PalFXState struct {
 	invblend int32
 }
 
-func NewPalFXState() PalFXState {
-	return PalFXState{
+func NewShaderPalFX() ShaderPalFX {
+	return ShaderPalFX{
 		neg:      false,
 		add:      [3]float32{0, 0, 0},
 		mult:     [3]float32{1, 1, 1},

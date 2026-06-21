@@ -29,7 +29,7 @@ type Font_VK struct {
 	vbo         uint32
 	program     uint32
 	color       color
-	palfxState   PalFXState
+	shaderPalFX ShaderPalFX
 	resolution  [2]float32
 	textures    []*TextureAtlas
 	descriptors []*list.Element
@@ -536,7 +536,7 @@ func (r *FontRenderer_VK) LoadTrueTypeFont(reader io.Reader, scale int32, low, h
 	f.ttf = ttf
 	f.scale = scale
 	f.SetColor(1.0, 1.0, 1.0, 1.0) //set default white
-	f.SetPalFX(NewPalFXState())
+	f.SetPalFX(NewShaderPalFX())
 	f.textures = append(f.textures, CreateTextureAtlas(256, 256, 8, true))
 	descriptorSet := r.freeDescriptors.Front()
 	r.freeDescriptors.Remove(descriptorSet)
@@ -575,8 +575,8 @@ func (f *Font_VK) SetColor(red float32, green float32, blue float32, alpha float
 	return
 }
 
-func (f *Font_VK) SetPalFX(state PalFXState) {
-    f.palfxState = state
+func (f *Font_VK) SetPalFX(state ShaderPalFX) {
+    f.shaderPalFX = state
 }
 
 func (f *Font_VK) UpdateResolution(windowWidth int, windowHeight int) {
@@ -642,9 +642,9 @@ func (f *Font_VK) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, 
 	vk.CmdSetViewport(r.commandBuffers[0], 0, 1, viewports)
 	vk.CmdSetScissor(r.commandBuffers[0], 0, 1, scissors)
 	color := f.color
-	palAddGray := [4]float32{f.palfxState.add[0], f.palfxState.add[1], f.palfxState.add[2], f.palfxState.gray}
-	palMulHue := [4]float32{f.palfxState.mult[0], f.palfxState.mult[1], f.palfxState.mult[2], f.palfxState.hue}
-	palNegPad := [4]float32{float32(Btoi(f.palfxState.neg)), 0, 0, 0}
+	palAddGray := [4]float32{f.shaderPalFX.add[0], f.shaderPalFX.add[1], f.shaderPalFX.add[2], f.shaderPalFX.gray}
+	palMulHue := [4]float32{f.shaderPalFX.mult[0], f.shaderPalFX.mult[1], f.shaderPalFX.mult[2], f.shaderPalFX.hue}
+	palNegPad := [4]float32{float32(Btoi(f.shaderPalFX.neg)), 0, 0, 0}
 	resolution := f.resolution
 	vk.CmdPushConstants(r.commandBuffers[0], gfxFont.(*FontRenderer_VK).program.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 0, 4*4, unsafe.Pointer(&color))
 	vk.CmdPushConstants(r.commandBuffers[0], gfxFont.(*FontRenderer_VK).program.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 4*4, 4*4, unsafe.Pointer(&palAddGray[0]))

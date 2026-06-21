@@ -1843,36 +1843,36 @@ func drawNode(mdl *Model, scene *Scene, layerNumber int, defaultLayerNumber int,
 		alpha = [2]int32{255, 0}
 	}
 
-	pfxstate := mdl.pfx.getFinalPalFx(blendMode, alpha)
+	spfx := mdl.pfx.getFinalPalFx(blendMode, alpha)
 
 	blendEq := BlendAdd
 	src := BlendOne
 	dst := BlendOneMinusSrcAlpha
 	switch n.trans {
 	case TransAdd:
-		if pfxstate.invblend == 3 {
+		if spfx.invblend == 3 {
 			src = BlendOne
 			dst = BlendOne
 			blendEq = BlendReverseSubtract
-			pfxstate.neg = false
-			if pfxstate.invblend >= 1 {
-				pfxstate.add[0] = -pfxstate.add[0]
-				pfxstate.add[1] = -pfxstate.add[1]
-				pfxstate.add[2] = -pfxstate.add[2]
+			spfx.neg = false
+			if spfx.invblend >= 1 {
+				spfx.add[0] = -spfx.add[0]
+				spfx.add[1] = -spfx.add[1]
+				spfx.add[2] = -spfx.add[2]
 			}
 		} else {
 			src = BlendOne
 			dst = BlendOne
 		}
 	case TransReverseSubtract:
-		if pfxstate.invblend == 3 {
+		if spfx.invblend == 3 {
 			src = BlendOne
 			dst = BlendOne
-			pfxstate.neg = false
-			if pfxstate.invblend >= 1 {
-				pfxstate.add[0] = -pfxstate.add[0]
-				pfxstate.add[1] = -pfxstate.add[1]
-				pfxstate.add[2] = -pfxstate.add[2]
+			spfx.neg = false
+			if spfx.invblend >= 1 {
+				spfx.add[0] = -spfx.add[0]
+				spfx.add[1] = -spfx.add[1]
+				spfx.add[2] = -spfx.add[2]
 			}
 		} else {
 			src = BlendOne
@@ -1880,11 +1880,11 @@ func drawNode(mdl *Model, scene *Scene, layerNumber int, defaultLayerNumber int,
 			blendEq = BlendReverseSubtract
 		}
 	case TransMul:
-		if pfxstate.invblend == 3 {
+		if spfx.invblend == 3 {
 			//Not accurate
 			src = BlendOneMinusDstColor
 			dst = BlendOne
-			pfxstate.neg = false
+			spfx.neg = false
 			blendEq = BlendReverseSubtract
 		} else {
 			src = BlendDstColor
@@ -1946,12 +1946,12 @@ func drawNode(mdl *Model, scene *Scene, layerNumber int, defaultLayerNumber int,
 			mode = 1 // Set mesh render mode to "lines"
 		}
 		gfx.SetModelUniformI("unlit", int(Btoi(unlit || mat.unlit)))
-		// Use pfxstate.add and pfxstate.mult (modified by invblend logic above)
-		gfx.SetModelUniformFv("add", pfxstate.add[:])
-		gfx.SetModelUniformFv("mult", []float32{pfxstate.mult[0] * sys.brightness, pfxstate.mult[1] * sys.brightness, pfxstate.mult[2] * sys.brightness})
-		gfx.SetModelUniformI("neg", int(Btoi(pfxstate.neg)))
-		gfx.SetModelUniformF("hue", pfxstate.hue)
-		gfx.SetModelUniformF("gray", pfxstate.gray)
+		// Use spfx.add and spfx.mult (modified by invblend logic above)
+		gfx.SetModelUniformFv("add", spfx.add[:])
+		gfx.SetModelUniformFv("mult", []float32{spfx.mult[0] * sys.brightness, spfx.mult[1] * sys.brightness, spfx.mult[2] * sys.brightness})
+		gfx.SetModelUniformI("neg", int(Btoi(spfx.neg)))
+		gfx.SetModelUniformF("hue", spfx.hue)
+		gfx.SetModelUniformF("gray", spfx.gray)
 		gfx.SetModelUniformI("enableAlpha", int(Btoi(mat.alphaMode == AlphaModeBlend)))
 		gfx.SetModelUniformF("alphaThreshold", mat.alphaCutoff.getValue().(float32))
 		gfx.SetModelUniformFv("baseColorFactor", color[:])
