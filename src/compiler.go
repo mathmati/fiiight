@@ -8308,6 +8308,11 @@ func (c *CharCompiler) Compile(pn int, def string, constants map[string]float32)
 			}
 		}
 
+		// Apply backward compatibiliy quirks
+		if sys.cgi[pn].ikemenver[0] == 0 && sys.cgi[pn].ikemenver[1] == 0 {
+			cm.ApplyBackwardCompatibility(pn)
+		}
+
 		c.cmdl.Add(*cm)
 	}
 
