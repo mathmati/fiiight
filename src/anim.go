@@ -118,6 +118,11 @@ func ReadAnimFrame(line string) (*AnimFrame, error) {
 			return
 		}
 
+		// Helper for the repetitive error
+		transErr := func(s string) {
+			err = Error(fmt.Sprintf("Invalid animation element transparency: %v", s))
+		}
+
 		ia := strings.IndexAny(ary[6], "ASas")
 		if ia >= 0 {
 			ary[6] = ary[6][ia:]
@@ -129,17 +134,25 @@ func ReadAnimFrame(line string) (*AnimFrame, error) {
 			af.SrcAlpha = 255
 			af.DstAlpha = 128
 
-		case len(a) >= 3 && a[:3] == "sas": // SubAdd
+		case len(a) >= 3 && a[:3] == "sas": // SubAdd with alpha
 			af.TransType = TT_subadd
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 3, 255, 0)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 3, 255, 255)
+
+		case len(a) >= 2 && a[:2] == "sa": // Plain SubAdd
+			af.TransType = TT_subadd
+			af.SrcAlpha = 255
+			af.DstAlpha = 255
+			if len(a) > 2 {
+				transErr(a)
+			}
 
 		case len(a) >= 2 && a[:2] == "as": // Add with alpha
 			af.TransType = TT_add
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0) // Mugen defaults to 0 here
 
 		case len(a) >= 2 && a[:2] == "ss": // Sub with alpha
 			af.TransType = TT_sub
-			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 0)
+			af.SrcAlpha, af.DstAlpha = parseAlphaNumbers(a, 2, 255, 255) // This is new so we can default properly
 
 		case len(a) >= 1 && a[0] == 'a': // Plain Add
 			af.TransType = TT_add
@@ -148,19 +161,19 @@ func ReadAnimFrame(line string) (*AnimFrame, error) {
 			// The first letter is enough in Mugen, but we will warn to encourage proper syntax
 			// https://github.com/ikemen-engine/Ikemen-GO/issues/3717
 			if len(a) > 1 {
-				err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
+				transErr(a)
 			}
 
-		case len(a) >= 1 && a[0] == 's': // Plain sub
+		case len(a) >= 1 && a[0] == 's': // Plain Sub
 			af.TransType = TT_sub
 			af.SrcAlpha = 255
 			af.DstAlpha = 255
 			if len(a) > 1 {
-				err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
+				transErr(a)
 			}
 
 		default:
-			err = Error(fmt.Sprintf("Invalid animation element transparency: %v", a))
+			transErr(a)
 		}
 	}
 

@@ -258,7 +258,7 @@ type System struct {
 	debugWC             *Char
 	projs               [MaxPlayerNo][]*Projectile
 	explods             [MaxPlayerNo][]*Explod
-	explodRunOrder      []*Explod
+	explodDrawOrder     []*Explod
 	chartexts           [MaxPlayerNo][]*TextSprite // From Text sctrl
 	spriteList          DrawList
 	shadowList          ShadowList
@@ -2221,8 +2221,8 @@ func (s *System) clearPlayerAssets(pn int, forceDestroy bool) {
 	s.explods[pn] = PointerSliceReset(s.explods[pn])
 	s.chartexts[pn] = PointerSliceReset(s.chartexts[pn])
 
-	// Clear explod run order so that no reference is left to this char
-	s.explodRunOrder = PointerSliceReset(s.explodRunOrder)
+	// Clear explod draw order so that no reference is left to this char
+	s.explodDrawOrder = PointerSliceReset(s.explodDrawOrder)
 }
 
 // Select correct stage for current round
@@ -2720,12 +2720,7 @@ func (s *System) action() {
 	// Note: Explod update must happen after hit detection. Because hit sparks are also explods
 	s.explodUpdate()
 	s.charTextsUpdate()
-
-	for i := range s.explods {
-		for _, e := range s.explods[i] {
-			e.cueDraw()
-		}
-	}
+	s.explodCueDraw()
 
 	// Adjust game speed
 	if s.tickNextFrame() {
@@ -2841,8 +2836,23 @@ func (s *System) projectilePrune(pn int) {
 
 // Update all explods for all players
 func (s *System) explodUpdate() {
+	// Update each explod in storage order
+	for i := range s.explods {
+		for _, e := range s.explods[i] {
+			e.update()
+		}
+	}
+
+	// Cleanup
+	for i := range s.explods {
+		s.explodPrune(i)
+	}
+}
+
+// Sort explods by age, ontop, etc before queuing them for drawing
+func (s *System) explodCueDraw() {
 	// Reset sorting list
-	s.explodRunOrder = s.explodRunOrder[:0]
+	s.explodDrawOrder = s.explodDrawOrder[:0]
 
 	// Flatten all explods into the sorting list
 	// Using this list makes the drawing order fairer instead of prioritizing player 1
@@ -2853,7 +2863,7 @@ func (s *System) explodUpdate() {
 		for j := range s.explods[i] {
 			e := s.explods[i][j]
 			e.sortindex = count // Unique reference for this frame
-			s.explodRunOrder = append(s.explodRunOrder, e)
+			s.explodDrawOrder = append(s.explodDrawOrder, e)
 			count++
 		}
 	}
@@ -2861,8 +2871,8 @@ func (s *System) explodUpdate() {
 	// Sort explods by age
 	// For the sake of backward compatibility we must also open exceptions for the ontop parameter
 	// The sortindex variable saves us from needing the more expensive SliceStable
-	sort.Slice(s.explodRunOrder, func(i, j int) bool {
-		a, b := s.explodRunOrder[i], s.explodRunOrder[j]
+	sort.Slice(s.explodDrawOrder, func(i, j int) bool {
+		a, b := s.explodDrawOrder[i], s.explodDrawOrder[j]
 
 		// All ontop explods come before the rest
 		if a.ontop != b.ontop {
@@ -2883,14 +2893,9 @@ func (s *System) explodUpdate() {
 		return a.sortindex < b.sortindex
 	})
 
-	// Update logic
-	for _, e := range s.explodRunOrder {
-		e.update()
-	}
-
-	// Cleanup
-	for i := range s.explods {
-		s.explodPrune(i)
+	// Queue in the sorted order
+	for _, e := range s.explodDrawOrder {
+		e.cueDraw()
 	}
 }
 
