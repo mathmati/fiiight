@@ -13568,19 +13568,23 @@ func (cl *CharList) pushDetection(getter *Char) {
 	}
 
 	for _, c := range cl.runOrder {
-		// Stop current iteration if char won't push
-		interact := false
+		// Stop current iteration if char won't ever push
+		if !c.csf(CSF_playerpush) || c.scf(SCF_standby) || c.scf(SCF_disabled) {
+			continue
+		}
+
+		// AffectTeam check
+		// The logic here needs to be a bit uneven because the default state (pushing enemies only) also is
 		if c.teamside == getter.teamside {
-			if c.pushAffectTeam <= 0 {
-				interact = true
+			// Partners are permissive: skip only if both are in "enemy" mode
+			if c.pushAffectTeam > 0 && getter.pushAffectTeam > 0 {
+				continue
 			}
 		} else {
-			if c.pushAffectTeam >= 0 && getter.pushAffectTeam >= 0 {
-				interact = true
+			// Enemies are strict: skip if either one is in "friendly" mode
+			if c.pushAffectTeam < 0 || getter.pushAffectTeam < 0 {
+				continue
 			}
-		}
-		if !c.csf(CSF_playerpush) || !interact || c.scf(SCF_standby) || c.scf(SCF_disabled) {
-			continue
 		}
 
 		// Get size box
