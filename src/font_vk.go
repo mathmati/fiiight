@@ -576,7 +576,7 @@ func (f *Font_VK) SetColor(red float32, green float32, blue float32, alpha float
 }
 
 func (f *Font_VK) SetPalFX(state ShaderPalFX) {
-    f.shaderPalFX = state
+	f.shaderPalFX = state
 }
 
 func (f *Font_VK) UpdateResolution(windowWidth int, windowHeight int) {

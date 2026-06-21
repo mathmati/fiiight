@@ -92,7 +92,7 @@ func (f *Font_GLES32) SetColor(red float32, green float32, blue float32, alpha f
 }
 
 func (f *Font_GLES32) SetPalFX(state ShaderPalFX) {
-    f.shaderPalFX = state
+	f.shaderPalFX = state
 }
 
 func (f *Font_GLES32) UpdateResolution(windowWidth int, windowHeight int) {

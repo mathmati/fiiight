@@ -94,7 +94,7 @@ func (f *Font_GL33) SetColor(red float32, green float32, blue float32, alpha flo
 }
 
 func (f *Font_GL33) SetPalFX(state ShaderPalFX) {
-    f.shaderPalFX = state
+	f.shaderPalFX = state
 }
 
 func (f *Font_GL33) UpdateResolution(windowWidth int, windowHeight int) {
