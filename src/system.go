@@ -2878,10 +2878,11 @@ func (s *System) explodCueDraw() {
 		if a.ontop != b.ontop {
 			return a.ontop
 		}
-		// If both are ontop the normal logic is inverted (old index shift trick)
+		// If both are ontop, the age logic is the same as normal, but the index tiebreaker is inverted
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3737
 		if a.ontop && b.ontop {
 			if a.timestamp != b.timestamp {
-				return a.timestamp >= b.timestamp
+				return a.timestamp < b.timestamp
 			}
 			return a.sortindex >= b.sortindex
 		}
