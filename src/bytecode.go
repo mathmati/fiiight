@@ -14245,9 +14245,9 @@ func (sc cameraCtrl) Run(c *Char, _ []int32) bool {
 				sys.cam.FollowChar = c
 			}
 		case cameraCtrl_pos:
-			sys.cam.Pos[0] = exp[0].evalF(c)
+			sys.cam.Pos[0] = exp[0].evalF(c) * c.localscl
 			if len(exp) > 1 {
-				sys.cam.Pos[1] = exp[1].evalF(c)
+				sys.cam.Pos[1] = exp[1].evalF(c) * c.localscl
 			}
 		case cameraCtrl_followid:
 			if cid := sys.playerID(exp[0].evalI(c)); cid != nil {
