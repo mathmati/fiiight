@@ -3362,10 +3362,15 @@ func (me *MotifMenu) init(m *Motif) {
 	}
 	openPressed := sys.esc || sys.uiRawInput(pm.Menu.Cancel.Key, -1)
 
-	if sys.escExit() || (sys.netplay() && openPressed) {
-		if sys.netplay() {
+	if !sys.sel.gameParams.PauseMenu {
+		if openPressed {
 			sys.esc = true
+			sys.endMatch = true
 		}
+		return
+	}
+
+	if sys.escExit() {
 		sys.endMatch = true
 		return
 	}

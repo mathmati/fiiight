@@ -941,6 +941,7 @@ end
 --;===========================================================
 function main.f_commandLine()
 	setGameMode('quickvs')
+	main.pauseMenu = false
 	setCredits(-1)
     -- No need for asynchronous loading when running from command line. Fixes race conditions with Turns teammate faces
     modifyGameOption('Config.BootLoadingMode', 0)
@@ -1129,6 +1130,7 @@ function main.f_commandLine()
 		main.f_clearShuffleTables()
 		refresh()
 	end
+	table.insert(t_params, 'pausemenu=' .. tostring(main.pauseMenu))
 	local params = table.concat(t_params, ", ")
 	if params == '' then
 		loadStart()
@@ -1885,6 +1887,7 @@ function main.f_default()
 		redlifebar = gameOption('Options.RedLife'),
 	}
 	main.luaPath = 'external/script/default.lua' --path to script executed by start.f_selectMode()
+	main.pauseMenu = true
 	main.makeRoster = false --if default roster for each match should be generated before first match
 	main.matchWins = { --amount of rounds to win for each team side and team mode
 		draw = {gameOption('Options.Match.MaxDrawGames'), gameOption('Options.Match.MaxDrawGames')},
@@ -2108,6 +2111,7 @@ main.t_itemname = {
 		main.matchWins.tag = {1, 1}
 		main.numSimul = {2, 2}
 		main.numTag = {2, 2}
+		main.pauseMenu = false
 		main.persistLife = true
 		main.persistMusic = true
 		main.persistRounds = true
@@ -2147,6 +2151,7 @@ main.t_itemname = {
 		main.motif.winscreen = true
 		main.numSimul = {2, 2}
 		main.numTag = {2, 2}
+		main.pauseMenu = false
 		main.resetScore = true
 		main.stageOrder = true
 		main.storyboard.credits = true
@@ -2174,6 +2179,7 @@ main.t_itemname = {
 		main.motif.victoryscreen = true
 		main.orderSelect[1] = true
 		main.orderSelect[2] = true
+		main.pauseMenu = false
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		main.teamMenu[1].simul = true
@@ -2197,6 +2203,7 @@ main.t_itemname = {
 	end,
 	--RANDOMTEST
 	['randomtest'] = function(t, item)
+		main.pauseMenu = false
 		setGameMode('randomtest')
 		hook.run("main.t_itemname", t, item)
 		return main.f_randomtest
@@ -3445,6 +3452,7 @@ end
 
 function main.f_demoStart()
 	main.f_default()
+	main.pauseMenu = false
 	local palState = {}
 	setFightScreenElements({bars = motif.demo_mode.fight.bars.display})
 	setGameMode('demo')
@@ -3461,7 +3469,7 @@ function main.f_demoStart()
 	end
 	hook.run("main.t_itemname", t, item)
 	--clearColor(motif[main.background].bgclearcolor[1], motif[main.background].bgclearcolor[2], motif[main.background].bgclearcolor[3])
-	loadStart()
+	loadStart(start.f_buildLoadStartParams())
 	game()
 	if not motif.attract_mode.enabled then
 		if introWaitCycles >= motif.demo_mode.intro.waitcycles then
