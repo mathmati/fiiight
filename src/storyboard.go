@@ -157,15 +157,16 @@ func loadStoryboard(def string) (*Storyboard, error) {
 	userOptions.AllowShadows = true
 
 	// Start merged INI as defaults, then overlay user (first-wins for duplicates).
-	iniFile, err := ini.LoadSources(baseOptions, defaultStoryboard)
+	iniFile, err := LoadINIBytes(defaultStoryboard, baseOptions)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load INI file: %w", err)
 	}
-	defaultOnlyIni, err := ini.LoadSources(baseOptions, defaultStoryboard)
+	defaultOnlyIni, err := LoadINIBytes(defaultStoryboard, baseOptions)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load defaults-only INI: %w", err)
 	}
-	userIniFile, err := ini.LoadSources(userOptions, def)
+	var userText string
+	userIniFile, userText, err := LoadINIFile(def, userOptions)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load user INI %s: %w", def, err)
 	}
@@ -295,11 +296,7 @@ func loadStoryboard(def string) (*Storyboard, error) {
 
 	s.loadFiles()
 
-	str, err := LoadText(def)
-	if err != nil {
-		return nil, err
-	}
-	lines, i := SplitAndTrim(str, "\n"), 0
+	lines, i := SplitAndTrim(userText, "\n"), 0
 	s.AnimTable = ReadAnimationTable(s.Def, s.Sff, &s.Sff.palList, lines, &i, true)
 	i = 0
 

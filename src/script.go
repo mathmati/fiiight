@@ -4395,7 +4395,7 @@ func systemScriptInit(l *lua.LState) {
 			PreserveSurroundedQuote:   true,
 			UnescapeValueDoubleQuotes: false,
 		}
-		iniFile, err := ini.LoadSources(opts, []byte(NormalizeNewlines(raw)))
+		iniFile, err := LoadINIText(raw, opts)
 		if err != nil {
 			l.RaiseError("\nCan't parse ini %v: %v\n", def, err.Error())
 		}

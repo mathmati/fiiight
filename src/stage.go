@@ -1259,10 +1259,10 @@ func loadStage(def string, maindef bool) (*Stage, error) {
 
 	// Music group
 	if sec, secName := getSection("music"); sec != nil {
-		iniFile, err := ini.LoadSources(ini.LoadOptions{
+		iniFile, err := LoadINIText(str, ini.LoadOptions{
 			Insensitive:             true,
 			SkipUnrecognizableLines: true,
-		}, []byte(str))
+		})
 
 		if err != nil {
 			fmt.Printf("Failed to load INI file: %v\n", err)

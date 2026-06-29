@@ -15,6 +15,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"gopkg.in/ini.v1"
+
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 )
@@ -407,6 +409,24 @@ func LoadText(filename string) (string, error) {
 	}
 
 	return string(bytes), nil
+}
+
+func LoadINIText(text string, opts ini.LoadOptions) (*ini.File, error) {
+	return ini.LoadSources(opts, []byte(NormalizeNewlines(text)))
+}
+
+func LoadINIBytes(data []byte, opts ini.LoadOptions) (*ini.File, error) {
+	return LoadINIText(string(data), opts)
+}
+
+func LoadINIFile(filename string, opts ini.LoadOptions) (*ini.File, string, error) {
+	text, err := LoadText(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	text = NormalizeNewlines(text)
+	iniFile, err := LoadINIText(text, opts)
+	return iniFile, text, err
 }
 
 func decodeShiftJIS(input string) string {
