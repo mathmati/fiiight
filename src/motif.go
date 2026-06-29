@@ -4826,7 +4826,7 @@ func (di *MotifDialogue) step(m *Motif) {
 	}
 
 	// If line is fully rendered, handle auto-switch after SwitchTime
-	if di.lineFullyRendered {
+	if di.lineFullyRendered && di.wait <= 0 {
 		di.switchCounter++
 		if di.switchCounter >= int(m.DialogueInfo.SwitchTime) {
 			di.advanceLine(m)
