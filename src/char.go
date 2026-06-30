@@ -11565,7 +11565,7 @@ func (c *Char) actionPrepare() {
 				if c.alive() || c.ss.no != 5150 || c.numPartner() == 0 {
 					c.setCSF(CSF_screenbound | CSF_movecamera_x | CSF_movecamera_y)
 				}
-				if sys.roundState() > 0 && (c.alive() || c.numPartner() == 0) {
+				if sys.roundState() > 0 && sys.roundState() < 4 && (c.alive() || c.numPartner() == 0) {
 					c.setCSF(CSF_playerpush)
 				}
 			}
