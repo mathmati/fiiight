@@ -1886,7 +1886,8 @@ function main.f_default()
 		stunbar = gameOption('Options.Dizzy'),
 		redlifebar = gameOption('Options.RedLife'),
 	}
-	main.luaPath = 'external/script/default.lua' --path to script executed by start.f_selectMode()
+	main.defaultLuaPath = 'external/script/default.lua'
+	main.luaPath = main.defaultLuaPath
 	main.pauseMenu = true
 	main.makeRoster = false --if default roster for each match should be generated before first match
 	main.matchWins = { --amount of rounds to win for each team side and team mode
