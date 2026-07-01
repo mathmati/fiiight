@@ -1367,6 +1367,8 @@ func hasUserKey(iniFile *ini.File, section, key string) bool {
 
 // preprocessINIContent removes or modifies specific sections before parsing.
 func preprocessINIContent(input string) string {
+	// go-ini rejects malformed empty quoted values like """, so collapse quote-only garbage to an empty string.
+	input = regexp.MustCompile(`(?m)^([ \t]*[^;\r\n\[\]=][^=\r\n]*=[ \t]*)"{3,}([ \t]*(?:;.*)?$)`).ReplaceAllString(input, `${1}""${2}`)
 	// Define a regex to find the [Infobox Text] section
 	infoboxRegex := regexp.MustCompile(`(?is)\[\s*infobox\s+text\s*\]\s*\n(.*?)(\n\s*\[|$)`)
 	// Extract the content of [Infobox Text]
