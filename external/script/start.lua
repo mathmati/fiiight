@@ -1746,13 +1746,17 @@ function start.f_selectMode()
 				path = start.f_getCharData(start.p[1].t_selected[1].ref).arcadepath
 			end
 			path = hook.runFirst("start.f_selectMode.luaPath", path) or path
-			if path ~= '' and path ~= main.luaPath then
+			if path ~= '' and path ~= main.defaultLuaPath then
 				if not main.f_fileExists(path) then
-					panicError("\n" .. start.f_getCharData(start.p[1].t_selected[1].ref).name .. " arcadepath doesn't exist: " .. path .. "\n")
+					local label = "arcadepath"
+					if path ~= main.luaPath then
+						label = start.f_getCharData(start.p[1].t_selected[1].ref).name .. " arcadepath"
+					end
+					panicError("\n" .. label .. " doesn't exist: " .. path .. "\n")
 				end
 			end
 		end
-		local customArcadePath = main.charparam.arcadepath and path ~= main.luaPath
+		local customArcadePath = main.charparam.arcadepath and path ~= main.defaultLuaPath
 		--first match
 		if start.reset then
 			-- Save current remap state. main.f_restoreInput() should restore to this.
