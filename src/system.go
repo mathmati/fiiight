@@ -1468,17 +1468,7 @@ func (s *System) netplay() bool {
 }
 
 func (s *System) escExit() bool {
-	if s.gameMode == "demo" || s.netplay() {
-		if s.uiRawInput([]string{"m"}, -1) || s.esc {
-			if s.netplay() {
-				s.esc = true
-			}
-			if s.gameMode == "demo" {
-				return true
-			}
-		}
-	}
-	return s.esc && (s.netplay() || !s.cfg.Config.EscOpensMenu || s.gameMode == "quickvs" ||
+	return s.esc && (!s.sel.gameParams.PauseMenu || !s.cfg.Config.EscOpensMenu ||
 		(s.motif.AttractMode.Enabled && s.credits == 0))
 }
 

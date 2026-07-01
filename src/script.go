@@ -4335,6 +4335,33 @@ func systemScriptInit(l *lua.LState) {
 		sys.statusLFunc, _ = sys.luaLState.GetGlobal(strArg(l, 1)).(*lua.LFunction)
 		return 0
 	})
+	luaRegister(l, "loadFile", func(l *lua.LState) int {
+		/*Load and compile a Lua file through the engine file system.
+		@function loadFile
+		@tparam string filename Lua file path. Supports regular files and files inside `.zip` archives.
+		@treturn function|nil chunk Compiled Lua chunk on success, or `nil` if loading failed.
+		@treturn[opt] string error Error message when loading failed.
+		function loadFile(filename) end*/
+		filename := strArg(l, 1)
+		text, err := LoadText(filename)
+		if err != nil {
+			l.Push(lua.LNil)
+			l.Push(lua.LString(err.Error()))
+			return 2
+		}
+		chunkName := strings.ReplaceAll(filename, "\\", "/")
+		if !strings.HasPrefix(chunkName, "@") {
+			chunkName = "@" + chunkName
+		}
+		fn, err := l.Load(strings.NewReader(text), chunkName)
+		if err != nil {
+			l.Push(lua.LNil)
+			l.Push(lua.LString(err.Error()))
+			return 2
+		}
+		l.Push(fn)
+		return 1
+	})
 	luaRegister(l, "loadGameOption", func(l *lua.LState) int {
 		/*Load game options from a config file and return the current config as a table.
 		@function loadGameOption
@@ -4395,7 +4422,7 @@ func systemScriptInit(l *lua.LState) {
 			PreserveSurroundedQuote:   true,
 			UnescapeValueDoubleQuotes: false,
 		}
-		iniFile, err := ini.LoadSources(opts, []byte(NormalizeNewlines(raw)))
+		iniFile, err := LoadINIText(raw, opts)
 		if err != nil {
 			l.RaiseError("\nCan't parse ini %v: %v\n", def, err.Error())
 		}

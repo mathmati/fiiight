@@ -1558,6 +1558,7 @@ func loadMotif(def string) (*Motif, error) {
 	var iniFile *ini.File
 	var userIniFile *ini.File
 	var defaultOnlyIni *ini.File
+	var motifText string
 
 	if err := LoadFile(&def, []string{def, "", "data/"}, "", func(filename string) error {
 		def = filename
@@ -1568,10 +1569,11 @@ func loadMotif(def string) (*Motif, error) {
 			return fmt.Errorf("Failed to discover external mod system.def files: %w", err)
 		}
 
-		inputBytes, err := LoadText(filename)
+		inputText, err := LoadText(filename)
 		if err != nil {
 			return fmt.Errorf("Failed to load text from %s: %w", filename, err)
 		}
+		motifText = NormalizeNewlines(inputText)
 
 		var modsConcat strings.Builder
 		for _, p := range modSystemDefs {
@@ -1588,7 +1590,7 @@ func loadMotif(def string) (*Motif, error) {
 
 		// Preprocess and load INI sources from memory.
 		// Motif file overrides mods
-		baseTxt := NormalizeNewlines(string(inputBytes))
+		baseTxt := motifText
 		modsTxt := modsConcat.String()
 		var combined string
 		if modsTxt != "" {
@@ -1599,22 +1601,22 @@ func loadMotif(def string) (*Motif, error) {
 		} else {
 			combined = baseTxt
 		}
-		normalizedInput := []byte(preprocessINIContent(combined))
-		normalizedDefault := []byte(preprocessINIContent(NormalizeNewlines(string(defaultMotif))))
+		normalizedInput := preprocessINIContent(combined)
+		normalizedDefault := preprocessINIContent(NormalizeNewlines(string(defaultMotif)))
 
 		// Defaults-only baseline
-		defaultOnlyIni, err = ini.LoadSources(baseOptions, normalizedDefault)
+		defaultOnlyIni, err = LoadINIText(normalizedDefault, baseOptions)
 		if err != nil {
 			return fmt.Errorf("Failed to load defaults-only INI from memory: %w", err)
 		}
 
 		// merged starts as defaults, then overlay user (first-wins for duplicates in user)
-		iniFile, err = ini.LoadSources(baseOptions, normalizedDefault)
+		iniFile, err = LoadINIText(normalizedDefault, baseOptions)
 		if err != nil {
 			return fmt.Errorf("Failed to load merged baseline INI from memory: %w", err)
 		}
 
-		userIniFile, err = ini.LoadSources(userOptions, normalizedInput)
+		userIniFile, err = LoadINIText(normalizedInput, userOptions)
 		if err != nil {
 			return fmt.Errorf("Failed to load user INI source from memory: %w", err)
 		}
@@ -1834,11 +1836,7 @@ func loadMotif(def string) (*Motif, error) {
 	m.loadFiles()
 	sys.keepAlive()
 
-	str, err := LoadText(def)
-	if err != nil {
-		return nil, err
-	}
-	lines, i := SplitAndTrim(str, "\n"), 0
+	lines, i := SplitAndTrim(motifText, "\n"), 0
 	m.AnimTable = ReadAnimationTable(m.Def, m.Sff, &m.Sff.palList, lines, &i, true)
 	i = 0
 
@@ -3362,10 +3360,15 @@ func (me *MotifMenu) init(m *Motif) {
 	}
 	openPressed := sys.esc || sys.uiRawInput(pm.Menu.Cancel.Key, -1)
 
-	if sys.escExit() || (sys.netplay() && openPressed) {
-		if sys.netplay() {
+	if !sys.sel.gameParams.PauseMenu {
+		if openPressed {
 			sys.esc = true
+			sys.endMatch = true
 		}
+		return
+	}
+
+	if sys.escExit() {
 		sys.endMatch = true
 		return
 	}
@@ -4823,7 +4826,7 @@ func (di *MotifDialogue) step(m *Motif) {
 	}
 
 	// If line is fully rendered, handle auto-switch after SwitchTime
-	if di.lineFullyRendered {
+	if di.lineFullyRendered && di.wait <= 0 {
 		di.switchCounter++
 		if di.switchCounter >= int(m.DialogueInfo.SwitchTime) {
 			di.advanceLine(m)
