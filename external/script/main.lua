@@ -639,7 +639,7 @@ function main.f_loadingRefresh()
 	end
 end
 
-main.pauseMenu = false
+main.pauseMenuActive = false
 require('external.script.debug')
 
 loadDebugFont(gameOption('Debug.Font'), gameOption('Debug.FontScale'))
