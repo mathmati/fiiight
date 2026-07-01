@@ -1777,7 +1777,7 @@ function start.f_selectMode()
 		--external script execution
 		local oldCustomArcadePath = start.customArcadePath
 		start.customArcadePath = customArcadePath
-		assert(loadfile(path))()
+		assert(loadFile(path))()
 		start.customArcadePath = oldCustomArcadePath
 		--infinite matches flag detected
 		if main.makeRoster and start.t_roster[matchNo()] ~= nil and start.t_roster[matchNo()][1] == -1 then
