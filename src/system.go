@@ -2868,11 +2868,13 @@ func (s *System) explodCueDraw() {
 		if a.ontop != b.ontop {
 			return a.ontop
 		}
-		// If both are ontop, the age logic is the same as normal, but the index tiebreaker is inverted
+		// If both are ontop, the normal logic is inverted in order to emulate Mugen's memory layout
+		// However, it's impossible to cover all of Mugen's quirks without making our layout worse
 		// https://github.com/ikemen-engine/Ikemen-GO/issues/3737
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3749
 		if a.ontop && b.ontop {
 			if a.timestamp != b.timestamp {
-				return a.timestamp < b.timestamp
+				return a.timestamp >= b.timestamp
 			}
 			return a.sortindex >= b.sortindex
 		}
