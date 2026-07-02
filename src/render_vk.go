@@ -59,9 +59,10 @@ func (r *Renderer_VK) newTexture(width, height, depth int32, filter bool) Textur
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), format, t.mipLevels, 1, vk.ImageUsageFlags(vk.ImageUsageTransferDstBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingOptimal, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("CreateRenderTargetDepthTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, format, 0, 1, 1, false)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -80,9 +81,10 @@ func (r *Renderer_VK) newModelTexture(width, height, depth int32, filter bool) T
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), format, t.mipLevels, 1, vk.ImageUsageFlags(vk.ImageUsageTransferSrcBit|vk.ImageUsageTransferDstBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingOptimal, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newModelTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, format, 0, t.mipLevels, 1, false)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -100,9 +102,10 @@ func (r *Renderer_VK) newDataTexture(width, height int32) Texture {
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), format, t.mipLevels, 1, vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit|vk.ImageUsageSampledBit|vk.ImageUsageTransferDstBit), 1, vk.ImageTilingOptimal, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newDataTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, format, 0, 1, 1, false)
 	t.sampler = r.GetSampler(VulkanSamplerInfo{TextureSamplingFilterNearest, TextureSamplingFilterNearest, TextureSamplingWrapClampToEdge, TextureSamplingWrapClampToEdge})
 
@@ -132,9 +135,10 @@ func (r *Renderer_VK) newCubeMapTexture(widthHeight int32, mipmap bool, lowestMi
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), format, t.mipLevels, 6, vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit|vk.ImageUsageTransferSrcBit|vk.ImageUsageTransferDstBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingOptimal, true)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newCubeMapTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, format, 0, t.mipLevels, 6, true)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -179,9 +183,10 @@ func (r *Renderer_VK) newDummyCubeMapTexture() Texture {
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), format, t.mipLevels, 6, vk.ImageUsageFlags(vk.ImageUsageTransferDstBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingOptimal, true)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newDummyCubeMapTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, format, 0, t.mipLevels, 6, true)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -1674,9 +1679,10 @@ func (r *Renderer_VK) CreateRenderTargetTexture(width, height uint32, numSamples
 	t.img = r.CreateImage(width, height, r.swapchains[0].format, 1, 1, usage, numSamples, vk.ImageTilingOptimal, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newCubeMapTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, r.swapchains[0].format, 0, 1, 1, false)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -1697,9 +1703,10 @@ func (r *Renderer_VK) CreateRenderTargetDepthTexture(width, height uint32, numSa
 	t.img = r.CreateImage(width, height, vk.FormatD32Sfloat, 1, 1, usage, numSamples, vk.ImageTilingOptimal, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("newDummyCubeMapTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, vk.FormatD32Sfloat, 0, 1, 1, false)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -1768,10 +1775,10 @@ func (r *Renderer_VK) addPalTexture() {
 	t.img = r.CreateImage(uint32(t.width), uint32(t.height), vk.FormatR8g8b8a8Unorm, 1, 1, vk.ImageUsageFlags(vk.ImageUsageTransferDstBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingLinear, false)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("addPalTexture: AllocateImageMemory failed: %w", err))
 	}
-	t.imageView = r.CreateImageView(t.img, vk.FormatR8g8b8a8Unorm, 0, 1, 1, false)
+	t.allocation = alloc
 	r.palTexture.textures = append(r.palTexture.textures, t)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -1809,9 +1816,10 @@ func (r *Renderer_VK) createShadowMapTexture(widthHeight int32) *Texture_VK {
 	t.img = r.CreateImage(uint32(widthHeight), uint32(widthHeight), format, 1, 6*4, vk.ImageUsageFlags(vk.ImageUsageDepthStencilAttachmentBit|vk.ImageUsageSampledBit), 1, vk.ImageTilingOptimal, true)
 
 	alloc, err := r.allocator.AllocateImageMemory(t.img, vk.MemoryPropertyDeviceLocalBit)
-	if err == nil {
-		t.allocation = alloc
+	if err != nil {
+		panic(fmt.Errorf("createShadowMapTexture: AllocateImageMemory failed: %w", err))
 	}
+	t.allocation = alloc
 	t.imageView = r.CreateImageView(t.img, vk.FormatD32Sfloat, 0, 1, 6*4, true)
 	commandBuffer := gfx.(*Renderer_VK).BeginSingleTimeCommands()
 
