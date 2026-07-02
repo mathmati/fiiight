@@ -6278,7 +6278,7 @@ func (c *Char) getOwnChannels(chNo int32) (found []*SoundChannel) {
 }
 
 func (c *Char) playSound(params *PlaySndParams) {
-	if params.group < 0 {
+	if params.group < 0 || sys.noCharSoundFlg {
 		return
 	}
 	current_ffx := params.ffx

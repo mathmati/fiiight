@@ -5068,10 +5068,6 @@ const (
 )
 
 func (sc playSnd) Run(c *Char, _ []int32) bool {
-	if sys.noSoundFlg {
-		return false
-	}
-
 	crun := getRedirectedChar(c, StateControllerBase(sc), playSnd_redirectid, "PlaySnd")
 	if crun == nil {
 		return false
@@ -12971,10 +12967,6 @@ const (
 )
 
 func (sc modifySnd) Run(c *Char, _ []int32) bool {
-	if sys.noSoundFlg {
-		return false
-	}
-
 	crun := getRedirectedChar(c, StateControllerBase(sc), modifySnd_redirectid, "ModifySnd")
 	if crun == nil {
 		return false

@@ -137,7 +137,7 @@ type SystemStateVars struct {
 	uiRepeatFrame       int32
 
 	endMatch      bool
-	noSoundFlg    bool
+	noCharSoundFlg bool
 	fightLoopEnd  bool
 	continueFlg   bool
 	matchResetFlg bool
@@ -934,7 +934,7 @@ func (s *System) update() bool {
 
 func (s *System) tickSound() {
 	s.soundChannels.Tick()
-	if !s.noSoundFlg {
+	if !s.noCharSoundFlg {
 		for i := range sys.charSoundChannels {
 			sys.charSoundChannels[i].Tick()
 		}
@@ -2309,6 +2309,9 @@ func (s *System) resetRound() {
 	s.introSkipCall = false
 	s.roundResetFlg = false
 	s.reloadFlg, s.reloadStageFlg, s.reloadFightScreenFlg = false, false, false
+
+	// https://github.com/ikemen-engine/Ikemen-GO/issues/1400
+	s.noCharSoundFlg = false
 
 	s.resetGblEffect()
 	s.fightScreen.reset()

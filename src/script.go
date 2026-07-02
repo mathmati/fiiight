@@ -3268,7 +3268,7 @@ func systemScriptInit(l *lua.LState) {
 				sys.resetGblEffect()
 				sys.dialogueForce = 0
 				sys.dialogueHideBars = false
-				sys.noSoundFlg = false
+				sys.noCharSoundFlg = false
 				sys.postMatchFlg = false
 				sys.preMatchTime += sys.matchTime
 				sys.matchTime = 0
@@ -7666,9 +7666,9 @@ func systemScriptInit(l *lua.LState) {
 		@tparam[opt] boolean state If provided, sets mute on/off; otherwise toggles it.
 		function toggleNoSound(state) end*/
 		if !nilArg(l, 1) {
-			sys.noSoundFlg = boolArg(l, 1)
+			sys.noCharSoundFlg = boolArg(l, 1)
 		} else {
-			sys.noSoundFlg = !sys.noSoundFlg
+			sys.noCharSoundFlg = !sys.noCharSoundFlg
 		}
 		return 0
 	})
