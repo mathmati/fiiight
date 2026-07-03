@@ -931,11 +931,19 @@ func (s *SoundEffect) Stream(samples [][2]float64) (n int, ok bool) {
 	// TODO: Test mugen panning in relation to PanningWidth and zoom settings
 	lv, rv := s.volume, s.volume
 	if sys.cfg.Sound.StereoEffects && (s.x != nil || s.pan != 0) {
+		screen := sys.xmax - sys.xmin
+		// Enforce a minimum playable area
+		// Prevents a division by 0 from corrupting the sound engine
+		// TODO: Panning shouldn't depend on playable area but rather screen area
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3743
+		if screen < 1 {
+			screen = 1
+		}
 		var r float32
 		if s.x != nil { // pan
-			r = ((sys.xmax - s.localscl**s.x) - s.pan) / (sys.xmax - sys.xmin)
+			r = ((sys.xmax - s.localscl**s.x) - s.pan) / screen
 		} else { // abspan
-			r = ((sys.xmax-sys.xmin)/2 - s.pan) / (sys.xmax - sys.xmin)
+			r = ((sys.xmax-sys.xmin)/2 - s.pan) / screen
 		}
 		sc := sys.cfg.Sound.PanningRange / 100
 		of := (100 - sys.cfg.Sound.PanningRange) / 200
