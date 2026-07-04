@@ -136,17 +136,17 @@ type SystemStateVars struct {
 	uiRepeatController  int
 	uiRepeatFrame       int32
 
-	endMatch      bool
+	endMatch       bool
 	noCharSoundFlg bool
-	fightLoopEnd  bool
-	continueFlg   bool
-	matchResetFlg bool
-	stageLoopNo   int
-	introSkipCall bool
-	preMatchTime  int32
-	loopBreak     bool
-	loopContinue  bool
-	winposetime   int32
+	fightLoopEnd   bool
+	continueFlg    bool
+	matchResetFlg  bool
+	stageLoopNo    int
+	introSkipCall  bool
+	preMatchTime   int32
+	loopBreak      bool
+	loopContinue   bool
+	winposetime    int32
 }
 
 // sys
