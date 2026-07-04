@@ -8492,6 +8492,29 @@ func (c *Char) targetDrop(excludeid int32, excludechar int32, keepone bool) {
 	}
 }
 
+// We do the extra steps to prevent the internal multiplication by 100 from exposing garbage float digits
+// https://github.com/ikemen-engine/Ikemen-GO/issues/1386
+func (c *Char) attackTrigger() float32 {
+	// Do the multiplication in float64
+	base := float64(c.gi().attackBase)
+	mul := float64(c.attackMul[0])
+	result := base * mul
+
+	// Snap to a 3-decimal grid to kill the garbage (e.g. 120.000008 -> 120.0)
+	// 3 because default attack/defence values have 3 significant digits
+	cleaned := math.Round(result*1e3) / 1e3
+
+	return float32(cleaned)
+}
+
+// See attackTrigger()
+func (c *Char) defenceTrigger() float32 {
+	def := float64(c.finalDefense)
+	result := def * 100
+	clean := math.Round(result*1e3) / 1e3
+	return float32(clean)
+}
+
 // Process raw damage into the value that will actually be used
 // Calculations are done in float64 for the sake of precision
 func (c *Char) computeDamage(damage float64, kill, absolute bool, atkmul float32, attacker *Char, bounds bool) int32 {
