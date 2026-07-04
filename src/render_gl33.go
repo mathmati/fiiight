@@ -498,6 +498,10 @@ func (r *Renderer_GL33) GetName() string {
 	return "OpenGL 3.3"
 }
 
+func (r *Renderer_GL33) DebugInfo() string {
+	return "" // No OOM tracking — GL driver manages memory
+}
+
 // init 3D model shader
 func (r *Renderer_GL33) InitModelShader() error {
 	var err error

@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -935,6 +936,7 @@ func (allocator *VulkanAllocator) findOrCreateBlock(
 	}
 	var deviceMemory vk.DeviceMemory
 	if err := vk.Error(vk.AllocateMemory(r.device, &allocInfo, nil, &deviceMemory)); err != nil {
+		allocator.recordOOMSnapshot("findOrCreateBlock", requiredSize, alignment, memProperties, memoryTypeIndex, memoryTypeBits, false, err)
 		return nil, fmt.Errorf("vk.AllocateMemory for block failed: %w", err)
 	}
 
@@ -959,6 +961,22 @@ func (allocator *VulkanAllocator) findOrCreateBlock(
 	return block, nil
 }
 
+// VulkanOOMRecord captures details of the last allocation failure.
+type VulkanOOMRecord struct {
+	FailedAt           string // caller function name
+	RequestedSize      vk.DeviceSize
+	RequestedAlign     vk.DeviceSize
+	RequestedProperty  vk.MemoryPropertyFlagBits
+	MemoryTypeIndex    uint32
+	MemoryTypeBits     uint32
+	WasDedicated       bool   // true = dedicated allocation, false = suballocation
+	VulkanError        string // raw vk.AllocateMemory error string
+	HeapSize           vk.DeviceSize // device-local heap size at time of failure
+	TrackedDedicatedMB float64       // dedicated image bytes tracked at time of failure
+	TrackedSuballocMB  float64       // suballocated bytes tracked at time of failure
+	BlockCount         int           // number of suballocation blocks at time of failure
+}
+
 // VulkanAllocator manages device memory allocations
 type VulkanAllocator struct {
 	renderer *Renderer_VK
@@ -976,6 +994,7 @@ type VulkanAllocator struct {
 	smallImageThreshold vk.DeviceSize                  // images ≤ this size are suballocated (bytes)
 	blockSize           vk.DeviceSize                  // size of each suballocation block (bytes)
 	allocations         map[vk.Image]*VulkanAllocation // image → allocation for cleanup
+	lastOOM             VulkanOOMRecord                // details of the most recent allocation failure
 }
 
 // ------------------------------------------------------------------
@@ -1046,6 +1065,7 @@ type Renderer_VK struct {
 	maxImageArrayLayers             uint32
 	memoryTypeMap                   map[vk.MemoryPropertyFlagBits]uint32
 	allocatedImageMemory            uint64
+	deviceLocalHeapSize             vk.DeviceSize
 
 	// Allocator for memory management
 	allocator *VulkanAllocator
@@ -1379,6 +1399,91 @@ var vk_validationLayers = []string{
 
 func (r *Renderer_VK) GetName() string {
 	return "Vulkan 1.3.239"
+}
+
+func (r *Renderer_VK) DebugInfo() string {
+	var sb strings.Builder
+
+	// Always include the last OOM record if one exists — this is critical crash data
+	a := r.allocator
+	if a != nil {
+		a.mu.Lock()
+		oom := a.lastOOM
+		if oom.FailedAt != "" {
+			sb.WriteString("=== Last OOM Failure ===\n")
+			sb.WriteString(fmt.Sprintf("  Failed at: %s\n", oom.FailedAt))
+			sb.WriteString(fmt.Sprintf("  Requested: %.2f MB (alignment: %d bytes)\n", float64(oom.RequestedSize)/(1024*1024), oom.RequestedAlign))
+			sb.WriteString(fmt.Sprintf("  Memory type: index=%d bits=0x%X property=%d\n", oom.MemoryTypeIndex, oom.MemoryTypeBits, int(oom.RequestedProperty)))
+			sb.WriteString(fmt.Sprintf("  Allocation type: %s\n", map[bool]string{true: "dedicated", false: "suballocated"}[oom.WasDedicated]))
+			sb.WriteString(fmt.Sprintf("  Vulkan error: %s\n", oom.VulkanError))
+			sb.WriteString(fmt.Sprintf("  Device-local heap at failure: %.0f MB\n", float64(oom.HeapSize)/(1024*1024)))
+			sb.WriteString(fmt.Sprintf("  Tracked dedicated at failure: %.2f MB\n", oom.TrackedDedicatedMB))
+			sb.WriteString(fmt.Sprintf("  Tracked suballoc at failure: %.2f MB\n", oom.TrackedSuballocMB))
+			sb.WriteString(fmt.Sprintf("  Suballoc blocks at failure: %d\n", oom.BlockCount))
+			if oom.HeapSize > 0 {
+				totalTracked := (oom.TrackedDedicatedMB + oom.TrackedSuballocMB) * 1024 * 1024
+				sb.WriteString(fmt.Sprintf("  Heap usage at failure: %.1f%%\n", float64(totalTracked)/float64(oom.HeapSize)*100))
+			}
+		}
+		a.mu.Unlock()
+	}
+
+	if !sys.cfg.Video.RendererDebugMode {
+		return sb.String()
+	}
+
+	// Full debug stats only when RendererDebugMode is enabled
+	sb.WriteString(fmt.Sprintf("Device-local heap: %.0f MB\n", float64(r.deviceLocalHeapSize)/(1024*1024)))
+
+	// Allocator stats
+	if a != nil {
+		a.mu.Lock()
+		sb.WriteString(fmt.Sprintf("Image allocations (lifetime): %d\n", a.totalImageAllocations))
+		sb.WriteString(fmt.Sprintf("Image bytes requested (lifetime): %.2f MB\n", float64(a.totalImageBytesRequested)/(1024*1024)))
+		sb.WriteString(fmt.Sprintf("Buffer allocations (lifetime): %d\n", a.totalBufferAllocations))
+		sb.WriteString(fmt.Sprintf("Buffer bytes requested (lifetime): %.2f MB\n", float64(a.totalBufferBytesRequested)/(1024*1024)))
+		sb.WriteString(fmt.Sprintf("Suballocation blocks: %d\n", len(a.blocks)))
+		sb.WriteString(fmt.Sprintf("Active image allocations: %d\n", len(a.allocations)))
+		sb.WriteString(fmt.Sprintf("Suballoc threshold: %.0f KB\n", float64(a.smallImageThreshold)/1024))
+		sb.WriteString(fmt.Sprintf("Suballoc block size: %.0f MB\n", float64(a.blockSize)/(1024*1024)))
+
+		var totalBlockUsed vk.DeviceSize
+		for _, block := range a.blocks {
+			totalBlockUsed += block.used
+			sb.WriteString(fmt.Sprintf("  Block %d: size=%.2f MB used=%.2f MB (%.1f%%)\n",
+				block.id,
+				float64(block.size)/(1024*1024),
+				float64(block.used)/(1024*1024),
+				float64(block.used)/float64(block.size)*100))
+		}
+		sb.WriteString(fmt.Sprintf("Total suballoc block memory in use: %.2f MB\n", float64(totalBlockUsed)/(1024*1024)))
+
+		// Count dedicated vs suballocated
+		var dedicatedCount, dedicatedBytes int64
+		var suballocCount, suballocBytes int64
+		for _, alloc := range a.allocations {
+			if alloc.dedicated {
+				dedicatedCount++
+				dedicatedBytes += int64(alloc.size)
+			} else {
+				suballocCount++
+				suballocBytes += int64(alloc.size)
+			}
+		}
+		sb.WriteString(fmt.Sprintf("Dedicated image allocations: %d (%.2f MB)\n", dedicatedCount, float64(dedicatedBytes)/(1024*1024)))
+		sb.WriteString(fmt.Sprintf("Suballocated image allocations: %d (%.2f MB)\n", suballocCount, float64(suballocBytes)/(1024*1024)))
+		sb.WriteString(fmt.Sprintf("Total tracked image memory: %.2f MB\n", float64(dedicatedBytes+suballocBytes)/(1024*1024)))
+
+		// Usage ratio vs device-local heap
+		if r.deviceLocalHeapSize > 0 {
+			usageRatio := float64(dedicatedBytes+int64(totalBlockUsed)) / float64(r.deviceLocalHeapSize) * 100
+			sb.WriteString(fmt.Sprintf("Device-local heap usage (tracked): %.1f%%\n", usageRatio))
+		}
+
+		a.mu.Unlock()
+	}
+
+	return sb.String()
 }
 
 func (r *Renderer_VK) NewVulkanDevice(appInfo *vk.ApplicationInfo, window uintptr) error {
@@ -1779,6 +1884,7 @@ func (r *Renderer_VK) addPalTexture() {
 		panic(fmt.Errorf("addPalTexture: AllocateImageMemory failed: %w", err))
 	}
 	t.allocation = alloc
+	t.imageView = r.CreateImageView(t.img, vk.FormatR8g8b8a8Unorm, 0, 1, 1, false)
 	r.palTexture.textures = append(r.palTexture.textures, t)
 
 	runtime.SetFinalizer(t, func(t *Texture_VK) {
@@ -5007,11 +5113,12 @@ func (r *Renderer_VK) Init() {
 	for i := uint32(0); i < memProperties.MemoryHeapCount; i++ {
 		heap := memProperties.MemoryHeaps[i]
 		if heap.Flags&vk.MemoryHeapFlags(vk.MemoryHeapDeviceLocalBit) != 0 {
-			if deviceLocalHeapSize == 0 || heap.Size < deviceLocalHeapSize {
+			if heap.Size > deviceLocalHeapSize {
 				deviceLocalHeapSize = heap.Size
 			}
 		}
 	}
+	r.deviceLocalHeapSize = deviceLocalHeapSize
 
 	suballocThreshold := vk.DeviceSize(sys.cfg.Video.ImageSuballocThresholdKB) * 1024
 	if suballocThreshold == 0 {
@@ -8505,6 +8612,33 @@ func computeMemoryTypeCacheKey(memoryTypeBits uint32, properties vk.MemoryProper
 	return (uint64(memoryTypeBits) << 32) | uint64(properties)
 }
 
+// recordOOMSnapshot captures allocator state at the point of an allocation failure.
+// Caller must hold allocator.mu.
+func (allocator *VulkanAllocator) recordOOMSnapshot(caller string, size, alignment vk.DeviceSize, properties vk.MemoryPropertyFlagBits, memTypeIdx, memTypeBits uint32, dedicated bool, vkErr error) {
+	var dedicatedBytes, suballocBytes vk.DeviceSize
+	for _, alloc := range allocator.allocations {
+		if alloc.dedicated {
+			dedicatedBytes += alloc.size
+		} else {
+			suballocBytes += alloc.size
+		}
+	}
+	allocator.lastOOM = VulkanOOMRecord{
+		FailedAt:           caller,
+		RequestedSize:      size,
+		RequestedAlign:     alignment,
+		RequestedProperty:  properties,
+		MemoryTypeIndex:    memTypeIdx,
+		MemoryTypeBits:     memTypeBits,
+		WasDedicated:       dedicated,
+		VulkanError:        vkErr.Error(),
+		HeapSize:           allocator.renderer.deviceLocalHeapSize,
+		TrackedDedicatedMB: float64(dedicatedBytes) / (1024 * 1024),
+		TrackedSuballocMB:  float64(suballocBytes) / (1024 * 1024),
+		BlockCount:         len(allocator.blocks),
+	}
+}
+
 // AllocateImageMemory allocates device memory for a VkImage.
 // Small images (≤ smallImageThreshold) are suballocated from shared blocks;
 // large images get dedicated allocations.
@@ -8540,6 +8674,7 @@ func (allocator *VulkanAllocator) AllocateImageMemory(img vk.Image, memoryProper
 		var deviceMemory vk.DeviceMemory
 		err := vk.Error(vk.AllocateMemory(r.device, &allocInfo, nil, &deviceMemory))
 		if err != nil {
+			allocator.recordOOMSnapshot("AllocateImageMemory(dedicated)", memReq.Size, memReq.Alignment, memoryProperty, memoryTypeIndex, memReq.MemoryTypeBits, true, err)
 			return nil, fmt.Errorf("vk.AllocateMemory failed: %w", err)
 		}
 		err = vk.Error(vk.BindImageMemory(r.device, img, deviceMemory, 0))
@@ -8568,12 +8703,15 @@ func (allocator *VulkanAllocator) AllocateImageMemory(img vk.Image, memoryProper
 			memReq.Alignment,
 		)
 		if err != nil {
+			allocator.recordOOMSnapshot("AllocateImageMemory(suballoc-block)", memReq.Size, memReq.Alignment, memoryProperty, memoryTypeIndex, memReq.MemoryTypeBits, false, err)
 			return nil, fmt.Errorf("findOrCreateBlock failed: %w", err)
 		}
 
 		offset, found := block.findFreeRegion(memReq.Size, memReq.Alignment)
 		if !found {
-			return nil, fmt.Errorf("no free region in block %d for image of size %d", block.id, memReq.Size)
+			oomErr := fmt.Errorf("no free region in block %d for image of size %d", block.id, memReq.Size)
+			allocator.recordOOMSnapshot("AllocateImageMemory(suballoc-nofit)", memReq.Size, memReq.Alignment, memoryProperty, memoryTypeIndex, memReq.MemoryTypeBits, false, oomErr)
+			return nil, oomErr
 		}
 
 		block.allocateFromFreeRegion(offset, memReq.Size)
@@ -8657,6 +8795,9 @@ func (allocator *VulkanAllocator) AllocateBufferMemory(buffer vk.Buffer, memoryT
 	var deviceMemory vk.DeviceMemory
 	err := vk.Error(vk.AllocateMemory(r.device, &allocInfo, nil, &deviceMemory))
 	if err != nil {
+		allocator.mu.Lock()
+		allocator.recordOOMSnapshot("AllocateBufferMemory", memReq.Size, memReq.Alignment, properties, memoryTypeIndex, memReq.MemoryTypeBits, true, err)
+		allocator.mu.Unlock()
 		err = fmt.Errorf("vk.AllocateMemory failed with %s", err)
 		return nil, err
 	}

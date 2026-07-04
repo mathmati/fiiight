@@ -21,6 +21,7 @@ type Texture interface {
 
 type Renderer interface {
 	GetName() string
+	DebugInfo() string
 	Init()
 	Close()
 	BeginFrame(clearColor bool)
