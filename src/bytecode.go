@@ -3276,7 +3276,7 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_spriteplayerno:
 		sys.bcStack.PushI(int32(c.spritePN) + 1)
 	case OC_ex_attack:
-		sys.bcStack.PushF(float32(c.gi().attackBase) * c.attackMul[0])
+		sys.bcStack.PushF(c.attackTrigger())
 	case OC_ex_clsnoverlap:
 		c2 := sys.bcStack.Pop().ToI()
 		id := sys.bcStack.Pop().ToI()
@@ -3289,7 +3289,7 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_decisiveround:
 		sys.bcStack.PushB(sys.decisiveRound[c.playerNo&1])
 	case OC_ex_defence:
-		sys.bcStack.PushF(float32(c.finalDefense * 100))
+		sys.bcStack.PushF(c.defenceTrigger())
 	case OC_ex_dizzy:
 		sys.bcStack.PushB(c.scf(SCF_dizzy))
 	case OC_ex_dizzypoints:
@@ -5068,10 +5068,6 @@ const (
 )
 
 func (sc playSnd) Run(c *Char, _ []int32) bool {
-	if sys.noSoundFlg {
-		return false
-	}
-
 	crun := getRedirectedChar(c, StateControllerBase(sc), playSnd_redirectid, "PlaySnd")
 	if crun == nil {
 		return false
@@ -12971,10 +12967,6 @@ const (
 )
 
 func (sc modifySnd) Run(c *Char, _ []int32) bool {
-	if sys.noSoundFlg {
-		return false
-	}
-
 	crun := getRedirectedChar(c, StateControllerBase(sc), modifySnd_redirectid, "ModifySnd")
 	if crun == nil {
 		return false

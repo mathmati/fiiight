@@ -137,7 +137,7 @@ type SystemStateVars struct {
 	uiRepeatFrame       int32
 
 	endMatch      bool
-	noSoundFlg    bool
+	noCharSoundFlg bool
 	fightLoopEnd  bool
 	continueFlg   bool
 	matchResetFlg bool
@@ -934,7 +934,7 @@ func (s *System) update() bool {
 
 func (s *System) tickSound() {
 	s.soundChannels.Tick()
-	if !s.noSoundFlg {
+	if !s.noCharSoundFlg {
 		for i := range sys.charSoundChannels {
 			sys.charSoundChannels[i].Tick()
 		}
@@ -2310,6 +2310,9 @@ func (s *System) resetRound() {
 	s.roundResetFlg = false
 	s.reloadFlg, s.reloadStageFlg, s.reloadFightScreenFlg = false, false, false
 
+	// https://github.com/ikemen-engine/Ikemen-GO/issues/1400
+	s.noCharSoundFlg = false
+
 	s.resetGblEffect()
 	s.fightScreen.reset()
 	s.motif.reset()
@@ -2868,11 +2871,13 @@ func (s *System) explodCueDraw() {
 		if a.ontop != b.ontop {
 			return a.ontop
 		}
-		// If both are ontop, the age logic is the same as normal, but the index tiebreaker is inverted
+		// If both are ontop, the normal logic is inverted in order to emulate Mugen's memory layout
+		// However, it's impossible to cover all of Mugen's quirks without making our layout worse
 		// https://github.com/ikemen-engine/Ikemen-GO/issues/3737
+		// https://github.com/ikemen-engine/Ikemen-GO/issues/3749
 		if a.ontop && b.ontop {
 			if a.timestamp != b.timestamp {
-				return a.timestamp < b.timestamp
+				return a.timestamp >= b.timestamp
 			}
 			return a.sortindex >= b.sortindex
 		}

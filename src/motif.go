@@ -3653,7 +3653,7 @@ func (co *MotifContinue) init(m *Motif) {
 
 	if !m.ContinueScreen.Sounds.Enabled {
 		sys.clearAllSound()
-		sys.noSoundFlg = true
+		sys.noCharSoundFlg = true
 	}
 
 	m.Music.Play("continue", sys.motif.Def)
@@ -3811,7 +3811,7 @@ func (co *MotifContinue) step(m *Motif) {
 		}
 		co.active = false
 		if !m.ContinueScreen.Sounds.Enabled {
-			sys.noSoundFlg = false
+			sys.noCharSoundFlg = false
 		}
 		return
 	}
@@ -6183,7 +6183,7 @@ func (vi *MotifVictory) init(m *Motif) {
 
 	if !m.VictoryScreen.Sounds.Enabled {
 		sys.clearAllSound()
-		sys.noSoundFlg = true
+		sys.noCharSoundFlg = true
 	}
 
 	// If match/stage/select.def defines victory.music, it should keep playing
@@ -6311,7 +6311,7 @@ func (vi *MotifVictory) step(m *Motif) {
 		}
 		vi.active = false
 		if !m.VictoryScreen.Sounds.Enabled {
-			sys.noSoundFlg = false
+			sys.noCharSoundFlg = false
 		}
 		return
 	}
@@ -6628,7 +6628,7 @@ func (wi *MotifWin) init(m *Motif) {
 
 	if !wi.soundsEnabled {
 		sys.clearAllSound()
-		sys.noSoundFlg = true
+		sys.noCharSoundFlg = true
 	}
 
 	m.Music.Play("results", sys.motif.Def)
@@ -6811,7 +6811,7 @@ func (wi *MotifWin) step(m *Motif) {
 		}
 		wi.active = false
 		if !wi.soundsEnabled {
-			sys.noSoundFlg = false
+			sys.noCharSoundFlg = false
 		}
 		return
 	}

@@ -6278,7 +6278,7 @@ func (c *Char) getOwnChannels(chNo int32) (found []*SoundChannel) {
 }
 
 func (c *Char) playSound(params *PlaySndParams) {
-	if params.group < 0 {
+	if params.group < 0 || sys.noCharSoundFlg {
 		return
 	}
 	current_ffx := params.ffx
@@ -8490,6 +8490,29 @@ func (c *Char) targetDrop(excludeid int32, excludechar int32, keepone bool) {
 	} else {
 		c.targets = tg
 	}
+}
+
+// We do the extra steps to prevent the internal multiplication by 100 from exposing garbage float digits
+// https://github.com/ikemen-engine/Ikemen-GO/issues/1386
+func (c *Char) attackTrigger() float32 {
+	// Do the multiplication in float64
+	base := float64(c.gi().attackBase)
+	mul := float64(c.attackMul[0])
+	result := base * mul
+
+	// Snap to a 3-decimal grid to kill the garbage (e.g. 120.000008 -> 120.0)
+	// 3 because default attack/defence values have 3 significant digits
+	cleaned := math.Round(result*1e3) / 1e3
+
+	return float32(cleaned)
+}
+
+// See attackTrigger()
+func (c *Char) defenceTrigger() float32 {
+	def := float64(c.finalDefense)
+	result := def * 100
+	clean := math.Round(result*1e3) / 1e3
+	return float32(clean)
 }
 
 // Process raw damage into the value that will actually be used
@@ -11565,7 +11588,7 @@ func (c *Char) actionPrepare() {
 				if c.alive() || c.ss.no != 5150 || c.numPartner() == 0 {
 					c.setCSF(CSF_screenbound | CSF_movecamera_x | CSF_movecamera_y)
 				}
-				if sys.roundState() > 0 && (c.alive() || c.numPartner() == 0) {
+				if sys.roundState() > 0 && sys.roundState() < 4 && (c.alive() || c.numPartner() == 0) {
 					c.setCSF(CSF_playerpush)
 				}
 			}
