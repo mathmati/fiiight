@@ -5664,10 +5664,18 @@ func (r *Renderer_VK) ReadPixels(data []uint8, width, height int) {
 }
 
 func (r *Renderer_VK) EnableScissor(x, y, width, height int32) {
+	if x < 0 {
+		width += x
+		x = 0
+	}
+	if y < 0 {
+		height += y
+		y = 0
+	}
 	r.VKState.scissor = vk.Rect2D{
 		Offset: vk.Offset2D{
-			X: int32(Max(int(x), 0)),
-			Y: int32(Max(int(y), 0)),
+			X: int32(x),
+			Y: int32(y),
 		},
 		Extent: vk.Extent2D{
 			Width:  uint32(width),
