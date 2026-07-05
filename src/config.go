@@ -163,7 +163,9 @@ type Config struct {
 		KeepAspect              bool     `ini:"KeepAspect"`
 		RendererDebugMode       bool     `ini:"RendererDebugMode"`
 		EnableModel             bool     `ini:"EnableModel"`
-		EnableModelShadow       bool     `ini:"EnableModelShadow"`
+		EnableModelShadow       bool `ini:"EnableModelShadow"`
+		ImageSuballocThresholdKB int  `ini:"ImageSuballocThresholdKB"` // ≤ this (KB) suballocated; 0 to disable
+		ImageSuballocBlockSizeMB int  `ini:"ImageSuballocBlockSizeMB"` // block size (MB) for suballocation pool
 	} `ini:"Video"`
 	Sound struct {
 		SampleRate           int32   `ini:"SampleRate"`
@@ -368,6 +370,13 @@ func (c *Config) normalize() {
 	case 0, 2, 4, 6, 8, 16, 32:
 	default:
 		c.SetValueUpdate("Video.MSAA", 0)
+	}
+
+	if c.Video.ImageSuballocThresholdKB < 0 {
+		c.SetValueUpdate("Video.ImageSuballocThresholdKB", 256)
+	}
+	if c.Video.ImageSuballocBlockSizeMB < 1 {
+		c.SetValueUpdate("Video.ImageSuballocBlockSizeMB", 64)
 	}
 }
 

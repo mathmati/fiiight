@@ -596,6 +596,10 @@ func (r *Renderer_GLES32) GetName() string {
 	return "OpenGL ES 3.2"
 }
 
+func (r *Renderer_GLES32) DebugInfo() string {
+	return "" // No OOM tracking — GLES driver manages memory
+}
+
 // init 3D model shader
 func (r *Renderer_GLES32) InitModelShader() error {
 	var err error

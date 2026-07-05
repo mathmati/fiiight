@@ -354,6 +354,9 @@ func handlePanic(r interface{}) {
 	memory := fmt.Sprintf("RAM in Use: %v MB / OS Reserved: %v MB", mem.Alloc/1024/1024, mem.Sys/1024/1024)
 	threads := fmt.Sprintf("Active Goroutines: %d", runtime.NumGoroutine())
 
+	// Renderer debug info (GPU memory stats, etc.)
+	rendererDebug := gfx.DebugInfo()
+
 	// Identify the crash type
 	crashType := "Fatal runtime error" // Default for unsafe crashes
 	if _, ok := r.(*lua.ApiError); ok {
@@ -371,6 +374,9 @@ func handlePanic(r interface{}) {
 	// Optional: print error to terminal
 	// We have to do this manually now because we recover() from the actual panic
 	fmt.Fprintf(os.Stderr, "Panic: %s\n\n%s\n", errStr, goStack)
+	if rendererDebug != "" {
+		fmt.Fprintf(os.Stderr, "\nRenderer Debug Info:\n%s\n", rendererDebug)
+	}
 
 	// Write to log file
 	logDir := filepath.Join(sys.baseDir, "save", "logs")
@@ -382,6 +388,9 @@ func handlePanic(r interface{}) {
 		fmt.Fprintf(f, "%s\n%s\n%s\n%s\n%s\n%s\nTimestamp: %s\n\n%s\n\nError: %s\n\n%s",
 			version, buildTime, platform, render, memory, threads,
 			now.Format("2006-01-02 15:04:05"), crashType, errStr, goStack)
+		if rendererDebug != "" {
+			fmt.Fprintf(f, "\n\nRenderer Debug Info:\n%s", rendererDebug)
+		}
 		f.Close()
 	}
 
