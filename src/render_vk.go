@@ -969,8 +969,8 @@ type VulkanOOMRecord struct {
 	RequestedProperty  vk.MemoryPropertyFlagBits
 	MemoryTypeIndex    uint32
 	MemoryTypeBits     uint32
-	WasDedicated       bool   // true = dedicated allocation, false = suballocation
-	VulkanError        string // raw vk.AllocateMemory error string
+	WasDedicated       bool          // true = dedicated allocation, false = suballocation
+	VulkanError        string        // raw vk.AllocateMemory error string
 	HeapSize           vk.DeviceSize // device-local heap size at time of failure
 	TrackedDedicatedMB float64       // dedicated image bytes tracked at time of failure
 	TrackedSuballocMB  float64       // suballocated bytes tracked at time of failure
