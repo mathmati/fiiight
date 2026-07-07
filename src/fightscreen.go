@@ -3734,13 +3734,13 @@ func (ro *FightScreenRound) handleRoundOutro() {
 			}
 		} else if sys.winTeam >= 0 {
 			isPlayerWin, isAiWin := false, false
-			for i := wt; i < len(sys.chars); i += 2 {
+			for i := wt; i < MaxSimul*2; i += 2 {
 				if len(sys.chars[i]) > 0 && sys.aiLevel[i] == 0 {
 					isPlayerWin = true
 					break
 				}
 			}
-			for i := lt; i < len(sys.chars); i += 2 {
+			for i := lt; i < MaxSimul*2; i += 2 {
 				if len(sys.chars[i]) > 0 && sys.aiLevel[i] == 0 {
 					isAiWin = true
 					break
@@ -4028,13 +4028,13 @@ func (ro *FightScreenRound) draw(layerno int16, f map[int]*Fnt) {
 			ro.drawgame_top.Draw(float32(ro.pos[0])+sys.fightScreen.offsetX, float32(ro.pos[1]), layerno, sys.fightScreen.scale)
 		} else if sys.winTeam >= 0 {
 			isPlayerWin, isAiWin := false, false
-			for i := wt; i < len(sys.chars); i += 2 {
+			for i := wt; i < MaxSimul*2; i += 2 {
 				if len(sys.chars[i]) > 0 && sys.aiLevel[i] == 0 {
 					isPlayerWin = true
 					break
 				}
 			}
-			for i := lt; i < len(sys.chars); i += 2 {
+			for i := lt; i < MaxSimul*2; i += 2 {
 				if len(sys.chars[i]) > 0 && sys.aiLevel[i] == 0 {
 					isAiWin = true
 					break
