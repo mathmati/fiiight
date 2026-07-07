@@ -2126,6 +2126,12 @@ local function buildMusicParams(data)
 	return table.concat(out, ", ")
 end
 
+local function defaultQuickContinue()
+	return (not main.selectMenu[1] and not main.selectMenu[2])
+		or main.quickContinue
+		or gameOption('Options.QuickContinue')
+end
+
 function launchFight(data)
 	local data = data or {}
 	local t = {}
@@ -2139,7 +2145,7 @@ function launchFight(data)
 		t.p2teammode = start.p[2].teamMode
 		t.challenger = main.f_arg(data.challenger, false)
 		t.continue = main.f_arg(data.continue, main.motif.continuescreen)
-		t.quickcontinue = (not main.selectMenu[1] and not main.selectMenu[2]) or main.f_arg(data.quickcontinue, main.quickContinue or gameOption('Options.QuickContinue'))
+		t.quickcontinue = main.f_arg(data.quickcontinue, defaultQuickContinue())
 		t.order = data.order or 1
 		t.orderselect = {main.f_arg(data.p1orderselect, main.orderSelect[1]), main.f_arg(data.p2orderselect, main.orderSelect[2])}
 		t.p1char = data.p1char or {}
@@ -3763,15 +3769,15 @@ function start.f_buildLoadStartParams(arg, doSelectMissing, t_orderRemap)
 		end
 		parts[#parts + 1] = k .. "=" .. tostring(v)
 	end
-	addParam("continue", t.continue)
-	addParam("quickcontinue", t.quickcontinue)
+	addParam("continue", main.f_arg(t.continue, main.motif.continuescreen))
+	addParam("quickcontinue", main.f_arg(t.quickcontinue, defaultQuickContinue()))
+	addParam("vsscreen", main.f_arg(t.vsscreen, main.motif.vsscreen))
+	addParam("victoryscreen", main.f_arg(t.victoryscreen, main.motif.victoryscreen))
+	addParam("winscreen", main.f_arg(t.winscreen, main.motif.winscreen))
 	addParam("order", t.order)
 	addParam("stage", t.stage)
 	addParam("ai", t.ai)
 	addParam("time", t.roundtime or t.time)
-	addParam("vsscreen", t.vsscreen)
-	addParam("victoryscreen", t.victoryscreen)
-	addParam("winscreen", t.winscreen)
 	addParam("lua", t.lua)
 	addParam("charparam.ai", main.charparam.ai)
 	addParam("charparam.arcadepath", main.charparam.arcadepath)

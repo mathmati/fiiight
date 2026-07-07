@@ -3530,7 +3530,7 @@ function main.f_randomtest()
 		end
 		start.f_setRounds(nil, {})
 		start.f_setStage()
-		loadStart(start.f_buildLoadStartParams({continue = main.motif.continuescreen}))
+		loadStart(start.f_buildLoadStartParams())
 		game()
 		refresh()
 		if getWinnerTeam() == -1 then
