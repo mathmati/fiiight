@@ -4193,6 +4193,9 @@ function start.f_selectVersus(active, t_orderSelect, loadStartArg)
 				loadCancel()
 				clearSelected()
 			end
+			if main.replayActive then
+				start.exit = true
+			end
 			fadeOutInit(motif.vs_screen.fadeout.FadeData)
 			fadeOutStarted = true
 			escFlag = true

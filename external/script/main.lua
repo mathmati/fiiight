@@ -3085,10 +3085,13 @@ function main.f_replay()
 		elseif getKey(motif.replay_info.menu.item.rename.keycode) then
 			t, item = main.f_renameReplay(item, t)
 		elseif getInput(-1, motif[main.group].menu.done.key) then
+			main.f_waitForPreloads(true)
 			sndPlay(motif.Snd, motif[main.group].cursor.done.snd.default[1], motif[main.group].cursor.done.snd.default[2])
 			if enterReplay(t[item].itemname) and synchronize() then
+				main.replayActive = true
 				enterSyncedNetplayMenu()
 			end
+			main.replayActive = false
 			replayStop()
 			exitNetPlay()
 			exitReplay()
