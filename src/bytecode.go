@@ -6168,6 +6168,7 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 	}
 
 	e.id = 0
+	var shaderTime int32 = -1
 
 	// Mugenversion 1.1 chars default postype to "None"
 	if c.stWgi().mugenver[0] == 1 && c.stWgi().mugenver[1] == 1 {
@@ -6425,7 +6426,7 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 			e.customShader.tex2.SprNo = [2]int32{g, n}
 			e.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
 		case explod_shadertime:
-			e.customShader.time = exp[0].evalI(c)
+			shaderTime = exp[0].evalI(c)
 		case explod_redirectid:
 			return true // Already handled. Avoid default
 		default:
@@ -6452,6 +6453,12 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 
 	if e.aimg != nil && e.aimg.time != 0 {
 		e.aimg.setup(crun)
+	}
+	if e.customShader.name != "" {
+		e.customShader.time = shaderTime
+		if e.customShader.time == 0 {
+			e.customShader.clear()
+		}
 	}
 
 	e.setPos(crun)
@@ -8055,6 +8062,7 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 	if p == nil {
 		return false
 	}
+	var shaderTime int32 = -1
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
@@ -8238,7 +8246,7 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 			p.customShader.tex2.SprNo = [2]int32{g, n}
 			p.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
 		case projectile_shadertime:
-			p.customShader.time = exp[0].evalI(c)
+			shaderTime = exp[0].evalI(c)
 		// case projectile_platform:
 		// 	p.platform = exp[0].evalB(c)
 		// case projectile_platformwidth:
@@ -8288,7 +8296,12 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 	if p.aimg != nil && p.aimg.time != 0 {
 		p.aimg.setup(crun)
 	}
-
+	if p.customShader.name != "" {
+		p.customShader.time = shaderTime
+		if p.customShader.time == 0 {
+			p.customShader.clear()
+		}
+	}
 	crun.commitProjectile(p, pt, offx, offy, offz, op, rp[0], rp[1], clsnscale)
 	return false
 }
