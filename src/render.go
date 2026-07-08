@@ -34,7 +34,7 @@ type Renderer interface {
 	LoadCustomSpriteShader(shaderName string, shaderData []byte) uint32
 	UnloadCustomSpriteShader(shaderName string)
 	SetSpritePipeline(shaderName string)
-	SetCustomUniforms(cs CustomShaderRenderData)
+	SetCustomUniforms(params [16]float32)
 	NeedsGrabPass() bool
 	ResolveBackBuffer() Texture
 
@@ -734,7 +734,7 @@ func RenderSprite(rp RenderParams) {
 		if rp.customShader.tex2 != nil {
 			gfx.SetTexture("tex2", rp.customShader.tex2)
 		}
-		gfx.SetCustomUniforms(rp.customShader)
+		gfx.SetCustomUniforms(rp.customShader.params)
 	}
 	// Texture binding
 	gfx.SetTexture("tex", rp.tex)

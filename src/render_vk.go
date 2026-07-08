@@ -8187,13 +8187,11 @@ func (r *Renderer_VK) SetSpritePipeline(shaderName string) {
 	r.VKState.currentProgram = targetProgram
 }
 
-func (r *Renderer_VK) SetCustomUniforms(cs CustomShaderRenderData) {
+func (r *Renderer_VK) SetCustomUniforms(params [16]float32) {
 	if r.VKState.currentProgram == nil {
 		return
 	}
-	var pushData [16]float32
-	copy(pushData[:16], cs.params[:])
-	vk.CmdPushConstants(r.commandBuffers[0], r.VKState.currentProgram.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 16, 64, unsafe.Pointer(&pushData[0]))
+	vk.CmdPushConstants(r.commandBuffers[0], r.VKState.currentProgram.pipelineLayout, vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 16, 64, unsafe.Pointer(&params[0]))
 }
 
 func (r *Renderer_VK) NeedsGrabPass() bool {
