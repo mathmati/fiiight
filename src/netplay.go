@@ -26,11 +26,11 @@ const (
 	REPLAY_NUM_INPUTS  = MaxSimul * 2
 	REPLAY_INPUT_BYTES = 2 + 6
 
-	syncConfigVersion   uint16 = 1
-	replayFormatVersion uint16 = 2
-	replayMagic                = "IKRPLCFG"
-	replaySyncMagic            = "IKRPLSYN"
-	replaySyncSearchLimit      = int64(64 << 20)
+	syncConfigVersion     uint16 = 1
+	replayFormatVersion   uint16 = 2
+	replayMagic                  = "IKRPLCFG"
+	replaySyncMagic              = "IKRPLSYN"
+	replaySyncSearchLimit        = int64(64 << 20)
 
 	netLoadingPollTimeout = time.Millisecond
 
