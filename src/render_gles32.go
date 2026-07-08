@@ -2263,8 +2263,8 @@ func (r *Renderer_GLES32) LoadCustomSpriteShader(shaderName string, shaderData [
 	shader.RegisterAttributes("position", "uv")
 	shader.RegisterUniforms("modelview", "projection", "x1x2x4x3",
 		"alpha", "tint", "mask", "neg", "gray", "add", "mult", "isFlat", "isRgba", "isTrapez", "hue",
-		"iTime", "iResolution", "aspectRatio")
-	shader.RegisterTextures("pal", "tex", "bgl_RenderedTexture")
+		"iTime", "iResolution", "aspectRatio", "sTime")
+	shader.RegisterTextures("pal", "tex", "tex1", "tex2", "bgl_RenderedTexture")
 
 	shader.needsGrabPass = strings.Contains(fragSource, "bgl_RenderedTexture")
 
@@ -2308,14 +2308,14 @@ func (r *Renderer_GLES32) SetSpritePipeline(shaderName string) {
 	}
 }
 
-func (r *Renderer_GLES32) SetCustomUniforms(params [16]float32) {
+func (r *Renderer_GLES32) SetCustomUniforms(cs CustomShaderRenderData) {
 	if r.currentProgram == nil {
 		return
 	}
 	for i := 0; i < 16; i++ {
 		loc := gl.GetUniformLocation(r.currentProgram.program, gl.Str(fmt.Sprintf("p%d\x00", i)))
 		if loc >= 0 {
-			gl.Uniform1f(loc, params[i])
+			gl.Uniform1f(loc, cs.params[i])
 		}
 	}
 }

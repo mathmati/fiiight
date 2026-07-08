@@ -10431,9 +10431,9 @@ func triggerFunctions(l *lua.LState) {
 	luaRegister(l, "shader", func(l *lua.LState) int {
 		if !nilArg(l, 1) {
 			shaderName := strings.ToLower(strArg(l, 1))
-			l.Push(lua.LBool(sys.debugWC.shader == shaderName))
+			l.Push(lua.LBool(sys.debugWC.customShader.name == shaderName))
 		} else {
-			l.Push(lua.LBool(sys.debugWC.shader != ""))
+			l.Push(lua.LBool(sys.debugWC.customShader.name != ""))
 		}
 		return 1
 	})
