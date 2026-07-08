@@ -1675,8 +1675,7 @@ type Explod struct {
 	timestamp            int32 // Determines run order
 	sortindex            int   // For faster run order sorting
 
-	shader       string
-	shaderParams [16]float32
+	customShader CustomShader
 }
 
 func newExplod() *Explod {
@@ -2010,8 +2009,7 @@ func (e *Explod) update() {
 				e.alpha = syncChar.alpha
 				e.palfx = syncChar.getPalfx()
 				e.facing = syncChar.facing
-				e.shader = syncChar.shader
-				e.shaderParams = syncChar.shaderParams
+				e.customShader = syncChar.customShader
 
 				if syncChar.aimg != nil && syncChar.aimg.time != 0 {
 					if e.aimg == nil {
@@ -2104,6 +2102,17 @@ func (e *Explod) update() {
 			e.time++
 			if e.bindtime > 0 {
 				e.bindtime--
+			}
+			if e.customShader.name != "" {
+				e.customShader.sTime++
+				e.customShader.tex1.step()
+				e.customShader.tex2.step()
+				if e.customShader.time > 0 {
+					e.customShader.time--
+				}
+				if e.customShader.time == 0 {
+					e.customShader.clear()
+				}
 			}
 		} else {
 			e.setAllPosX(e.pos[0])
@@ -2219,8 +2228,14 @@ func (e *Explod) cueDraw() {
 	sd.fLength = fLength
 	sd.window = ewin
 	sd.xshear = xshear
-	sd.shader = e.shader
-	sd.shaderParams = e.shaderParams
+	sd.customShader = CustomShaderRenderData{
+		name:   e.customShader.name,
+		params: e.customShader.params,
+		time:   e.customShader.time,
+		sTime:  e.customShader.sTime,
+		tex1:   e.customShader.tex1.GetTexture(),
+		tex2:   e.customShader.tex2.GetTexture(),
+	}
 
 	if e.syncId > 0 {
 		sd.syncId = e.syncId
@@ -2424,8 +2439,7 @@ type Projectile struct {
 	contactflag     bool
 	time            int32
 	removeDone      bool
-	shader          string
-	shaderParams    [16]float32
+	customShader    CustomShader
 }
 
 func newProjectile() *Projectile {
@@ -2793,6 +2807,17 @@ func (p *Projectile) tick() {
 			if p.pausemovetime > 0 {
 				p.pausemovetime--
 			}
+			if p.customShader.name != "" {
+				p.customShader.sTime++
+				p.customShader.tex1.step()
+				p.customShader.tex2.step()
+				if p.customShader.time > 0 {
+					p.customShader.time--
+				}
+				if p.customShader.time == 0 {
+					p.customShader.clear()
+				}
+			}
 			p.freezeflag = false
 		} else {
 			p.hitpause--
@@ -2898,8 +2923,14 @@ func (p *Projectile) cueDraw() {
 	sd.fLength = fLength
 	sd.window = pwin
 	sd.xshear = p.xshear
-	sd.shader = p.shader
-	sd.shaderParams = p.shaderParams
+	sd.customShader = CustomShaderRenderData{
+		name:   p.customShader.name,
+		params: p.customShader.params,
+		time:   p.customShader.time,
+		sTime:  p.customShader.sTime,
+		tex1:   p.customShader.tex1.GetTexture(),
+		tex2:   p.customShader.tex2.GetTexture(),
+	}
 
 	// Add sprite to the appropriate layer's drawlist
 	sys.spriteList.add(sd)
@@ -3366,9 +3397,7 @@ type Char struct {
 	currentSctrlIndex    int32
 	analogAxes           [6]float32
 	enableSyncId         bool
-	shader               string
-	shaderParams         [16]float32
-	shaderTime           int32
+	customShader         CustomShader
 	pctype               ProjContact
 	pctime, pcid         int32
 	//soundChannels        SoundChannels // Moved to system
@@ -3479,9 +3508,7 @@ func (c *Char) clearState() {
 	c.makeDustSpacing = 0
 	c.hitStateChangeIdx = -1
 	c.pushAffectTeam = 1
-	c.shader = ""
-	c.shaderParams = [16]float32{}
-	c.shaderTime = 0
+	c.customShader.clear()
 }
 
 func (c *Char) clsnOverlapTrigger(box1, pid, box2 int32) bool {
@@ -3556,9 +3583,7 @@ func (c *Char) prepareNextRound() {
 	c.enemyNearP2Clear()
 	c.targets = c.targets[:0]
 	c.cpucmd = -1
-	c.shader = ""
-	c.shaderParams = [16]float32{}
-	c.shaderTime = 0
+	c.customShader.clear()
 }
 
 // Return Char Global Info normally
@@ -11615,11 +11640,10 @@ func (c *Char) actionPrepare() {
 					}
 				}
 			}
-			if c.shaderTime > 0 {
-				c.shaderTime--
-				if c.shaderTime == 0 {
-					c.shader = ""
-					c.shaderParams = [16]float32{}
+			if c.customShader.time > 0 {
+				c.customShader.time--
+				if c.customShader.time == 0 {
+					c.customShader = CustomShader{}
 				}
 			}
 			if sys.supertime > 0 {
@@ -12122,6 +12146,11 @@ func (c *Char) update() {
 					c.setPosZ(c.pos[2]+c.ghv.zoff, false)
 					c.ghv.zoff = 0
 				}
+			}
+			if c.customShader.name != "" {
+				c.customShader.sTime++
+				c.customShader.tex1.step()
+				c.customShader.tex2.step()
 			}
 			// Engine dust effects
 			// Moved to system.zss
@@ -12727,8 +12756,14 @@ func (c *Char) cueDraw() {
 		charSD.fLength = fLength
 		charSD.xshear = c.xshear
 		charSD.window = cwin
-		charSD.shader = c.shader
-		charSD.shaderParams = c.shaderParams
+		charSD.customShader = CustomShaderRenderData{
+			name:   c.customShader.name,
+			params: c.customShader.params,
+			time:   c.customShader.time,
+			sTime:  c.customShader.sTime,
+			tex1:   c.customShader.tex1.GetTexture(),
+			tex2:   c.customShader.tex2.GetTexture(),
+		}
 
 		if c.enableSyncId {
 			charSD.syncId = c.id

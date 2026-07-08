@@ -4190,7 +4190,7 @@ func (be BytecodeExp) run_ex2(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushB(c.parentExist())
 	case OC_ex2_shader:
 		shaderName := strings.ToLower(be.ReadPoolStringAt(i))
-		sys.bcStack.PushB(c.shader == shaderName)
+		sys.bcStack.PushB(c.customShader.name == shaderName)
 	default:
 		LogMessage("%v", be[*i-1])
 		c.panic("Invalid bytecode OpCode encountered")
@@ -6141,6 +6141,11 @@ const (
 	explod_syncid
 	explod_shader
 	explod_shaderparam
+	explod_shader_tex1_anim
+	explod_shader_tex1_spr
+	explod_shader_tex2_anim
+	explod_shader_tex2_spr
+	explod_shadertime
 	explod_last = iota + palFX_last + afterImage_last + 1 - 1
 	explod_redirectid
 )
@@ -6159,6 +6164,7 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 	}
 
 	e.id = 0
+	var shaderTime int32 = -1
 
 	// Mugenversion 1.1 chars default postype to "None"
 	if c.stWgi().mugenver[0] == 1 && c.stWgi().mugenver[1] == 1 {
@@ -6379,7 +6385,7 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 		case explod_shader:
 			shader := exp[0].evalS()
 			if shader == "" || sys.isValidCustomShader(shader) {
-				e.shader = shader
+				e.customShader.name = shader
 			} else {
 				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid explod shader name: %s", shader))
 			}
@@ -6388,8 +6394,35 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 			for j := 0; j < numParams; j++ {
 				idx := int(exp[1+j*2].evalI(c))
 				val := exp[2+j*2].evalF(c)
-				e.shaderParams[idx] = val
+				e.customShader.params[idx] = val
 			}
+		case explod_shader_tex1_anim:
+			animNo := exp[0].evalI(c)
+			e.customShader.tex1.AnimNo = animNo
+			e.customShader.tex1.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if e.customShader.tex1.Anim != nil {
+				e.customShader.tex1.Anim.Reset()
+			}
+		case explod_shader_tex1_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			e.customShader.tex1.SprNo = [2]int32{g, n}
+			e.customShader.tex1.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+
+		case explod_shader_tex2_anim:
+			animNo := exp[0].evalI(c)
+			e.customShader.tex2.AnimNo = animNo
+			e.customShader.tex2.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if e.customShader.tex2.Anim != nil {
+				e.customShader.tex2.Anim.Reset()
+			}
+		case explod_shader_tex2_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			e.customShader.tex2.SprNo = [2]int32{g, n}
+			e.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+		case explod_shadertime:
+			shaderTime = exp[0].evalI(c)
 		case explod_redirectid:
 			return true // Already handled. Avoid default
 		default:
@@ -6416,6 +6449,12 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 
 	if e.aimg != nil && e.aimg.time != 0 {
 		e.aimg.setup(crun)
+	}
+	if e.customShader.name != "" {
+		e.customShader.time = shaderTime
+		if e.customShader.time == 0 {
+			e.customShader.clear()
+		}
 	}
 
 	e.setPos(crun)
@@ -7000,7 +7039,7 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 			case explod_shader:
 				s := exp[0].evalS()
 				eachExpl(func(e *Explod) {
-					e.shader = s
+					e.customShader.name = s
 				})
 			case explod_shaderparam:
 				numParams := int(exp[0].evalI(c))
@@ -7009,9 +7048,49 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 					val := exp[2+j*2].evalF(c)
 
 					eachExpl(func(e *Explod) {
-						e.shaderParams[idx] = val
+						e.customShader.params[idx] = val
 					})
 				}
+			case explod_shader_tex1_anim:
+				animNo := exp[0].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.customShader.tex1.AnimNo = animNo
+					e.customShader.tex1.Anim = crun.getSelfAnimSprite(animNo, "", true)
+					if e.customShader.tex1.Anim != nil {
+						e.customShader.tex1.Anim.Reset()
+					}
+				})
+			case explod_shader_tex1_spr:
+				g := exp[0].evalI(c)
+				n := exp[1].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.customShader.tex1.SprNo = [2]int32{g, n}
+					e.customShader.tex1.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+				})
+			case explod_shader_tex2_anim:
+				animNo := exp[0].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.customShader.tex2.AnimNo = animNo
+					e.customShader.tex2.Anim = crun.getSelfAnimSprite(animNo, "", true)
+					if e.customShader.tex2.Anim != nil {
+						e.customShader.tex2.Anim.Reset()
+					}
+				})
+			case explod_shader_tex2_spr:
+				g := exp[0].evalI(c)
+				n := exp[1].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.customShader.tex2.SprNo = [2]int32{g, n}
+					e.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+				})
+			case explod_shadertime:
+				v1 := exp[0].evalI(c)
+				eachExpl(func(e *Explod) {
+					e.customShader.time = v1
+					if e.customShader.time == 0 {
+						e.customShader.clear()
+					}
+				})
 			case explod_interpolation:
 				if c.stWgi().ikemenver[0] != 0 || c.stWgi().ikemenver[1] != 0 {
 					interpolation := exp[0].evalB(c)
@@ -7946,6 +8025,11 @@ const (
 	projectile_projfocallength
 	projectile_shader
 	projectile_shaderparam
+	projectile_shader_tex1_anim
+	projectile_shader_tex1_spr
+	projectile_shader_tex2_anim
+	projectile_shader_tex2_spr
+	projectile_shadertime
 	// projectile_platform
 	// projectile_platformwidth
 	// projectile_platformheight
@@ -7974,6 +8058,7 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 	if p == nil {
 		return false
 	}
+	var shaderTime int32 = -1
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
@@ -8123,14 +8208,41 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 		case projectile_projprojection:
 			p.projection = Projection(exp[0].evalI(c))
 		case projectile_shader:
-			p.shader = exp[0].evalS()
+			p.customShader.name = exp[0].evalS()
 		case projectile_shaderparam:
 			numParams := int(exp[0].evalI(c))
 			for j := 0; j < numParams; j++ {
 				idx := int(exp[1+j*2].evalI(c))
 				val := exp[2+j*2].evalF(c)
-				p.shaderParams[idx] = val
+				p.customShader.params[idx] = val
 			}
+		case projectile_shader_tex1_anim:
+			animNo := exp[0].evalI(c)
+			p.customShader.tex1.AnimNo = animNo
+			p.customShader.tex1.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if p.customShader.tex1.Anim != nil {
+				p.customShader.tex1.Anim.Reset()
+			}
+		case projectile_shader_tex1_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			p.customShader.tex1.SprNo = [2]int32{g, n}
+			p.customShader.tex1.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+
+		case projectile_shader_tex2_anim:
+			animNo := exp[0].evalI(c)
+			p.customShader.tex2.AnimNo = animNo
+			p.customShader.tex2.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if p.customShader.tex2.Anim != nil {
+				p.customShader.tex2.Anim.Reset()
+			}
+		case projectile_shader_tex2_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			p.customShader.tex2.SprNo = [2]int32{g, n}
+			p.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+		case projectile_shadertime:
+			shaderTime = exp[0].evalI(c)
 		// case projectile_platform:
 		// 	p.platform = exp[0].evalB(c)
 		// case projectile_platformwidth:
@@ -8180,7 +8292,12 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 	if p.aimg != nil && p.aimg.time != 0 {
 		p.aimg.setup(crun)
 	}
-
+	if p.customShader.name != "" {
+		p.customShader.time = shaderTime
+		if p.customShader.time == 0 {
+			p.customShader.clear()
+		}
+	}
 	crun.commitProjectile(p, pt, offx, offy, offz, op, rp[0], rp[1], clsnscale)
 	return false
 }
@@ -8574,7 +8691,7 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 			case projectile_shader:
 				v1 := exp[0].evalS()
 				eachProj(func(p *Projectile) {
-					p.shader = v1
+					p.customShader.name = v1
 				})
 			case projectile_shaderparam:
 				numParams := int(exp[0].evalI(c))
@@ -8586,7 +8703,47 @@ func (sc modifyProjectile) Run(c *Char, _ []int32) bool {
 				}
 				eachProj(func(p *Projectile) {
 					for j := 0; j < numParams; j++ {
-						p.shaderParams[indices[j]] = vals[j]
+						p.customShader.params[indices[j]] = vals[j]
+					}
+				})
+			case projectile_shader_tex1_anim:
+				animNo := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.customShader.tex1.AnimNo = animNo
+					p.customShader.tex1.Anim = crun.getSelfAnimSprite(animNo, "", true)
+					if p.customShader.tex1.Anim != nil {
+						p.customShader.tex1.Anim.Reset()
+					}
+				})
+			case projectile_shader_tex1_spr:
+				g := exp[0].evalI(c)
+				n := exp[1].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.customShader.tex1.SprNo = [2]int32{g, n}
+					p.customShader.tex1.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+				})
+			case projectile_shader_tex2_anim:
+				animNo := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.customShader.tex2.AnimNo = animNo
+					p.customShader.tex2.Anim = crun.getSelfAnimSprite(animNo, "", true)
+					if p.customShader.tex2.Anim != nil {
+						p.customShader.tex2.Anim.Reset()
+					}
+				})
+			case projectile_shader_tex2_spr:
+				g := exp[0].evalI(c)
+				n := exp[1].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.customShader.tex2.SprNo = [2]int32{g, n}
+					p.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+				})
+			case projectile_shadertime:
+				v1 := exp[0].evalI(c)
+				eachProj(func(p *Projectile) {
+					p.customShader.time = v1
+					if p.customShader.time == 0 {
+						p.customShader.clear()
 					}
 				})
 			case hitDef_attr:
@@ -12645,6 +12802,10 @@ type shaderSet StateControllerBase
 const (
 	shaderSet_shader byte = iota
 	shaderSet_shaderparam
+	shaderSet_tex1_anim
+	shaderSet_tex1_spr
+	shaderSet_tex2_anim
+	shaderSet_tex2_spr
 	shaderSet_time
 	shaderSet_redirectid
 )
@@ -12662,7 +12823,7 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 		case shaderSet_shader:
 			shader := exp[0].evalS()
 			if shader == "" || sys.isValidCustomShader(shader) {
-				crun.shader = shader
+				crun.customShader.name = shader
 			} else {
 				sys.appendToConsole(crun.warn() + fmt.Sprintf("invalid shader name: %s", shader))
 			}
@@ -12671,15 +12832,39 @@ func (sc shaderSet) Run(c *Char, _ []int32) bool {
 			for j := 0; j < numParams; j++ {
 				idx := int(exp[1+j*2].evalI(c))
 				val := exp[2+j*2].evalF(c)
-				crun.shaderParams[idx] = val
+				crun.customShader.params[idx] = val
 			}
+		case shaderSet_tex1_anim:
+			animNo := exp[0].evalI(c)
+			crun.customShader.tex1.AnimNo = animNo
+			crun.customShader.tex1.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if crun.customShader.tex1.Anim != nil {
+				crun.customShader.tex1.Anim.Reset()
+			}
+		case shaderSet_tex1_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			crun.customShader.tex1.SprNo = [2]int32{g, n}
+			crun.customShader.tex1.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
+
+		case shaderSet_tex2_anim:
+			animNo := exp[0].evalI(c)
+			crun.customShader.tex2.AnimNo = animNo
+			crun.customShader.tex2.Anim = crun.getSelfAnimSprite(animNo, "", true)
+			if crun.customShader.tex2.Anim != nil {
+				crun.customShader.tex2.Anim.Reset()
+			}
+		case shaderSet_tex2_spr:
+			g := exp[0].evalI(c)
+			n := exp[1].evalI(c)
+			crun.customShader.tex2.SprNo = [2]int32{g, n}
+			crun.customShader.tex2.Spr = crun.gi().sff.GetSprite(uint16(g), uint16(n))
 		}
 		return true
 	})
-	crun.shaderTime = st
-	if crun.shaderTime == 0 {
-		crun.shader = ""
-		crun.shaderParams = [16]float32{}
+	crun.customShader.time = st
+	if crun.customShader.time == 0 {
+		crun.customShader.clear()
 	}
 	return false
 }
