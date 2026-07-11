@@ -290,6 +290,27 @@ func (ss *StateState) Clone(a *arena.Arena) (result StateState) {
 	return result
 }
 
+func cloneRemapPreset(src RemapPreset, gsp *GameStatePool) RemapPreset {
+	if src == nil {
+		return nil
+	}
+	result := *gsp.Get(src).(*RemapPreset)
+	maps.Clear(result)
+	for group, table := range src {
+		if table == nil {
+			result[group] = nil
+			continue
+		}
+		tableCopy := *gsp.Get(table).(*RemapTable)
+		maps.Clear(tableCopy)
+		for number, remap := range table {
+			tableCopy[number] = remap
+		}
+		result[group] = tableCopy
+	}
+	return result
+}
+
 func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	result = Char{}
 	result = *c
@@ -299,6 +320,16 @@ func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	}
 	if c.animBackup != nil {
 		result.animBackup = c.animBackup.Clone(a, gsp)
+	}
+
+	// RemapSprite mutates a nested map, and SpriteVar exposes its result to character logic.
+	// Keep each saved state isolated and make the cloned animations point at the cloned preset.
+	result.remapSpr = cloneRemapPreset(c.remapSpr, gsp)
+	if result.anim != nil {
+		result.anim.remap = result.remapSpr
+	}
+	if result.animBackup != nil {
+		result.animBackup.remap = result.remapSpr
 	}
 
 	// Since curFrame is desynced from anim's state, we must save it as well

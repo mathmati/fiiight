@@ -525,6 +525,8 @@ type GameStatePool struct {
 	int32CharPointerMapPool sync.Pool
 	int32int32MapPool       sync.Pool
 	int32float32MapPool     sync.Pool
+	remapPresetPool         sync.Pool
+	remapTablePool          sync.Pool
 
 	animFrameSlicePool sync.Pool
 	poolObjs           map[int][]interface{}
@@ -582,6 +584,18 @@ func NewGameStatePool() GameStatePool {
 				return &if3
 			},
 		},
+		remapPresetPool: sync.Pool{
+			New: func() interface{} {
+				rp := make(RemapPreset)
+				return &rp
+			},
+		},
+		remapTablePool: sync.Pool{
+			New: func() interface{} {
+				rt := make(RemapTable)
+				return &rt
+			},
+		},
 		poolObjs: make(map[int][]interface{}),
 	}
 }
@@ -621,6 +635,12 @@ func (gsp *GameStatePool) Get(item interface{}) (result interface{}) {
 	case (map[int32]float32):
 		objs = append(objs, gsp.int32float32MapPool.Get())
 		return objs[len(objs)-1]
+	case (RemapPreset):
+		objs = append(objs, gsp.remapPresetPool.Get())
+		return objs[len(objs)-1]
+	case (RemapTable):
+		objs = append(objs, gsp.remapTablePool.Get())
+		return objs[len(objs)-1]
 	default:
 		return nil
 	}
@@ -642,6 +662,10 @@ func (gsp *GameStatePool) Put(item interface{}) {
 		gsp.int32int32MapPool.Put(item)
 	case (*map[int32]float32):
 		gsp.int32float32MapPool.Put(item)
+	case (*RemapPreset):
+		gsp.remapPresetPool.Put(item)
+	case (*RemapTable):
+		gsp.remapTablePool.Put(item)
 	default:
 	}
 }
