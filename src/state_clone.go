@@ -476,6 +476,11 @@ func (cl *CommandList) Clone(a *arena.Arena) (result CommandList) {
 
 	result.Buffer = arena.New[InputBuffer](a)
 	*result.Buffer = *cl.Buffer
+	if cl.Buffer.InputReader != nil {
+		// Preserve SOCD direction history in command snapshots.
+		result.Buffer.InputReader = arena.New[InputReader](a)
+		*result.Buffer.InputReader = *cl.Buffer.InputReader
+	}
 
 	result.Commands = arena.MakeSlice[[]Command](a, len(cl.Commands), len(cl.Commands))
 	for i := 0; i < len(cl.Commands); i++ {
