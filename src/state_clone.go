@@ -396,6 +396,12 @@ func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	result.clipboardText = arena.MakeSlice[string](a, len(c.clipboardText), len(c.clipboardText))
 	copy(result.clipboardText, c.clipboardText)
 
+	// Dialogue controllers append to this queue, and motif dialogue can hold round/match progression.
+	if c.dialogue != nil {
+		result.dialogue = arena.MakeSlice[string](a, len(c.dialogue), len(c.dialogue))
+		copy(result.dialogue, c.dialogue)
+	}
+
 	if c.keyctrl[0] {
 		result.cmd = arena.MakeSlice[CommandList](a, len(c.cmd), len(c.cmd))
 		for i, c := range c.cmd {
