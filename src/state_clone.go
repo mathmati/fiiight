@@ -194,8 +194,18 @@ func (ai *AfterImage) Clone(a *arena.Arena, gsp *GameStatePool) *AfterImage {
 		return nil
 	}
 
-	result := &AfterImage{}
+	result := arena.New[AfterImage](a)
 	*result = *ai
+
+	// Allocate the slice backing arrays before replacing nested pointers.
+	if ai.imgs != nil {
+		result.imgs = arena.MakeSlice[SpriteData](a, len(ai.imgs), len(ai.imgs))
+		copy(result.imgs, ai.imgs)
+	}
+	if ai.palfx != nil {
+		result.palfx = arena.MakeSlice[*PalFX](a, len(ai.palfx), len(ai.palfx))
+		copy(result.palfx, ai.palfx)
+	}
 
 	// Deep copy Animations
 	for i := range ai.imgs {
