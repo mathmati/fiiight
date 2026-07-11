@@ -587,11 +587,17 @@ func NewGameStatePool() GameStatePool {
 }
 
 func (gsp *GameStatePool) Get(item interface{}) (result interface{}) {
-	objs, ok := gsp.poolObjs[gsp.curStateID]
+	stateID := gsp.curStateID
+	objs, ok := gsp.poolObjs[stateID]
 	if !ok {
-		gsp.poolObjs[gsp.curStateID] = make([]interface{}, 0, 50)
-		objs = gsp.poolObjs[gsp.curStateID]
+		gsp.poolObjs[stateID] = make([]interface{}, 0, 50)
+		objs = gsp.poolObjs[stateID]
 	}
+
+	// A map stores a copy of a slice header, so appending only to the local variable would leave the map entry at its old length.
+	defer func() {
+		gsp.poolObjs[stateID] = objs
+	}()
 
 	switch item.(type) {
 	case (map[string]float32):
