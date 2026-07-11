@@ -213,6 +213,6 @@ func (s *StatsLog) nextRound() {
 	// Record the round into the current stats match.
 	// We fill timers later in finalizeMatch.
 	roundIdx := sys.round
-	roundScore := [2]int32{int32(sys.fightScreen.scores[0].scorePoints), int32(sys.fightScreen.scores[1].scorePoints)}
+	roundScore := [2]int32{int32(sys.scorePoints[0]), int32(sys.scorePoints[1])}
 	s.addRound(roundIdx, 0, roundScore, fighters)
 }

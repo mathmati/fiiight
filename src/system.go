@@ -116,6 +116,8 @@ type SystemStateVars struct {
 	teamLeader              [2]int
 	postMatchFlg            bool
 	scoreStart              [2]float32
+	scorePoints             [2]float32
+	comboCount              [2]int32
 	decisiveRound           [2]bool
 	gameMode                string
 
@@ -2314,6 +2316,8 @@ func (s *System) resetRound() {
 	s.noCharSoundFlg = false
 
 	s.resetGblEffect()
+	s.scorePoints = [2]float32{}
+	s.comboCount = [2]int32{}
 	s.fightScreen.reset()
 	s.motif.reset()
 	s.saveStateFlag = false
@@ -4055,7 +4059,7 @@ func (s *System) runNextRound() bool {
 		}
 		s.clearAllSound()
 		s.statsLog.nextRound()
-		s.scoreRounds = append(s.scoreRounds, [2]float32{s.fightScreen.scores[0].scorePoints, s.fightScreen.scores[1].scorePoints})
+		s.scoreRounds = append(s.scoreRounds, s.scorePoints)
 
 		if !s.matchOver() &&
 			!(s.tmode[0] == TM_Turns && s.effectiveLoss[0]) &&

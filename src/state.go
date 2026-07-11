@@ -425,7 +425,8 @@ func (gs *GameState) Checksum() int {
 // Returns some state variables as a string for debugging
 func (gs *GameState) String() (str string) {
 	// Add match data
-	str = fmt.Sprintf("MatchTime %d CurRoundTime: %d\n", gs.matchTime, gs.curRoundTime)
+	str = fmt.Sprintf("MatchTime %d CurRoundTime: %d ScorePoints: %v ComboCount: %v\n",
+		gs.matchTime, gs.curRoundTime, gs.scorePoints, gs.comboCount)
 
 	// Add bytecode data
 	// TODO: Every log seems to have these empty. May not be needed

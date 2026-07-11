@@ -5249,7 +5249,7 @@ func (c *Char) comboCount() int32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.fightScreen.combos[c.teamside].trueHits
+	return sys.comboCount[c.teamside]
 }
 
 func (c *Char) command(pn, i int) bool {
@@ -8767,14 +8767,14 @@ func (c *Char) score() float32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.fightScreen.scores[c.teamside].scorePoints
+	return sys.scorePoints[c.teamside]
 }
 
 func (c *Char) scoreAdd(val float32) {
 	if val == 0 || c.teamside == -1 || c.asf(ASF_noscore) {
 		return
 	}
-	sys.fightScreen.scores[c.teamside].scorePoints += val
+	sys.scorePoints[c.teamside] += val
 }
 
 func (c *Char) scoreTotal() float32 {

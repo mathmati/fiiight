@@ -109,6 +109,16 @@ func (a *Animation) Clone(ar *arena.Arena, gsp *GameStatePool) (result *Animatio
 	return
 }
 
+// CloneState copies an animation's mutable playback state while sharing its immutable frame/interpolation data.
+func (anim *Animation) CloneState(a *arena.Arena) *Animation {
+	if anim == nil {
+		return nil
+	}
+	result := arena.New[Animation](a)
+	*result = *anim
+	return result
+}
+
 func (af *AnimFrame) Clone(a *arena.Arena) (result *AnimFrame) {
 	result = arena.New[AnimFrame](a)
 	*result = *af
@@ -478,44 +488,108 @@ func (cl *CommandList) Clone(a *arena.Arena) (result CommandList) {
 	return
 }
 
+type fightScreenAnimationStateCloner struct {
+	a *arena.Arena
+	// Current FightScreenRound has ~40 logic-bearing AnimTextSnd values.
+	src   [64]*Animation
+	dst   [64]*Animation
+	count int
+}
+
+func (cl *fightScreenAnimationStateCloner) clone(anim *Animation) *Animation {
+	if anim == nil {
+		return nil
+	}
+
+	for i := 0; i < cl.count; i++ {
+		if cl.src[i] == anim {
+			return cl.dst[i]
+		}
+	}
+	result := anim.CloneState(cl.a)
+	if cl.count >= len(cl.src) {
+		return result
+	}
+	cl.src[cl.count] = anim
+	cl.dst[cl.count] = result
+	cl.count++
+	return result
+}
+
+func (cl *fightScreenAnimationStateCloner) cloneAnimTextSnd(src AnimTextSnd) (result AnimTextSnd) {
+	result = src
+	result.animLayout.anim = cl.clone(src.animLayout.anim)
+	return
+}
+
+func (ro *FightScreenRound) Clone(a *arena.Arena) *FightScreenRound {
+	if ro == nil {
+		return nil
+	}
+
+	result := arena.New[FightScreenRound](a)
+	*result = *ro
+	result.fadeIn = ro.fadeIn.Clone(a)
+	result.fadeOut = ro.fadeOut.Clone(a)
+
+	// AnimTextSnd.End reads mutable Animation playback fields to advance the round/fight/KO/win phases.
+	// Purely visual top/background animations are intentionally not rollbacked.
+	cl := fightScreenAnimationStateCloner{a: a}
+	for i := range ro.round {
+		result.round[i] = cl.cloneAnimTextSnd(ro.round[i])
+	}
+	result.round_default = cl.cloneAnimTextSnd(ro.round_default)
+	result.round_single = cl.cloneAnimTextSnd(ro.round_single)
+	result.round_final = cl.cloneAnimTextSnd(ro.round_final)
+	result.fight = cl.cloneAnimTextSnd(ro.fight)
+	result.ko = cl.cloneAnimTextSnd(ro.ko)
+	result.dko = cl.cloneAnimTextSnd(ro.dko)
+	result.to = cl.cloneAnimTextSnd(ro.to)
+	result.drawgame = cl.cloneAnimTextSnd(ro.drawgame)
+	for i := range ro.win {
+		for side := range ro.win[i].text {
+			result.win[i].text[side] = cl.cloneAnimTextSnd(ro.win[i].text[side])
+			result.aiLose[i].text[side] = cl.cloneAnimTextSnd(ro.aiLose[i].text[side])
+			result.aiWin[i].text[side] = cl.cloneAnimTextSnd(ro.aiWin[i].text[side])
+		}
+	}
+
+	return result
+}
+
 func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	result = *fs
 
-	// Round
-	if fs.round != nil {
-		result.round = &FightScreenRound{} // Shallow copy
-		*result.round = *fs.round
-		// Fade state
-		result.round.fadeIn = fs.round.fadeIn.Clone(a)
-		result.round.fadeOut = fs.round.fadeOut.Clone(a)
-	}
+	// FightScreenRound timers/phases, timerActive, shutter, fades and selected announcement playback
+	// state affect when control starts, when the round timer runs and when a round/match can finish.
+	result.round = fs.round.Clone(a)
 
-	// WinCount
-	for i := 0; i < len(fs.winCounts); i++ {
-		if fs.winCounts[i] != nil {
-			result.winCounts[i] = arena.New[FightScreenWinCount](a)
-			*result.winCounts[i] = *fs.winCounts[i]
-		}
-	}
-
-	// Combo
-	for i := 0; i < len(fs.combos); i++ {
-		if fs.combos[i] != nil {
-			result.combos[i] = arena.New[FightScreenCombo](a)
-			*result.combos[i] = *fs.combos[i]
-		}
-	}
-
-	// Score
-	for i := 0; i < len(fs.scores); i++ {
-		if fs.scores[i] != nil {
-			result.scores[i] = arena.New[FightScreenScore](a)
-			*result.scores[i] = *fs.scores[i]
-		}
-	}
-
-	// We probably don't need a deep copy of these
+	// Presentation-only state is intentionally shared across rollback snapshots.
 	/*
+		// WinCount
+		for i := 0; i < len(fs.winCounts); i++ {
+			if fs.winCounts[i] != nil {
+				result.winCounts[i] = arena.New[FightScreenWinCount](a)
+				*result.winCounts[i] = *fs.winCounts[i]
+			}
+		}
+
+		// Combo widget (ComboCount itself is in SystemStateVars)
+		for i := 0; i < len(fs.combos); i++ {
+			if fs.combos[i] != nil {
+				result.combos[i] = arena.New[FightScreenCombo](a)
+				*result.combos[i] = *fs.combos[i]
+			}
+		}
+
+		// Score widget (scorePoints itself is in SystemStateVars)
+		for i := 0; i < len(fs.scores); i++ {
+			if fs.scores[i] != nil {
+				result.scores[i] = arena.New[FightScreenScore](a)
+				*result.scores[i] = *fs.scores[i]
+			}
+		}
+
 		//UIT
 		if fs.ti != nil {
 			result.ti = arena.New[FightScreenTime](a)
@@ -599,24 +673,24 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 				*result.names[i][j] = *fs.names[i][j]
 			}
 		}
-	*/
 
-	// Action
-	for i := range result.actions {
-		if fs.actions[i] != nil {
-			result.actions[i] = arena.New[FightScreenAction](a)
+		// Action
+		for i := range result.actions {
+			if fs.actions[i] != nil {
+				result.actions[i] = arena.New[FightScreenAction](a)
+				*result.actions[i] = *fs.actions[i]
 
-			*result.actions[i] = *fs.actions[i]
-
-			if fs.actions[i].messages != nil {
-				result.actions[i].messages = arena.MakeSlice[*FSMsg](a, len(fs.actions[i].messages), len(fs.actions[i].messages))
-				for j := 0; j < len(fs.actions[i].messages); j++ {
-					result.actions[i].messages[j] = arena.New[FSMsg](a)
-					*result.actions[i].messages[j] = *fs.actions[i].messages[j]
+				if fs.actions[i].messages != nil {
+					result.actions[i].messages = arena.MakeSlice[*FSMsg](a,
+						len(fs.actions[i].messages), len(fs.actions[i].messages))
+					for j := 0; j < len(fs.actions[i].messages); j++ {
+						result.actions[i].messages[j] = arena.New[FSMsg](a)
+						*result.actions[i].messages[j] = *fs.actions[i].messages[j]
+					}
 				}
 			}
 		}
-	}
+	*/
 
 	return
 }
