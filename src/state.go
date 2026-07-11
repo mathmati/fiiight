@@ -48,7 +48,9 @@ type GameState struct {
 	//debugDisplay            bool
 
 	timerRounds []int32
+	stageRef    *Stage
 	stage       *Stage
+	stageState  stageRollbackState
 	scoreRounds [][2]float32
 	sel         Select
 	//stringPool      [MaxPlayerNo]StringPool // Only mutated while compiling
@@ -103,9 +105,15 @@ func (gs *GameState) LoadState(stateID int) {
 	sys.bcVar = arena.MakeSlice[BytecodeValue](a, len(gs.bcVar), len(gs.bcVar))
 	copy(sys.bcVar, gs.bcVar)
 
-	// Only try loading the stage if it was saved
+	// Load the full stage only when character code can mutate its definition.
+	// Otherwise restore the small gameplay-visible runtime subset.
 	if gs.stage != nil {
 		sys.stage = gs.stage.Clone(a, gsp)
+	} else {
+		// A speculative round transition may have switched sys.stage to a different roundXdef entry.
+		// Restore the saved stage identity before applying its lightweight runtime snapshot.
+		sys.stage = gs.stageRef
+		gs.stageState.Load(sys.stage)
 	}
 
 	sys.workBe = arena.MakeSlice[BytecodeExp](a, len(gs.workBe), len(gs.workBe))
@@ -209,10 +217,17 @@ func (gs *GameState) SaveState(stateID int) {
 	gs.bcVar = arena.MakeSlice[BytecodeValue](a, len(sys.bcVar), len(sys.bcVar))
 	copy(gs.bcVar, sys.bcVar)
 
-	// We only save the stage's state if any existing characters can modify it
+	// A pooled GameState may still contain stage data from an older save.
+	gs.stageRef = sys.stage
+	gs.stage = nil
+	gs.stageState = stageRollbackState{}
+
+	// Character-controlled stage mutations need the full clone.
 	if sys.rollback.session != nil || sys.cfg.Netplay.Rollback.DesyncTestFrames > 0 {
 		if gs.stageCanMutate() || sys.cfg.Netplay.Rollback.SaveStageData {
 			gs.stage = sys.stage.Clone(a, gsp)
+		} else {
+			gs.stageState = sys.stage.CloneRollbackState(a)
 		}
 	} else {
 		// Save anyway if using debug keys

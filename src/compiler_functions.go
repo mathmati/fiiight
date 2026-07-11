@@ -5311,6 +5311,7 @@ func (c *CharCompiler) modifyBGCtrl(is IniSection, sc *StateControllerBase) (Sta
 		}
 		return nil
 	})
+	sys.cgi[c.playerNo].canMutateStage = true
 	return *ret, err
 }
 
@@ -5330,6 +5331,7 @@ func (c *CharCompiler) modifyBGCtrl3d(is IniSection, sc *StateControllerBase) (S
 		}
 		return nil
 	})
+	sys.cgi[c.playerNo].canMutateStage = true
 	return *ret, err
 }
 

@@ -695,6 +695,61 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	return
 }
 
+// Background fields that are either exposed through StageBGVar or affect their future values.
+type stageRollbackBgState struct {
+	bga      bgAction
+	actionno int32
+	enabled  bool
+}
+
+// Subset that is authoritative even when character code cannot modify the stage definition.
+type stageRollbackState struct {
+	stageTime int32
+	bga       bgAction
+	bg        []stageRollbackBgState
+}
+
+func (s *Stage) CloneRollbackState(a *arena.Arena) (result stageRollbackState) {
+	if s == nil {
+		return
+	}
+
+	result.stageTime = s.stageTime
+	result.bga = s.bga
+	result.bg = arena.MakeSlice[stageRollbackBgState](a, len(s.bg), len(s.bg))
+	for i, bg := range s.bg {
+		if bg == nil {
+			continue
+		}
+		result.bg[i] = stageRollbackBgState{
+			bga:      bg.bga,
+			actionno: bg.actionno,
+			enabled:  bg.enabled,
+		}
+	}
+	return
+}
+
+func (ss *stageRollbackState) Load(s *Stage) {
+	if ss == nil || s == nil {
+		return
+	}
+
+	s.stageTime = ss.stageTime
+	s.bga = ss.bga
+	for i := range ss.bg {
+		if i >= len(s.bg) {
+			break
+		}
+		if s.bg[i] == nil {
+			continue
+		}
+		s.bg[i].bga = ss.bg[i].bga
+		s.bg[i].actionno = ss.bg[i].actionno
+		s.bg[i].enabled = ss.bg[i].enabled
+	}
+}
+
 func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 	result := &Stage{}
 	*result = *s
