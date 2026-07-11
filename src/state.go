@@ -51,6 +51,7 @@ type GameState struct {
 	stageRef    *Stage
 	stage       *Stage
 	stageState  stageRollbackState
+	statsState  statsRollbackState
 	scoreRounds [][2]float32
 	sel         Select
 	//stringPool      [MaxPlayerNo]StringPool // Only mutated while compiling
@@ -151,6 +152,7 @@ func (gs *GameState) LoadState(stateID int) {
 
 	sys.scoreRounds = arena.MakeSlice[[2]float32](a, len(gs.scoreRounds), len(gs.scoreRounds))
 	copy(sys.scoreRounds, gs.scoreRounds)
+	gs.statsState.load(&sys.statsLog)
 
 	//sys.sel = gs.sel.Clone(a)
 	// for i := 0; i < len(sys.stringPool); i++ {
@@ -263,6 +265,7 @@ func (gs *GameState) SaveState(stateID int) {
 	copy(gs.timerRounds, sys.timerRounds)
 	gs.scoreRounds = arena.MakeSlice[[2]float32](a, len(sys.scoreRounds), len(sys.scoreRounds))
 	copy(gs.scoreRounds, sys.scoreRounds)
+	gs.statsState = sys.statsLog.saveRollbackState()
 
 	//gs.sel = sys.sel.Clone(a)
 	// for i := 0; i < len(sys.stringPool); i++ {

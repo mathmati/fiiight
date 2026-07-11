@@ -68,6 +68,36 @@ type StatsLog struct {
 	Matches []StatsMatch `json:"matches"`
 }
 
+// statsRollbackState tracks the append-only part of StatsLog that can change inside rollback simulation.
+type statsRollbackState struct {
+	matches int
+	rounds  int
+}
+
+func (s *StatsLog) saveRollbackState() (result statsRollbackState) {
+	result.matches = len(s.Matches)
+	if result.matches > 0 {
+		result.rounds = len(s.Matches[result.matches-1].Rounds)
+	}
+	return
+}
+
+func (state statsRollbackState) load(s *StatsLog) {
+	if s == nil {
+		return
+	}
+	if len(s.Matches) > state.matches {
+		s.Matches = s.Matches[:state.matches]
+	}
+	if state.matches == 0 || len(s.Matches) < state.matches {
+		return
+	}
+	rounds := &s.Matches[state.matches-1].Rounds
+	if len(*rounds) > state.rounds {
+		*rounds = (*rounds)[:state.rounds]
+	}
+}
+
 // resets all gathered stats
 func (s *StatsLog) reset() {
 	s.Matches = nil
