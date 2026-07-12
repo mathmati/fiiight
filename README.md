@@ -153,3 +153,7 @@ must be non-commercial. If you host your own game, replace or audit the
 bundled content and respect the licenses of every character, stage, and
 screenpack you ship — `content/MANIFEST.md` lists exactly what this repo
 bundles and under which terms.
+
+---
+
+Developed with [Claude Code](https://claude.com/claude-code).
