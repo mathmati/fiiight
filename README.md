@@ -15,7 +15,10 @@ and the browser backend is written so the diff can be upstreamed — see
 [Upstreaming intent](#upstreaming-intent).
 
 The bundled demo boots to the title screen, character select, versus and
-training with the default Ikemen screenpack and Kung Fu Man 720p.
+training with the default Ikemen screenpack and a seven-slot roster of
+MUGEN-sample-universe characters (Kung Fu Man in three variants, Suave Dude,
+and stupa's Training dummies — see `content/MANIFEST.md` for provenance and
+licenses).
 
 ## Quick start
 
@@ -144,7 +147,8 @@ files** (`system_js.go`, `render_webgl2.go`, `font_webgl2.go`, `gl_js.go`,
   Commons **NonCommercial** licenses.
 
 **Note the NON-COMMERCIAL restriction:** the bundled demo content includes
-CC-NC material (kfm720, Elecbyte fonts), so a deployment of this demo bundle
+CC-NC material (the Kung Fu Man family of characters, Elecbyte fonts), so a
+deployment of this demo bundle
 must be non-commercial. If you host your own game, replace or audit the
 bundled content and respect the licenses of every character, stage, and
 screenpack you ship — `content/MANIFEST.md` lists exactly what this repo
