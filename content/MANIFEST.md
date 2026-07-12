@@ -33,8 +33,8 @@ identical to what the release zips ship.
 - `data/gofx/` — engine common FX pack (`defaultConfig.ini` `Common.Fx =
   data/gofx/gofx.def`; required by `dizzy.zss`/`guardbreak.zss`/`tag.zss`).
 - `data/select.def` — roster edited for the browser bundle: seven characters
-  (`kfm720`, `kfm`, `kfm_zss`, `suavedude`, `Training` plus its
-  `TrainingLarge`/`TrainingSmall` variant defs, all mapped to
+  (`kfm720`, `kfm`, `kfm_zss`, `suavedude`, `Training` (roster-listed with `exclude=1` — kept out of
+  demo/random pools; Large/Small variants removed: mismatched scaled hitboxes), all mapped to
   `stages/stage0-720.def`) plus `randomselect`; `[ExtraStages]` trimmed to
   the one bundled stage. Everything else is upstream verbatim. See
   "Characters" below for per-character provenance.
@@ -114,7 +114,7 @@ Kung Fu Man cast) or training dummies derived from it.
 - WinMUGEN-era character (`MugenVersion = 04,14,2002`); boot-tested in the
   wasm build (char select + versus load OK).
 
-### chars/Training/ — Training dummy + Large/Small variants (stupa) — 4.1 MB
+### chars/Training/ — Training dummy (stupa) — Large/Small variants removed post-review (bad scaled hitboxes; overlays looked broken in demo mode)
 
 - Source: https://github.com/acdgames/Ikemen-Plus @ `b1f9d6c`,
   `chars/Training/` — the official Ikemen Plus engine repository (Suehiro's
