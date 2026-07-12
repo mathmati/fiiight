@@ -4,8 +4,8 @@
 #   2. copy wasm_exec.js from GOROOT
 #   3. package web/content.zip from the engine content dirs (data/ external/ font/)
 #
-# The engine's js/wasm port is not finished yet, so step 1 is expected to fail
-# today; pass --shell-only to skip it and still produce steps 2-3.
+# Pass --shell-only to skip the engine compile and only refresh steps 2-3
+# (useful after content-only changes).
 #
 # Serve the result with any static server, e.g.:
 #   node web/dev-server.mjs 8080         # correct .wasm MIME

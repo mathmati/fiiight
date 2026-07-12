@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ikemen GO</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Crect%20width='16'%20height='16'%20rx='3'%20fill='%23000'/%3E%3Cpath%20d='M4%203h3v10H4zM9%203h3v10H9z'%20fill='%23e33'/%3E%3C/svg%3E">
 <style>
 	html, body {
 		margin: 0;
@@ -63,6 +64,18 @@
 		transition: width 0.1s linear;
 	}
 	#status { color: #999; }
+	#credit {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 4px;
+		text-align: center;
+		color: #555;
+		font: 11px/1.4 system-ui, sans-serif;
+		z-index: 5;
+		pointer-events: none;
+	}
+	#credit a { color: #777; pointer-events: auto; }
 	#error {
 		display: none;
 		max-width: min(90vw, 700px);
@@ -88,6 +101,7 @@
 	<div id="status">Starting&hellip;</div>
 	<pre id="error"></pre>
 </div>
+<div id="credit"><a href="https://github.com/ikemen-engine/Ikemen-GO">Ikemen GO</a> &mdash; engine MIT, assets CC-BY 3.0 Ikemen team &middot; <a href="https://github.com/mathmati/fiiight">browser port</a></div>
 <script src="wasm_exec.js"></script>
 <script src="fs-shim.js"></script>
 <script src="main.js"></script>
