@@ -879,7 +879,10 @@ func (s *System) renderFrame() {
 func (s *System) update() bool {
 	s.frameCounter++
 
-	if s.matchTime == 0 {
+	// preMatchTime normally follows the local UI clock until gameplay begins.
+	// Preserve the synchronized prematch time while rollback waits for its first frame.
+	rollbackMatchStarting := s.rollback.session != nil && s.rollback.netConnection != nil
+	if s.matchTime == 0 && !rollbackMatchStarting && s.replayFile == nil {
 		s.preMatchTime = s.frameCounter
 	}
 

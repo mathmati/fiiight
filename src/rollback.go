@@ -134,6 +134,7 @@ func (rs *RollbackSystem) postMatchSetup() {
 	// sys.esc = true
 
 	sys.netConnection = rs.netConnection
+	rs.netConnection = nil
 	rs.session.backend.Close()
 
 	// Prep for the next match.
