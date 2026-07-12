@@ -59,6 +59,12 @@ window.__ikemenBootLog = [];
 		else setStatus(msg);
 	}
 
+	// Autoplay policy: resume WebAudio on the first user gesture. The Go side
+	// (audio_js.go) registers window.__ikemenResumeAudio once audio is up.
+	const resumeAudio = () => { if (window.__ikemenResumeAudio) window.__ikemenResumeAudio(); };
+	window.addEventListener("pointerdown", resumeAudio);
+	window.addEventListener("keydown", resumeAudio);
+
 	boot().catch((err) => {
 		const detail = (err && err.stack) ? err.stack : String(err);
 		window.__ikemenBootLog.push("BOOT-ERROR: " + detail);
