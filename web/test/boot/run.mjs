@@ -60,6 +60,8 @@ async function startServer() {
 // ---- Chromium + minimal CDP client -------------------------------------------
 async function startChrome() {
 	const proc = spawn(chrome, [
+		// Chromium ignores http(s)_proxy env vars; needed when BASE_URL is remote.
+		...(process.env.CHROME_PROXY ? [`--proxy-server=${process.env.CHROME_PROXY}`] : []),
 		"--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
 		"--use-angle=swiftshader", "--enable-unsafe-swiftshader",
 		"--autoplay-policy=no-user-gesture-required",
@@ -151,7 +153,8 @@ async function screenshot(cdp, session, name) {
 
 // ---- main ---------------------------------------------------------------------
 try {
-	const base = await startServer();
+	// BASE_URL overrides the local dev-server (e.g. to boot-test the live site).
+	const base = process.env.BASE_URL || (await startServer());
 	const wsUrl = await startChrome();
 	const cdp = await CDP.connect(wsUrl);
 	const url = base + "/index.html";
