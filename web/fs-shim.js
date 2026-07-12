@@ -533,7 +533,10 @@
 
 	// Minimal zip reader driven by the central directory (sizes there are
 	// valid even when entries use streaming data descriptors).
-	async function extractZip(bytes, mountPoint) {
+	// opts (optional): { mapName(name) -> newName|null to skip,
+	//                    onProgress(entriesDone, entriesTotal) }
+	async function extractZip(bytes, mountPoint, opts) {
+		opts = opts || {};
 		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 		// Find End Of Central Directory record (sig 0x06054b50), scanning
 		// backwards past a possible zip comment (max 64k).
@@ -555,9 +558,12 @@
 			const extraLen = view.getUint16(off + 30, true);
 			const commentLen = view.getUint16(off + 32, true);
 			const localOff = view.getUint32(off + 42, true);
-			const name = dec.decode(bytes.subarray(off + 46, off + 46 + nameLen));
+			let name = dec.decode(bytes.subarray(off + 46, off + 46 + nameLen));
 			off += 46 + nameLen + extraLen + commentLen;
+			if (opts.onProgress) opts.onProgress(i + 1, count);
 
+			if (opts.mapName) name = opts.mapName(name);
+			if (!name) continue; // skipped by mapName
 			if (name.includes("..")) continue; // hostile path, skip
 			const target = mountPoint + "/" + name;
 			if (name.endsWith("/")) {
@@ -589,6 +595,18 @@
 		return { files, restored, bytes: bytes.length };
 	}
 
+	// Mount from an in-memory zip (ArrayBuffer or Uint8Array), e.g. a
+	// user-supplied file. opts may be a progress callback
+	// (entriesDone, entriesTotal) or the extractZip options object.
+	async function mountZipBuffer(buf, mountPoint, opts) {
+		if (typeof opts === "function") opts = { onProgress: opts };
+		mountPoint = absPath(mountPoint);
+		mkdirAt(mountPoint);
+		const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+		const files = await extractZip(bytes, mountPoint, opts);
+		return { files, bytes: bytes.length };
+	}
+
 	// Overwrite unconditionally: wasm_exec.js may have installed its ENOSYS
 	// stubs already (script order is not guaranteed), and it resolves
 	// globalThis.fs lazily at call time.
@@ -596,4 +614,5 @@
 	globalThis.process = processShim;
 	globalThis.path = pathShim;
 	globalThis.mountZip = mountZip;
+	globalThis.mountZipBuffer = mountZipBuffer;
 })();
