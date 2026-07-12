@@ -65,7 +65,7 @@ func LoadFntTtf(f *Fnt, fontfile string, filename string, height int32) {
 
 func selectRenderer(cfgVal string) (Renderer, FontRenderer) {
 	// The browser build always renders through WebGL2.
-	return &RendererStub{}, &FontRendererStub{}
+	return &Renderer_WebGL2{}, &FontRenderer_WebGL2{}
 }
 
 func Logcat(s string) {
