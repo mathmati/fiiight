@@ -196,9 +196,7 @@ kfm720, stages/stage0-720.def
 kfm, stages/stage0-720.def
 kfm_zss, stages/stage0-720.def
 suavedude, stages/stage0-720.def
-Training, stages/stage0-720.def
-Training/TrainingLarge.def, stages/stage0-720.def
-Training/TrainingSmall.def, stages/stage0-720.def
+Training, stages/stage0-720.def, exclude=1
 randomselect
 
 ;-------------------------------------------------------------------------------
