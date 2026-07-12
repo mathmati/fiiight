@@ -2,3 +2,5 @@ web/ikemen.wasm
 web/content.zip
 web/test/fstest.wasm
 web/test/content.zip
+web/test/boot/shots/
+web/test/boot/lastlog.txt
