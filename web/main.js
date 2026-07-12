@@ -34,6 +34,13 @@ window.__ikemenBootLog = [];
 			}
 		});
 		setProgress(1);
+
+		// User-supplied game overlay (loader.js): mounts a zip stored in
+		// IndexedDB over /ikemen. Catches its own errors; never blocks boot.
+		if (window.__ikemenLoader) {
+			await window.__ikemenLoader.applyStoredOverlay(setStatus, setProgress);
+		}
+
 		globalThis.process.chdir("/ikemen");
 
 		setStatus("Loading engine…");
