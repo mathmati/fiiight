@@ -42,19 +42,14 @@
 > (context: issue #1606). Feedback very welcome, especially perf reports
 > from different GPUs/browsers.
 
-## Draft: license request to KGenjuro (github.com/donswelt)
+## Roster note (append to the main post above; replaces the separate license-request issue)
 
-Post as an issue on donswelt/Takezo-Kibagami-Mugen (and reference Genpaku-Mugen):
-
-> Hi! I run a browser port of Ikemen GO (https://mathmati.github.io/fiiight/ —
-> the engine compiled to WebAssembly, playable instantly in Chrome) and I'd
-> love to include Takezo and Genpaku in the default roster: fully original,
-> hand-drawn characters of this quality are rare, and they'd be seen by
-> everyone who tries the port.
->
-> Since bundling means redistributing the files, could you add a license to
-> these two repos (or just reply here with terms you're happy with)? Something
-> like CC-BY 4.0 ("free to use/redistribute with credit") would be perfect —
-> you'd be credited on the site and in the bundle manifest either way.
->
-> No pressure if you'd rather not — thanks for making these!
+> Roster note: the bundle includes Takezo and Genpaku by @donswelt
+> (KGenjuro) — fully original, hand-drawn, and their small animated intro
+> stories helped test a few things in the port (storyboards, MIDI music,
+> video). I've included them with a note and accreditation in the bundle
+> manifest — please let me know if you're happy with them staying in, or
+> would rather I removed them. I wanted some demo characters beyond the
+> Kung Fu Man cast, but it's hard finding IP-safe things for a clean
+> baseline repo — if others have open characters from original IP that
+> could be included, let me know.
