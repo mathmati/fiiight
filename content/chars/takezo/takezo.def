@@ -1,0 +1,34 @@
+[Info]
+name = "Kibagami Takezo"
+displayname = "Takezo"
+versiondate = 14,07,2002
+mugenversion = 14,04,2001
+author = "KGenjuro"
+pal.defaults = 1,2,3,4,5,6,7,8,9,10,11,12
+
+;V7.0 (R)
+
+[Files]
+cmd      = takezo.cmd
+cns      = takezo.cns
+st       = takezo.cns
+stcommon = common1.cns
+sprite   = takezo.sff
+anim     = takezo.air
+sound    = takezo.snd
+pal1     = takezo.act
+pal2     = takezo2.act
+pal3     = takezo3.act
+pal4     = takezo4.act
+pal5     = takezo5.act
+pal6     = takezo6.act
+pal7     = takeex1.act
+pal8     = takeex2.act
+pal9     = takeex3.act
+pal10     = takeex4.act
+pal11     = takeex5.act
+pal12     = takeex6.act
+
+[Arcade]
+intro.storyboard = takezo-i.def
+ending.storyboard = takezo-e.def

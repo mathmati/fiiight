@@ -1,3 +1,16 @@
+;===============================================================================
+; ROSTER FILE — this is the file to edit to change who is playable.
+;
+; To add a character: put its folder under content/chars/<name>/ (containing
+; <name>.def and the files it references) and add a line below in the
+; [Characters] section, e.g.:
+;     <name>, stages/stage0-720.def
+; To add a stage: put its .def + .sff under content/stages/ and list the .def
+; in the [ExtraStages] section further down, e.g.:
+;     stages/mystage.def
+; Then rebuild the bundle (bash build/wasm.sh --shell-only) or just push to
+; main — CI rebuilds and redeploys. See README.md "Host your own game".
+;===============================================================================
 ;-------------------------------------------------------------------------------
 [Characters]
  ;How to add characters
@@ -196,6 +209,8 @@ kfm720, stages/stage0-720.def
 kfm, stages/stage0-720.def
 kfm_zss, stages/stage0-720.def
 suavedude, stages/stage0-720.def
+takezo, stages/takezo.def
+genpaku, stages/stage0-720.def
 Training, stages/stage0-720.def, exclude=1
 randomselect
 
@@ -269,6 +284,7 @@ randomselect
  ;Insert your stages below.
 
 stages/stage0-720.def
+stages/takezo.def
 
 ;-------------------------------------------------------------------------------
 [Options]

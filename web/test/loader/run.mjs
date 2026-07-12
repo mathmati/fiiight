@@ -310,6 +310,90 @@ try {
 
 	await cdp.send("Page.navigate", { url: base + "/index.html" }, sessionId);
 
+	// ---- Phase UI: loader controls usable while the boot overlay is up ----
+	// Regression for two reported desktop bugs: the touch gamepad (z-index 40,
+	// auto-enabled whenever maxTouchPoints > 0 -- i.e. many desktops) used to
+	// cover the "Load game..." pill (then z-index 20) with touch-only buttons
+	// that swallowed mouse clicks, so the pill was dead and the F8-shown UI
+	// was click-dead too. Force the pad on (worst-case stacking) and assert
+	// the pill wins the hit test everywhere and a real CDP mouse click lands.
+	{
+		let seen = null;
+		for (let i = 0; i < 160; i++) {
+			await sleep(50);
+			try {
+				seen = await evalInPage(
+					"(() => { const ov = document.getElementById('overlay');" +
+					" const pill = document.getElementById('loader-pill');" +
+					" if (!ov || !pill || !window.__ikemenTouch) return null;" +
+					" if (ov.classList.contains('hidden')) return 'boot-done';" +
+					" return 'ready'; })()");
+			} catch { continue; }
+			if (seen) break;
+		}
+		if (seen !== "ready") fail("phase UI: never saw pill while boot overlay shown (state: " + seen + ")");
+		const hit = JSON.parse(await evalInPage(
+			"(() => {" +
+			"  window.__ikemenTouch.show();" + // what touch-capable desktops get automatically
+			"  const pill = document.getElementById('loader-pill');" +
+			"  const orig = pill.textContent;" +
+			"  const out = { dead: [] };" +
+			"  for (const label of ['Load game\\u2026', 'Load game\\u2026 (current: mygame.zip)']) {" +
+			"    pill.textContent = label;" +
+			"    const r = pill.getBoundingClientRect();" +
+			"    for (let fx = 0.06; fx <= 0.95; fx += 0.11) {" +
+			"      for (let fy = 0.2; fy <= 0.81; fy += 0.3) {" +
+			"        const x = r.left + r.width * fx, y = r.top + r.height * fy;" +
+			"        const el = document.elementFromPoint(x, y);" +
+			"        if (!el || !(el === pill || pill.contains(el)))" +
+			"          out.dead.push([Math.round(x), Math.round(y), el ? (el.id || el.className) : null]);" +
+			"      }" +
+			"    }" +
+			"  }" +
+			"  pill.textContent = orig;" +
+			"  const r = pill.getBoundingClientRect();" +
+			"  out.center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };" +
+			"  return JSON.stringify(out);" +
+			"})()"));
+		if (hit.dead.length) fail("phase UI: pill covered at " + JSON.stringify(hit.dead.slice(0, 6)));
+		// Real mouse click at the pill center must reach the pill and trigger
+		// the hidden file input (spied: headless has no file chooser).
+		await evalInPage(
+			"(() => { window.__uiProbe = { pill: 0, input: 0 };" +
+			" document.getElementById('loader-pill').addEventListener('click', () => window.__uiProbe.pill++);" +
+			" const inp = document.querySelector('input[type=file]');" +
+			" window.__uiProbeOrigClick = inp.click.bind(inp);" +
+			" inp.click = () => { window.__uiProbe.input++; }; return true; })()");
+		await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: hit.center.x, y: hit.center.y, button: "left", clickCount: 1 }, sessionId);
+		await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: hit.center.x, y: hit.center.y, button: "left", clickCount: 1 }, sessionId);
+		await sleep(200);
+		const probe = await evalInPage(
+			"(() => { const p = window.__uiProbe;" +
+			" const inp = document.querySelector('input[type=file]');" +
+			" inp.click = window.__uiProbeOrigClick; return p; })()");
+		if (!probe || probe.pill !== 1 || probe.input !== 1) {
+			fail("phase UI: pill click during overlay did not reach it: " + JSON.stringify(probe));
+		}
+		// Drop indicator must also stack above the touch pad during boot.
+		const dropOK = await evalInPage(
+			"(() => {" +
+			"  const dt = new DataTransfer();" +
+			"  dt.items.add(new File([new Uint8Array([1])], 'x.zip'));" +
+			"  window.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt }));" +
+			"  const drop = document.getElementById('loader-drop');" +
+			"  const active = drop.classList.contains('active');" +
+			"  const above = parseInt(getComputedStyle(drop).zIndex, 10) >" +
+			"    parseInt(getComputedStyle(document.getElementById('ikemen-touch')).zIndex, 10);" +
+			"  window.dispatchEvent(new DragEvent('dragleave', { dataTransfer: dt }));" +
+			"  const inactive = !drop.classList.contains('active');" +
+			"  window.__ikemenTouch.hide();" +
+			"  try { localStorage.removeItem('ikemen.touch.hidden'); } catch (e) { }" +
+			"  return active && above && inactive;" +
+			"})()");
+		if (!dropOK) fail("phase UI: drop indicator missing or stacked under the touch pad");
+		console.log("--- phase UI: pill clickable over touch pad during overlay, drop indicator above pad ---");
+	}
+
 	// ---- Phase A: baseline ----
 	await waitBoot("phase A");
 	const storedA = await evalInPage("window.__ikemenLoader.getStored()", true);

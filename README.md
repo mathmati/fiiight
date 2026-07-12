@@ -20,10 +20,10 @@ and the browser backend is written so the diff can be upstreamed — see
 [Upstreaming intent](#upstreaming-intent).
 
 The bundled demo boots to the title screen, character select, versus and
-training with the default Ikemen screenpack and a seven-slot roster of
-MUGEN-sample-universe characters (Kung Fu Man in three variants, Suave Dude,
-and stupa's Training dummies — see `content/MANIFEST.md` for provenance and
-licenses).
+training with the default Ikemen screenpack and a seven-slot roster: Kung Fu
+Man in three variants, Suave Dude, KGenjuro's original hand-drawn samurai
+Takezo and Genpaku, and stupa's Training dummy — see `content/MANIFEST.md`
+for provenance and licenses.
 
 ## Quick start
 
@@ -46,30 +46,66 @@ Firefox, or Safari.
 ## Host your own game
 
 This is the fun part: you can ship your own MUGEN/Ikemen game as a static
-website.
+website. Editing the roster is a two-step recipe:
 
-1. **Drop your content into `content/`**, mirroring the usual MUGEN layout
-   (`chars/`, `stages/`, `data/`, `font/`, `sound/`, …). At build time,
-   `content/` is overlaid on top of the engine's stock data
-   (`engine/data`, `engine/external`, `engine/font`); on path conflicts your
-   files win. `content/MANIFEST.md` documents the demo bundle if you want a
-   reference.
-2. **Edit `content/data/select.def`** to register your characters and stages,
-   exactly as you would for a desktop Ikemen GO install. Screenpack changes go
-   through `content/data/` the same way (the demo motif lives in
-   `content/data/ikemen1/`).
-3. **Run `bash build/wasm.sh`.** It compiles the engine and packages
-   everything into `web/content.zip`. If you only changed content, pass
-   `--shell-only` to skip the engine compile and just repackage the zip.
-4. **Upload the `web/` folder to any static host.** No server code needed:
-   - **GitHub Pages** — this repo ships a workflow
-     (`.github/workflows/deploy-pages.yml`) that builds and deploys on every
-     push to `main`; enable Pages → Source: *GitHub Actions* in the repo
-     settings.
-   - **itch.io** — zip the contents of `web/` and upload it as an HTML
-     project with `index.html` as the entry point.
-   - **Netlify / Cloudflare Pages** — point the publish directory at `web/`
-     (or drag-and-drop the folder).
+### Add a character
+
+1. Put the character's folder under `content/chars/<name>/` — it must
+   contain `<name>.def` and the files it references (`.sff`, `.cns`, `.cmd`,
+   `.air`, `.snd`, palettes).
+2. Add one line under `[Characters]` in `content/data/select.def`:
+
+   ```
+   <name>, stages/stage0-720.def
+   ```
+
+3. Push to `main` — CI rebuilds `web/content.zip` and redeploys the site.
+   (Locally: `bash build/wasm.sh --shell-only`, then serve `web/`.)
+
+### Add a stage
+
+1. Put the stage's `.def` + `.sff` under `content/stages/`.
+2. Add its path on a line under `[ExtraStages]` in
+   `content/data/select.def`:
+
+   ```
+   stages/mystage.def
+   ```
+
+   (You can also make it a character's home stage by naming it second on
+   that character's `[Characters]` line.)
+3. Push to `main`, same as above.
+
+`content/data/select.def` itself carries a pointer comment at the top with
+this recipe, and `content/MANIFEST.md` documents every file in the demo
+bundle if you want a reference. Watch the character's `.def` for references
+to files you don't have (music, `.act` palettes): missing music just plays
+silent, but missing sprites/palettes will show as load errors.
+
+**No-code alternative:** for personal use you don't need any of the above —
+just **drag and drop a MUGEN content zip onto the deployed page** and it is
+mounted over the bundled content in your browser only (nothing is uploaded
+anywhere). Rebuilding is only needed when you want to *publish* your roster
+to everyone.
+
+### Full custom builds
+
+- **Everything under `content/` overlays the engine's stock data**
+  (`engine/data`, `engine/external`, `engine/font`) at build time; on path
+  conflicts your files win. Screenpack changes go through `content/data/`
+  the same way (the demo motif lives in `content/data/ikemen1/`).
+- **`bash build/wasm.sh`** compiles the engine and packages
+  `web/content.zip`; pass `--shell-only` after content-only changes to skip
+  the engine compile.
+- **Upload the `web/` folder to any static host.** No server code needed:
+  - **GitHub Pages** — this repo ships a workflow
+    (`.github/workflows/deploy-pages.yml`) that builds and deploys on every
+    push to `main`; enable Pages → Source: *GitHub Actions* in the repo
+    settings.
+  - **itch.io** — zip the contents of `web/` and upload it as an HTML
+    project with `index.html` as the entry point.
+  - **Netlify / Cloudflare Pages** — point the publish directory at `web/`
+    (or drag-and-drop the folder).
 
 Player progress and settings persist per browser: files the engine writes
 under `save/` are mirrored to `localStorage` and restored on the next visit.

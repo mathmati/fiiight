@@ -1,0 +1,232 @@
+[SceneDef]
+spr = genpaku-i.sff
+startscene = 0         ;Starting scene number (for debugging)
+
+;------------------------------------
+[Scene 0]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  0
+layer0.offset = 0,0
+layer0.starttime = 0
+bgm = genpaku-i.mid
+bgm.loop = 1
+end.time = 300
+
+[Scene 1]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  1
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 2]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  2
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 3]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  3
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 4]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  4
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 5]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  5
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 6]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  6
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 7]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  7
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 8]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  8
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 9]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  9
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 10]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  10
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 11]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  11
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 12]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+layerall.pos = 0,0
+layer0.anim =  12
+layer0.offset = 0,0
+layer0.starttime = 0
+end.time = 300
+
+[Scene 13]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+end.time = 60
+
+[Begin Action 0]
+0,0, 0,0, -1
+
+[Begin Action 1]
+0,1, 0,0, -1
+
+[Begin Action 2]
+0,2, 0,0, -1
+
+[Begin Action 3]
+0,3, 0,0, -1
+
+[Begin Action 4]
+0,4, 0,0, -1
+
+[Begin Action 5]
+0,5, 0,0,2
+
+[Begin Action 6]
+0,6, 0,0,2
+
+[Begin Action 7]
+LoopStart
+0,7, 0,0,12
+0,8, 0,0,12
+
+[Begin Action 8]
+0,9, 0,0, -1
+
+[Begin Action 9]
+LoopStart
+0,10, 0,0,44
+0,11, 0,0,12
+
+[Begin Action 10]
+0,12, 0,0, -1
+
+[Begin Action 11]
+LoopStart
+0,13, 0,0,3
+0,14, 0,0,3
+
+[Begin Action 12]
+0,15, 0,0, 48
+LoopStart
+0,16, 0,0,2
+0,17, 0,0,2

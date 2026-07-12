@@ -293,9 +293,17 @@
 
 	// ---- UI -------------------------------------------------------------------
 	// Styling matches index.html's overlay: black bg, system-ui, #e33 accent.
+	// z-index contract: boot overlay (index.html) is 10, the touch gamepad and
+	// the controls hint (touch.js/main.js) are 40. The loader UI must sit ABOVE
+	// the touch pad: its bottom-right action buttons overlap the pill, take
+	// pointer events, and only handle touchstart — under them, mouse clicks on
+	// the pill are silently swallowed (touch pads auto-enable on any device
+	// reporting maxTouchPoints > 0, which includes many desktops). The loader UI
+	// is only shown while the boot overlay is up, a status is showing, or the
+	// user pressed F8, so covering a sliver of the pad then is fine.
 	const style = document.createElement("style");
 	style.textContent = [
-		"#loader-ui { position: fixed; right: 12px; bottom: 26px; z-index: 20;",
+		"#loader-ui { position: fixed; right: 12px; bottom: 26px; z-index: 50;",
 		"  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;",
 		"  font: 12px/1.4 system-ui, sans-serif; }",
 		"#loader-ui.hidden { display: none; }",
@@ -307,7 +315,7 @@
 		"#loader-pill:hover { border-color: #e33; color: #fff; }",
 		"#loader-reset { color: #777; text-decoration: underline; cursor: pointer; display: none; }",
 		"#loader-reset:hover { color: #f66; }",
-		"#loader-drop { position: fixed; inset: 0; z-index: 30; display: none;",
+		"#loader-drop { position: fixed; inset: 0; z-index: 60; display: none;",
 		"  align-items: center; justify-content: center;",
 		"  background: rgba(0, 0, 0, 0.72); pointer-events: none; }",
 		"#loader-drop.active { display: flex; }",
@@ -357,8 +365,12 @@
 	if (overlayEl) {
 		new MutationObserver(syncVisibility).observe(overlayEl, { attributes: true, attributeFilter: ["class"] });
 	}
+	// Match on .code or .key: .code is layout-independent, but some browsers/
+	// keyboards report F-keys only via .key. Registered before the engine's own
+	// window keydown listener (system_js.go), so its preventDefault can't
+	// starve this handler.
 	window.addEventListener("keydown", (e) => {
-		if (e.code === "F8") {
+		if (e.code === "F8" || e.key === "F8") {
 			e.preventDefault();
 			forcedVisible = !forcedVisible;
 			syncVisibility();

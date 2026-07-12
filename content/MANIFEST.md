@@ -33,11 +33,14 @@ identical to what the release zips ship.
 - `data/gofx/` — engine common FX pack (`defaultConfig.ini` `Common.Fx =
   data/gofx/gofx.def`; required by `dizzy.zss`/`guardbreak.zss`/`tag.zss`).
 - `data/select.def` — roster edited for the browser bundle: seven characters
-  (`kfm720`, `kfm`, `kfm_zss`, `suavedude`, `Training` (roster-listed with `exclude=1` — kept out of
-  demo/random pools; Large/Small variants removed: mismatched scaled hitboxes), all mapped to
-  `stages/stage0-720.def`) plus `randomselect`; `[ExtraStages]` trimmed to
-  the one bundled stage. Everything else is upstream verbatim. See
-  "Characters" below for per-character provenance.
+  (`kfm720`, `kfm`, `kfm_zss`, `suavedude`, `takezo`, `genpaku`, `Training`
+  (roster-listed with `exclude=1` — kept out of demo/random pools;
+  Large/Small variants removed: mismatched scaled hitboxes)) plus
+  `randomselect`. All map to `stages/stage0-720.def` except `takezo`, which
+  maps to `stages/takezo.def`; `[ExtraStages]` lists the two bundled stages.
+  A "how to edit the roster" pointer comment was added at the top of the
+  file. Everything else is upstream verbatim. See "Characters" below for
+  per-character provenance.
 - `stages/stage0-720.def` + `stages/stage0-720.sff` — default boot/fallback
   stage (`defaultConfig.ini` `Debug.StartStage`). Its .def references no
   music or sound files.
@@ -53,9 +56,11 @@ identical to what the release zips ship.
 ## Characters
 
 Roster policy: only original-IP characters with recorded evidence permitting
-redistribution. No rips or fan versions of commercial characters. All
-characters below are from the MUGEN/Ikemen "sample" universe (Elecbyte's
-Kung Fu Man cast) or training dummies derived from it.
+redistribution. No rips or fan versions of commercial characters. The
+characters below are either from the MUGEN/Ikemen "sample" universe
+(Elecbyte's Kung Fu Man cast) / training dummies derived from it, or
+original hand-drawn characters self-published on GitHub by their author
+(KGenjuro's Takezo and Genpaku).
 
 ### chars/kfm720/ — Kung Fu Man 720 (Elecbyte) — 1.5 MB
 
@@ -135,6 +140,71 @@ Kung Fu Man cast) or training dummies derived from it.
   sff/air/cns). Upstream's `TrainingMedium.def` was omitted to keep the
   roster at seven slots.
 
+### chars/takezo/ — Kibagami Takezo (KGenjuro, 2002) — 2.2 MB
+
+- Author: KGenjuro (Torsten Hartmann, github.com/donswelt).
+- Source: https://github.com/donswelt/Takezo-Kibagami-Mugen @ `7042c79`
+  (`main`), the author's own repository.
+- Original-IP evidence: the repo description reads "An original M.U.G.E.N.
+  character I made decades ago." The bundled `README.md` (author's own
+  F.A.Q., kept verbatim in the folder) says the character was "programmed
+  and designed by KGenjuro" with voices and sound FX "recorded by KGenjuro";
+  it is an original hand-drawn superdeformed samurai (inspired by, but not
+  ripped from, Samurai Shodown — the author describes creating the sprites
+  himself from a keyring figure as reference).
+- Status: No formal license in the source repo; author self-publishes these
+  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  removed immediately on the author's request.
+- WinMUGEN-era character (`mugenversion = 14,04,2001`), 12 palettes,
+  intro/ending storyboards (`takezo-i.def` / `takezo-e.def`) included.
+- Local modifications: palette files renamed from upstream uppercase
+  `*.ACT` to lowercase `*.act` to match the `.def` `[Files]` references
+  byte-for-byte (the browser port's zip filesystem lookup is happiest with
+  exact case); the `Takezo_Stage/` subfolder was installed separately as
+  `stages/takezo.*` (see Stages below). File contents are unmodified.
+- Storyboard `bgm = takezo-i.mid` ships in the folder, but MIDI playback is
+  not supported by Ikemen GO — storyboards play silently (non-fatal).
+
+### chars/genpaku/ — Ogata Genpaku (KGenjuro, 2002) — 4.4 MB
+
+- Author: KGenjuro (Torsten Hartmann, github.com/donswelt).
+- Source: https://github.com/donswelt/Genpaku-Mugen @ `f3b91fb` (`main`),
+  the author's own repository.
+- Original-IP evidence: the repo description reads "Another M.U.G.E.N.
+  character I made decades ago." (companion repo to Takezo, whose
+  description reads "An original M.U.G.E.N. character I made decades
+  ago."); same author, same original hand-drawn cast. The author's
+  `README.md` is kept verbatim in the folder.
+- Status: No formal license in the source repo; author self-publishes these
+  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  removed immediately on the author's request.
+- WinMUGEN-era character (`mugenversion = 14,04,2002`, V1.0 BETA), 6
+  palettes, intro/ending storyboards included. Files are unmodified.
+- Storyboard `bgm = genpaku-i.mid`: MIDI unsupported, plays silently
+  (non-fatal).
+
+## Stages
+
+### stages/takezo.def + stages/takezo.sff — "Takezo's BG" (KGenjuro) — 24 KB
+
+- Author: KGenjuro (Torsten Hartmann, github.com/donswelt).
+- Source: https://github.com/donswelt/Takezo-Kibagami-Mugen @ `7042c79`,
+  `Takezo_Stage/` subfolder (distributed by the author together with the
+  character).
+- Original-IP evidence: same repo as chars/takezo/ — description "An
+  original M.U.G.E.N. character I made decades ago."; the stage .def credits
+  ";by KGenjuro".
+- Status: No formal license in the source repo; author self-publishes these
+  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  removed immediately on the author's request.
+- Installed as `stages/takezo.def` + `stages/takezo.sff` (upstream folder
+  already names the files `takezo.def`/`takezo.sff`, and its `spr =
+  stages/takezo.sff` reference is correct as-is). Registered in
+  `data/select.def` `[ExtraStages]` and as takezo's character stage.
+- Local modification (marked "Browser port"): `[Music]` `bgmusic =
+  sound\sound_sea.mp3` commented out — the mp3 is not distributed with the
+  repo; the stage plays silently.
+
 ## Local modifications (all marked with "Browser port" comments)
 
 - `data/ikemen1/system.def`: `logo.storyboard = logo.def` commented out (the
@@ -165,8 +235,9 @@ Kung Fu Man cast) or training dummies derived from it.
 - `system.def` `gameover.def` / `credits.def`: guarded by
   `main.f_fileExists()` in `external/script/start.lua`; skipped when absent
   (they do not exist upstream either).
-- `stcommon = common1.cns` (kfm720, kfm, suavedude, Training defs): the
-  engine falls back to `engine/data/common1.cns.zss` (`src/compiler.go`).
+- `stcommon = common1.cns` (kfm720, kfm, suavedude, Training, takezo,
+  genpaku defs): the engine falls back to `engine/data/common1.cns.zss`
+  (`src/compiler.go`).
 - `ai = kfm720.ai` / `ai = kfm.ai` (kfm720, kfm, kfm_zss defs): legacy MUGEN
   AI hint files, unused by Ikemen GO and not shipped upstream.
 - `intro.def` / `ending.def` `bgm = intro.mp3` / `ending.mp3` (kfm720, kfm,
@@ -199,6 +270,11 @@ Kung Fu Man cast) or training dummies derived from it.
   the Characters section for the full evidence trail.
 - `stages/stage0-720.*`: Elecbyte sample stage, distributed with the
   screenpack repo under the same terms.
+- `chars/takezo/`, `chars/genpaku/`, `stages/takezo.*` (KGenjuro / Torsten
+  Hartmann): original characters and stage, self-published by the author at
+  github.com/donswelt. No formal license in the source repos; a license
+  request is pending (see port/ANNOUNCEMENT.md); will be removed immediately
+  on the author's request.
 - Engine-side content (`engine/data`, `engine/external`, `engine/font`) is
   distributed under the Ikemen GO project's licenses (MIT source; bundled
   asset licenses per `engine/LICENCE.txt`).

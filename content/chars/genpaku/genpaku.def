@@ -1,0 +1,34 @@
+[Info]
+name = "Ogata Genpaku"
+displayname = "Genpaku"
+versiondate = 24,04,2002
+mugenversion = 14,04,2002
+author = "KGenjuro"
+pal.defaults = 1,2,3,4,5,6
+
+;V1.0*BETA*
+
+[Files]
+cmd     = genpaku.cmd
+cns     = genpaku.cns
+st      = genpaku.cns
+stcommon = common1.cns
+sprite  = genpaku.sff
+anim    = genpaku.air
+sound   = genpaku.snd
+pal1    = genpaku.act
+pal2    = genpaku2.act
+pal3    = genpaku3.act
+pal4    = genpaku4.act
+pal5    = genpaku5.act
+pal6    = genpaku6.act
+
+[Arcade]
+intro.storyboard = genpaku-i.def
+ending.storyboard = genpaku-e.def
+
+
+
+
+
+
