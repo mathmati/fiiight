@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Loader harness: verifies the "load your own game" flow end to end.
 //
-// Phase A: boot the stock game, assert no stored zip, roster = 7 chars +
-//          randomselect, navigate to VS char select, screenshot baseline.
+// Phase A: boot the stock game, assert no stored zip, baseline roster
+//          (derived at runtime) + randomselect, navigate to VS char select,
+//          screenshot baseline.
 // Phase B: build a test zip (MyGame/chars/kfmcopy/* -- a renamed copy of
 //          content/chars/kfm with displayname "KFM Copy"), install it via
 //          window.__ikemenLoader.installBlob (in-page File from the served
@@ -10,7 +11,11 @@
 //          select.def gained a "kfmcopy" roster line (merge mode + wrapper
 //          strip), navigate to VS char select, screenshot (8 chars + random).
 // Phase C: window.__ikemenLoader.reset(), wait for reload, assert IndexedDB
-//          cleared and roster back to 7, screenshot char select again.
+//          cleared and roster back to baseline, screenshot char select again.
+// Phase D: plant a corrupt stored zip, reload: boot must survive and clear it.
+// Phase E: install a bare stage zip (.def + .sff at the zip root, no
+//          chars/stages layout): must be mounted under stages/ and appended
+//          to [ExtraStages], with the character roster untouched.
 //
 // Usage: node web/test/loader/run.mjs      exit 0 = green, 1 = failure.
 import { spawn } from "node:child_process";
@@ -116,6 +121,20 @@ function buildFixture() {
 	const zip = buildZip(files);
 	fs.writeFileSync(path.join(fixtureDir, "kfmcopy.zip"), zip);
 	console.log("--- fixture kfmcopy.zip: " + files.length + " files, " + zip.length + " bytes ---");
+}
+// Bare stage zip: stage0-720 renamed to stagecopy, .def + .sff at the zip
+// root (no wrapper, no stages/ prefix) — exercises the bare-stage fallback.
+function buildStageFixture() {
+	const srcDir = path.join(repoDir, "content", "stages");
+	const def = fs.readFileSync(path.join(srcDir, "stage0-720.def")).toString("latin1")
+		.replace(/spr\s*=\s*stage0-720\.sff/, "spr = stagecopy.sff");
+	if (!def.includes("spr = stagecopy.sff")) throw new Error("stage fixture: spr patch did not apply");
+	const zip = buildZip([
+		{ name: "stagecopy.def", data: Buffer.from(def, "latin1") },
+		{ name: "stagecopy.sff", data: fs.readFileSync(path.join(srcDir, "stage0-720.sff")) },
+	]);
+	fs.writeFileSync(path.join(fixtureDir, "stagecopy.zip"), zip);
+	console.log("--- fixture stagecopy.zip: " + zip.length + " bytes ---");
 }
 
 // ---- dev server ---------------------------------------------------------------
@@ -256,22 +275,24 @@ async function navToCharSelect(tag, firstBoot) {
 	await screenshot(tag + "-charselect.png");
 }
 
-// Roster lines of the in-memfs select.def [Characters] section.
-async function rosterLines() {
+// Entry lines of a section of the in-memfs select.def.
+async function sectionLines(section) {
 	const sel = await evalInPage("window.__ikemenLoader.readFile('/ikemen/data/select.def')", true);
 	const out = [];
-	let inChars = false;
+	let inSec = false;
 	for (const raw of sel.split(/\r?\n/)) {
 		const t = raw.trim();
 		if (t.startsWith("[")) {
-			if (inChars) break;
-			inChars = t.toLowerCase().startsWith("[characters");
+			if (inSec) break;
+			inSec = t.toLowerCase().startsWith("[" + section);
 			continue;
 		}
-		if (inChars && t && !t.startsWith(";")) out.push(t.split(",")[0].trim());
+		if (inSec && t && !t.startsWith(";")) out.push(t.split(",")[0].trim());
 	}
 	return out;
 }
+const rosterLines = () => sectionLines("characters");
+const extraStageLines = () => sectionLines("extrastages");
 
 async function waitReload(label) {
 	// Set a marker; when it disappears the page has navigated away.
@@ -288,6 +309,7 @@ async function waitReload(label) {
 // ---- main -----------------------------------------------------------------------
 try {
 	buildFixture();
+	buildStageFixture();
 	const base = await startServer();
 	const wsUrl = await startChrome();
 	cdp = await CDP.connect(wsUrl);
@@ -431,6 +453,21 @@ try {
 	if (!dragOK) fail("phase A: drag indicator did not toggle on dragenter/dragleave");
 	console.log("--- phase A: drag indicator OK ---");
 
+	// Update link: present, and with the served version.txt matching the boot
+	// stamp, "Check for updates" must report up-to-date without reloading.
+	const updState = await evalInPage(
+		"(async () => {" +
+		"  if (!document.getElementById('loader-update')) return 'missing-el';" +
+		"  if (typeof window.__ikemenLoader.updateGame !== 'function') return 'missing-api';" +
+		"  if (!window.__ikemenBuild) return 'no-stamp';" + // stamp-less host: skip the click
+		"  const reloaded = await window.__ikemenLoader.updateGame(false);" +
+		"  return reloaded === false ? 'up-to-date' : 'unexpected-reload';" +
+		"})()", true);
+	if (updState !== "up-to-date" && updState !== "no-stamp") {
+		fail("phase A: update check state: " + updState);
+	}
+	console.log("--- phase A: update link OK (" + updState + ") ---");
+
 	// Rejection paths: non-zip content and oversize files must be refused
 	// with a status message and nothing stored.
 	const badRejected = await evalInPage(
@@ -535,7 +572,36 @@ try {
 	}
 	console.log("--- phase D: corrupt stored zip auto-cleared, default game booted ---");
 
-	console.log("--- OK: baseline " + rosterA.length + " entries, merge-mode install adds kfmcopy, reset restores default, corrupt zip recovered ---");
+	// ---- Phase E: bare stage zip -> stages/ + [ExtraStages] ----
+	const stagesA = await extraStageLines();
+	const stageInstalled = await evalInPage(
+		"(async () => {" +
+		"  const r = await fetch('test/loader/fixture/stagecopy.zip');" +
+		"  if (!r.ok) throw new Error('fixture fetch: ' + r.status);" +
+		"  const b = await r.blob();" +
+		"  const f = new File([b], 'stagecopy.zip', { type: 'application/zip' });" +
+		"  return await window.__ikemenLoader.installBlob(f);" +
+		"})()", true);
+	if (stageInstalled !== true) fail("phase E: installBlob returned " + JSON.stringify(stageInstalled));
+	await waitReload("phase E");
+	await waitBoot("phase E");
+	const storedE = await evalInPage("window.__ikemenLoader.getStored()", true);
+	if (!storedE || storedE.name !== "stagecopy.zip") fail("phase E: stored record wrong: " + JSON.stringify(storedE));
+	const rosterE = await rosterLines();
+	if (JSON.stringify(rosterE) !== JSON.stringify(rosterA)) {
+		fail("phase E: bare stage zip changed the character roster: " + JSON.stringify(rosterE));
+	}
+	const stagesE = await extraStageLines();
+	console.log("phase E extrastages: " + JSON.stringify(stagesE));
+	if (!stagesE.includes("stages/stagecopy.def") ||
+		JSON.stringify(stagesE.filter((s) => s !== "stages/stagecopy.def")) !== JSON.stringify(stagesA)) {
+		fail("phase E: stagecopy not merged into [ExtraStages] (baseline " + JSON.stringify(stagesA) + "): " + JSON.stringify(stagesE));
+	}
+	const defE = await evalInPage("window.__ikemenLoader.readFile('/ikemen/stages/stagecopy.def')", true);
+	if (!defE.includes("spr = stagecopy.sff")) fail("phase E: stagecopy.def not mounted under stages/");
+	console.log("--- phase E: bare stage zip mounted under stages/ and listed in [ExtraStages] ---");
+
+	console.log("--- OK: baseline " + rosterA.length + " entries, merge-mode install adds kfmcopy, reset restores default, corrupt zip recovered, bare stage zip lands in stages/ ---");
 	cleanup();
 	process.exit(0);
 } catch (err) {

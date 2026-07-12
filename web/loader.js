@@ -143,19 +143,27 @@
 			charLines.push(own ? dir : dir + "/" + defs[0]);
 		}
 
-		// Bare character folder: the zip IS a char dir (its root holds a .def
+		// Bare folder: the zip IS a char or stage dir (its root holds a .def
 		// and sprite data, no chars/stages/select.def layout). Remount it
-		// under chars/<name>/ via mapTo instead of matching nothing.
+		// under chars/<name>/ or stages/ via mapTo instead of matching
+		// nothing. Characters always carry state/command/anim files
+		// (.cmd/.cns/.air); a .def + .sff without them is a stage.
 		let mapTo = "";
 		if (!hasSelect && charLines.length === 0 && stageLines.length === 0) {
 			const topDefs = stripped.filter((n) => !n.includes("/") && n.toLowerCase().endsWith(".def"));
 			const hasSpriteData = stripped.some((n) => /\.(sff|air)$/i.test(n));
+			const looksLikeChar = stripped.some((n) => /\.(cmd|cns|air)$/i.test(n));
 			if (topDefs.length > 0 && hasSpriteData) {
-				const rawName = prefix ? prefix.slice(0, -1) : topDefs[0].slice(0, -4);
-				const dir = rawName.replace(/[^\w .-]+/g, "_").trim() || "customchar";
-				mapTo = "chars/" + dir + "/";
-				const own = topDefs.find((d) => d.toLowerCase() === (dir + ".def").toLowerCase());
-				charLines.push(own ? dir : dir + "/" + topDefs[0]);
+				if (looksLikeChar) {
+					const rawName = prefix ? prefix.slice(0, -1) : topDefs[0].slice(0, -4);
+					const dir = rawName.replace(/[^\w .-]+/g, "_").trim() || "customchar";
+					mapTo = "chars/" + dir + "/";
+					const own = topDefs.find((d) => d.toLowerCase() === (dir + ".def").toLowerCase());
+					charLines.push(own ? dir : dir + "/" + topDefs[0]);
+				} else {
+					mapTo = "stages/";
+					stageLines.push(...topDefs.map((d) => "stages/" + d));
+				}
 			}
 		}
 
@@ -315,6 +323,8 @@
 		"#loader-pill:hover { border-color: #e33; color: #fff; }",
 		"#loader-reset { color: #777; text-decoration: underline; cursor: pointer; display: none; }",
 		"#loader-reset:hover { color: #f66; }",
+		"#loader-update { color: #777; text-decoration: underline; cursor: pointer; }",
+		"#loader-update:hover { color: #fff; }",
 		"#loader-drop { position: fixed; inset: 0; z-index: 60; display: none;",
 		"  align-items: center; justify-content: center;",
 		"  background: rgba(0, 0, 0, 0.72); pointer-events: none; }",
@@ -338,7 +348,11 @@
 	const resetEl = document.createElement("a");
 	resetEl.id = "loader-reset";
 	resetEl.textContent = "Reset to default game";
-	ui.append(statusEl, pillEl, resetEl);
+	const updateEl = document.createElement("a");
+	updateEl.id = "loader-update";
+	updateEl.textContent = "Check for updates";
+	updateEl.title = "Re-download the latest game files, bypassing the browser cache";
+	ui.append(statusEl, pillEl, resetEl, updateEl);
 
 	const dropEl = document.createElement("div");
 	dropEl.id = "loader-drop";
@@ -403,6 +417,39 @@
 		reset();
 	});
 
+	// ---- update / re-install ---------------------------------------------------
+	// GitHub Pages serves with a short max-age, but a mobile tab resumed from
+	// memory (or an aggressive cache) can keep running a stale build
+	// indefinitely. Compare the build stamp loaded at boot (main.js sets
+	// window.__ikemenBuild from version.txt) against a cache-bypassing fetch;
+	// on mismatch re-download every game file with cache:"reload" (which
+	// replaces the HTTP cache entries) and restart. With no stamp to compare
+	// (local dev, stamp-less host), force the re-download — that IS the
+	// requested "re-install".
+	async function updateGame(force) {
+		showStatus("Checking for updates…", true);
+		let remote = null;
+		try {
+			const r = await fetch("version.txt", { cache: "no-store" });
+			if (r.ok) remote = (await r.text()).trim();
+		} catch (e) { /* offline or stamp-less host */ }
+		const local = window.__ikemenBuild || null;
+		if (!force && remote && local && remote === local) {
+			showStatus("Already up to date (build " + local + ").");
+			return false;
+		}
+		showStatus(remote && local && remote !== local
+			? "Update found (" + local + " → " + remote + ") — re-downloading…"
+			: "Re-downloading game files…", true);
+		const assets = ["index.html", "main.js", "loader.js", "fs-shim.js", "touch.js",
+			"wasm_exec.js", "ikemen.wasm", "content.zip"];
+		await Promise.allSettled(assets.map((a) => fetch(a, { cache: "reload" })));
+		showStatus("Restarting with the latest build…", true);
+		setTimeout(() => location.reload(), 300);
+		return true;
+	}
+	updateEl.addEventListener("click", () => { updateGame(false); });
+
 	// Whole-page drag & drop.
 	function dragHasFiles(e) {
 		return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
@@ -439,6 +486,7 @@
 		applyStoredOverlay,
 		reset,
 		getStored,
+		updateGame,
 		// debug/test helper
 		readFile: readFileText,
 	};
