@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"syscall/js"
 	"time"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -262,6 +263,32 @@ func (t *Texture_WebGL2) SetData(data []byte) {
 	glPixelStorei(gl_UNPACK_ROW_LENGTH, 0)
 
 	glTexImage2D(gl_TEXTURE_2D, 0, int32(internalFormat), t.width, t.height, uploadFormat, uploadType, data)
+
+	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_MAG_FILTER, interp)
+	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_MIN_FILTER, interp)
+	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_WRAP_S, gl_CLAMP_TO_EDGE)
+	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_WRAP_T, gl_CLAMP_TO_EDGE)
+}
+
+// SetDataFromTexImageSource uploads the current frame of a JS
+// TexImageSource (e.g. an HTMLVideoElement) into the texture. Used by
+// the background-video backend (video_js.go): WebGL2's texImage2D takes
+// the element directly, avoiding a per-frame CPU pixel copy. The caller
+// is responsible for sizing the texture to the source's dimensions.
+func (t *Texture_WebGL2) SetDataFromTexImageSource(source js.Value) {
+	var interp int32 = gl_NEAREST
+	if t.filter {
+		interp = gl_LINEAR
+	}
+
+	r := gfx.(*Renderer_WebGL2)
+	r.SetActiveTexture0()
+
+	glBindTexture(gl_TEXTURE_2D, t.handle)
+	glPixelStorei(gl_UNPACK_ALIGNMENT, 1)
+	glPixelStorei(gl_UNPACK_ROW_LENGTH, 0)
+
+	glTexImage2DSource(gl_TEXTURE_2D, 0, int32(gl_RGBA8), t.width, t.height, gl_RGBA, gl_UNSIGNED_BYTE, source)
 
 	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_MAG_FILTER, interp)
 	glTexParameteri(gl_TEXTURE_2D, gl_TEXTURE_MIN_FILTER, interp)
@@ -985,6 +1012,12 @@ func (r *Renderer_WebGL2) EndFrame() {
 		// construct the quad and draw it
 		glDrawArrays(gl_TRIANGLE_STRIP, 0, 4)
 	}
+
+	// Unbind the FBO color texture from unit 0. Leaving it bound makes
+	// ANGLE flag "feedback loop" on next frame's draws into r.fbo whenever
+	// a sprite-shader sampler uniform still points at unit 0 without a
+	// rebind (e.g. the untextured RGBA path of background videos/rects).
+	glBindTexture(gl_TEXTURE_2D, 0)
 
 	glCheckError("EndFrame")
 }

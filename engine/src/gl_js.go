@@ -433,6 +433,13 @@ func glTexImage2Df(target uint32, level, internalFormat, width, height int32, fo
 	glCtx.Call("texImage2D", int(target), level, int(internalFormat), width, height, 0, int(format), gl_FLOAT, view)
 }
 
+// glTexImage2DSource uploads a DOM TexImageSource (HTMLVideoElement,
+// HTMLCanvasElement, ImageBitmap, ...) into the bound texture. WebGL2
+// accepts the element directly, so no per-frame CPU pixel copy is needed.
+func glTexImage2DSource(target uint32, level, internalFormat, width, height int32, format, xtype uint32, source js.Value) {
+	glCtx.Call("texImage2D", int(target), level, int(internalFormat), width, height, 0, int(format), int(xtype), source)
+}
+
 func glTexSubImage2D(target uint32, level, x, y, width, height int32, format, xtype uint32, data []byte) {
 	if data == nil {
 		return

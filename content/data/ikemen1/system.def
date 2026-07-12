@@ -38,7 +38,7 @@ localcoord = 1280,720       ;Local coordinate space width and height (new in MUG
 [Files]
 spr = system.sff            ;Filename of sprite data
 snd = system.snd            ;Filename of sound data
-;logo.storyboard = logo.def ;Disabled for browser port: storyboard uses a background video (video/ik_logo.webm); video playback is stubbed on js/wasm
+logo.storyboard = logo.def  ;Browser port: re-enabled — video playback works on js/wasm (plays video/ik_logo.webm via a hidden <video> element)
 ;intro.storyboard =         ;Intro storyboard definition (optional)
 select = select.def         ;Character and stage selection list
 fight = fight.def           ;Fight definition filename
@@ -2218,8 +2218,9 @@ fadein.col = 0, 0, 0
 fadeout.time = 10
 fadeout.col = 0, 0, 0
 credits.snd = 400, 0
-;Browser port: attract mode is disabled (enabled = 0 above) and logo.def/intro.def
-;storyboards are not bundled (logo.def needs video playback, unsupported on js/wasm).
+;Browser port: attract mode stays disabled (enabled = 0 above); its storyboard
+;references are left commented out (intro.def is not bundled; logo.def is bundled
+;for the boot logo, but attract mode itself is not used in the browser build).
 ;logo.storyboard = logo.def
 ;intro.storyboard = intro.def
 start.storyboard = 
