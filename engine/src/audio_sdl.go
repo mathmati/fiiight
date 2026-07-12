@@ -1,3 +1,5 @@
+//go:build !js
+
 // This replaces the "final mix" from a beep speaker
 // and wraps it in a similar interface for use with SDL
 package main
@@ -20,6 +22,11 @@ type AudioSink interface {
 }
 
 var speaker AudioSink
+
+// newSpeaker returns the platform audio sink (see system.go init).
+func newSpeaker() AudioSink {
+	return &SDLSpeaker{}
+}
 
 type SDLSpeaker struct {
 	dev        sdl.AudioDeviceID
