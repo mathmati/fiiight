@@ -108,8 +108,10 @@ function buildFixture() {
 			data = Buffer.from(text, "latin1");
 		}
 		// Wrapper dir "MyGame/" exercises wrapper stripping; no select.def
-		// exercises merge mode.
-		files.push({ name: "MyGame/chars/kfmcopy/" + out, data });
+		// exercises merge mode. LAYOUT=bare zips the char folder itself
+		// (root = kfmcopy/) to exercise the bare-char-folder fallback.
+		const zipPrefix = process.env.LAYOUT === "bare" ? "kfmcopy/" : "MyGame/chars/kfmcopy/";
+		files.push({ name: zipPrefix + out, data });
 	}
 	const zip = buildZip(files);
 	fs.writeFileSync(path.join(fixtureDir, "kfmcopy.zip"), zip);

@@ -143,8 +143,25 @@
 			charLines.push(own ? dir : dir + "/" + defs[0]);
 		}
 
+		// Bare character folder: the zip IS a char dir (its root holds a .def
+		// and sprite data, no chars/stages/select.def layout). Remount it
+		// under chars/<name>/ via mapTo instead of matching nothing.
+		let mapTo = "";
+		if (!hasSelect && charLines.length === 0 && stageLines.length === 0) {
+			const topDefs = stripped.filter((n) => !n.includes("/") && n.toLowerCase().endsWith(".def"));
+			const hasSpriteData = stripped.some((n) => /\.(sff|air)$/i.test(n));
+			if (topDefs.length > 0 && hasSpriteData) {
+				const rawName = prefix ? prefix.slice(0, -1) : topDefs[0].slice(0, -4);
+				const dir = rawName.replace(/[^\w .-]+/g, "_").trim() || "customchar";
+				mapTo = "chars/" + dir + "/";
+				const own = topDefs.find((d) => d.toLowerCase() === (dir + ".def").toLowerCase());
+				charLines.push(own ? dir : dir + "/" + topDefs[0]);
+			}
+		}
+
 		return {
 			prefix,
+			mapTo,
 			hasSelect,
 			charLines,
 			stageLines,
@@ -207,7 +224,8 @@
 				mapName: (n) => {
 					n = cleanName(n);
 					if (!n) return null;
-					return (info.prefix && n.startsWith(info.prefix)) ? n.slice(info.prefix.length) : n;
+					if (info.prefix && n.startsWith(info.prefix)) n = n.slice(info.prefix.length);
+					return n ? info.mapTo + n : null;
 				},
 				onProgress: (done, total) => {
 					if (setProgress && total > 0) setProgress(done / total);
