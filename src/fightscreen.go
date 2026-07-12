@@ -2351,7 +2351,6 @@ type FightScreenCombo struct {
 	hidespeed    float32
 	separator    string
 	places       int32
-	trueHits     int32
 	shownHits    int32
 	shownDmg     int32
 	shownPct     float32
@@ -2471,7 +2470,7 @@ func readFightScreenCombo(pre string, is IniSection,
 	return co
 }
 
-func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
+func (co *FightScreenCombo) step(side int, hits, damage int32, percentage float32) {
 	co.bg.Action()
 	co.top.Action()
 
@@ -2482,11 +2481,9 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 
 	// Reset team combo if no player was found getting hit
 	if hits == 0 {
-		co.trueHits = 0
+		sys.comboCount[side] = 0
 	}
-
-	// True hits are only updated by Char(). The live tally is only used for combo display behavior
-	//co.trueHits = hits
+	trueHits := sys.comboCount[side]
 
 	// Handle show/hide speed
 	if co.resttime > 0 {
@@ -2496,7 +2493,7 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		if Abs(co.counterX) < 1 {
 			co.counterX = 0
 		}
-	} else if co.trueHits < 2 {
+	} else if trueHits < 2 {
 		// Slide out when combo ends
 		co.counterX -= sys.fightScreen.fnt_scale * co.hidespeed * float32(sys.fightScreen.localcoord[0]) / 320
 		// Snap to starting position
@@ -2513,9 +2510,9 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 	}
 
 	// Update if number of hits or total damage change
-	if co.trueHits >= 2 && (co.newCombo || co.shownHits != co.trueHits || co.shownDmg != damage) {
+	if trueHits >= 2 && (co.newCombo || co.shownHits != trueHits || co.shownDmg != damage) {
 		// Reset visuals when hits changed
-		if co.newCombo || co.shownHits != co.trueHits {
+		if co.newCombo || co.shownHits != trueHits {
 			co.counterShake.restart()
 			co.textShake.restart()
 			for i := range co.counter {
@@ -2528,7 +2525,7 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 		// Time resets if either hits or damage changed
 		co.resttime = co.displaytime
 		// Update state
-		co.shownHits = co.trueHits
+		co.shownHits = trueHits
 		co.shownDmg = damage
 		co.shownPct = percentage
 		co.newCombo = false
@@ -2563,7 +2560,6 @@ func (co *FightScreenCombo) step(hits, damage int32, percentage float32) {
 func (co *FightScreenCombo) reset() {
 	co.bg.Reset()
 	co.top.Reset()
-	co.trueHits = 0
 	co.shownHits = 0
 	co.shownDmg = 0
 	co.shownPct = 0
@@ -4253,7 +4249,6 @@ type FightScreenScore struct {
 	places      int32
 	min         float32
 	max         float32
-	scorePoints float32
 	enabled     map[string]bool
 	active      bool
 }
@@ -4296,7 +4291,6 @@ func (sc *FightScreenScore) step() {
 func (sc *FightScreenScore) reset() {
 	sc.bg.Reset()
 	sc.top.Reset()
-	sc.scorePoints = 0
 }
 
 func (sc *FightScreenScore) bgDraw(layerno int16) {
@@ -5442,7 +5436,7 @@ func (fs *FightScreen) step() {
 		}
 	}
 	for i := range fs.combos {
-		fs.combos[i].step(cb[i], cd[i], cp[i]) // Combo hits, combo damage, combo damage percentage
+		fs.combos[i].step(i, cb[i], cd[i], cp[i]) // Combo hits, combo damage, combo damage percentage
 	}
 	// Action
 	for i := range fs.actions {
@@ -6016,7 +6010,7 @@ func (fs *FightScreen) addComboHits(side int, n int32) {
 	if side < 0 || side >= len(fs.combos) {
 		return
 	}
-	fs.combos[side].trueHits += n
+	sys.comboCount[side] += n
 }
 
 // Update team order based on the actual character member numbers

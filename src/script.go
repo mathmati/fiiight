@@ -5966,7 +5966,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.fightScreen.scores[tn-1].scorePoints = 0
+		sys.scorePoints[tn-1] = 0
 		return 0
 	})
 	luaRegister(l, "resetTokenGuard", func(*lua.LState) int {
