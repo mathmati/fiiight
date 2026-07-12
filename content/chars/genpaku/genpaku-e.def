@@ -1,0 +1,328 @@
+[SceneDef]
+spr = genpaku-e.sff
+startscene = 0
+
+;------------------------------------
+[Scene 0]
+
+fadein.time = 60
+fadein.col = 0,0,0
+fadeout.time = 60
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bgm = genpaku-i.mid
+bgm.loop = 1
+end.time = 100
+
+;------------------------------------
+[Scene 1]
+
+fadein.time = 70
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 300
+layer1.anim =  5
+layer1.offset = 10,160
+
+;------------------------------------
+[Scene 2]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 250
+layer1.anim =  6
+layer1.offset = 220,160
+
+;------------------------------------
+[Scene 3]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 200
+
+;------------------------------------
+[Scene 4]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 150
+
+;------------------------------------
+[Scene 5]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 100
+
+;------------------------------------
+[Scene 6]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 60
+
+;------------------------------------
+[Scene 7]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 30
+
+;------------------------------------
+[Scene 8]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 30
+
+;------------------------------------
+[Scene 7]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 30
+
+;------------------------------------
+[Scene 8]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 30
+
+;------------------------------------
+[Scene 7]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG0
+end.time = 30
+
+;------------------------------------
+[Scene 8]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG1
+end.time = 30
+
+;------------------------------------
+[Scene 9]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG3
+end.time = 60
+
+;------------------------------------
+[Scene 10]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 0
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG4
+end.time = 150
+
+;------------------------------------
+[Scene 11]
+
+fadein.time = 0
+fadein.col = 0,0,0
+fadeout.time = 150
+fadeout.col = 255,0,0
+clearcolor = 255,0,0
+bg.name = BG2
+end.time = 200
+
+;------------------------------------
+[Scene 12]
+
+fadein.time = 30
+fadein.col = 255,0,0
+fadeout.time = 30
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+bg.name = BG5
+end.time = 150
+
+;------------------------------------
+[Scene 13]
+
+fadein.time = 100
+fadein.col = 0,0,0
+fadeout.time = 80
+fadeout.col = 0,0,0
+clearcolor = 0,0,0
+end.time = 60
+
+;------------------------------------
+;------------------------------------
+;------------------------------------
+[BG0Def]
+
+[BG0 paralax]
+type = Normal
+Spriteno = 0,2
+start = -300,0
+velocity = -32, 0
+tile = 1,0
+
+[BG0 GenPaku]
+type = Anim
+ActionNo = 0
+start = -180,0
+velocity = .2, 0
+mask = 1
+
+[BG1Def]
+
+[BG1 paralax]
+type = Normal
+Spriteno = 0,2
+start = -300,0
+velocity = 32, 0
+tile = 1,0
+
+[BG1 Ninja]
+type = Anim
+Actionno = 1
+start = -80,0
+velocity = -.2, 0
+mask = 1
+
+[BG2Def]
+
+[BG2 Explo]
+type = Anim
+ActionNo = 4
+start = -160,0
+velocity = 0, 0
+mask = 0
+
+[BG3Def]
+
+[BG3 paralax]
+type = Normal
+Spriteno = 0,2
+start = -300,0
+velocity = -32, 0
+tile = 1,0
+
+[BG3 Bomb]
+type = Anim
+ActionNo = 2
+start = -180,70
+velocity = .6, 0
+mask = 1
+
+[BG3 Bomb]
+type = Anim
+ActionNo = 2
+start = -80,20
+velocity = 1, 0
+mask = 1
+
+[BG3 Bomb]
+type = Anim
+ActionNo = 2
+start = -100,100
+velocity = .7, 0
+mask = 1
+
+[BG4Def]
+
+[BG4 paralax]
+type = Normal
+Spriteno = 0,2
+start = -300,0
+velocity = -32, 0
+tile = 1,0
+
+[BG4 Sweating_Ninja]
+type = Anim
+ActionNo = 3
+start = -115,0
+velocity = .2, 0
+mask = 1
+
+[BG5Def]
+
+[BG5 paralax]
+type = Normal
+Spriteno = 0,7
+start = -110,210
+
+[Begin Action 0]
+0,0, 0,0, 6
+0,0, 0,3, 6
+
+[Begin Action 1]
+0,1, 0,0, 6
+0,1, 0,3, 6
+
+[Begin Action 2]
+0,8, 0,0, 3
+0,9, 0,0, 3
+
+[Begin Action 3]
+0,4, 0,0, 6
+0,4, 0,3, 6
+
+[Begin Action 4]
+0,5, 0,0, 8
+0,6, 0,0, 8
+
+[Begin Action 5]
+0,10, 0,0, -1
+
+[Begin Action 6]
+0,11, 0,0, -1

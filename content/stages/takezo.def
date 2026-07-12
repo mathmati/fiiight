@@ -1,0 +1,116 @@
+[Info]
+name = "Takezo's BG"
+;by KGenjuro (kgenjuro@daddelkingz.de / www.daddelkingz.de)
+
+[Camera]
+startx = 0
+starty = 0
+boundleft = -160
+boundright = 160
+boundhigh = -90
+boundlow = 0
+verticalfollow = .2
+tension = 50
+
+[PlayerInfo]
+p1startx = -70
+p1starty = 0
+p1startz = 0
+p1facing = 1
+
+p2startx = 70
+p2starty = 0
+p2startz = 0
+p2facing = -1
+
+leftbound  = -1000
+rightbound =  1000
+topbound  =  0
+botbound  =  0
+
+[Scaling]
+topz     = 0
+botz     = 50
+topscale = 1
+botscale = 1.2
+
+[Bound]
+screenleft = 15
+screenright = 15
+
+[StageInfo]
+zoffset = 200
+autoturn = 1
+resetBG = 0
+
+[Shadow]
+color = 22,22,22
+yscale = .4
+
+[Music]
+;Browser port: original bgmusic (sound\sound_sea.mp3) is not distributed with
+;the character repo; commented out so the stage plays silently.
+;bgmusic = sound\sound_sea.mp3
+;bgvolume = 1200
+
+[BGdef]
+spr = stages/takezo.sff
+
+debugbg = 0
+
+[BG Sterne]
+type = normal
+spriteno = 0,0
+start = -400,-90
+delta = .1,.1
+
+[BG Mond]
+type = normal
+spriteno = 0,1
+start = -150,-50
+delta = .05,.05
+mask = 1
+
+[BG Nordsee]
+type = normal
+spriteno = 0,5
+start = -320,160
+delta = .1,.1
+id = 1
+
+[BG Main]
+type = normal
+spriteno = 0,4
+start = -320,140
+delta = 1,1
+mask = 1
+
+[BG EdelFarn#1]
+type = normal
+spriteno = 0,2
+start = -320,100
+delta = 1,1.6
+mask = 1
+layerno = 1
+
+[BG EdelFarn#2]
+type = normal
+spriteno = 0,3
+start = 185,10
+delta = 1,1.6
+mask = 1
+layerno = 1
+
+;-----------------
+[BGCtrlDef 1]
+CtrlID = 1
+
+[BGCtrl 1.4]
+type = Enable
+time = 0
+value = 1
+
+[BGCtrl 1.7]
+type = SinY
+time = 0
+value = -10,600
