@@ -41,3 +41,20 @@
 > engine, structured as an additive js backend for possible upstreaming
 > (context: issue #1606). Feedback very welcome, especially perf reports
 > from different GPUs/browsers.
+
+## Draft: license request to KGenjuro (github.com/donswelt)
+
+Post as an issue on donswelt/Takezo-Kibagami-Mugen (and reference Genpaku-Mugen):
+
+> Hi! I run a browser port of Ikemen GO (https://mathmati.github.io/fiiight/ —
+> the engine compiled to WebAssembly, playable instantly in Chrome) and I'd
+> love to include Takezo and Genpaku in the default roster: fully original,
+> hand-drawn characters of this quality are rare, and they'd be seen by
+> everyone who tries the port.
+>
+> Since bundling means redistributing the files, could you add a license to
+> these two repos (or just reply here with terms you're happy with)? Something
+> like CC-BY 4.0 ("free to use/redistribute with credit") would be perfect —
+> you'd be credited on the site and in the bundle manifest either way.
+>
+> No pressure if you'd rather not — thanks for making these!
