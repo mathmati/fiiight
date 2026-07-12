@@ -120,6 +120,7 @@ type SystemStateVars struct {
 	comboCount              [2]int32
 	decisiveRound           [2]bool
 	gameMode                string
+	credits                 int32
 
 	consecutiveWins  [2]int32
 	firstAttack      [3]int
@@ -288,7 +289,6 @@ type System struct {
 	cmdFlags            map[string]string
 	whitePalTex         Texture
 	usePalette          bool
-	credits             int32
 	gameRunning         bool
 
 	msaa               int32
