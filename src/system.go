@@ -3912,8 +3912,13 @@ func (s *System) runMatch() (reload bool) {
 		// Render frame
 		s.renderFrame()
 
-		// Update system. Break if update returns false (game ended)
+		// Update system. Break if update returns false (engine shutdown).
 		if !s.update() {
+			break
+		}
+
+		// Exit the replay match loop before EOF can reuse the last input sample.
+		if s.replayFile != nil && s.replayFile.file == nil {
 			break
 		}
 
