@@ -4240,17 +4240,17 @@ func (tr *FightScreenTimer) draw(layerno int16, f map[int]*Fnt) {
 }
 
 type FightScreenScore struct {
-	pos         [2]int32
-	text        FSText
-	bg          AnimLayout
-	top         AnimLayout
-	separator   [2]string
-	pad         int32
-	places      int32
-	min         float32
-	max         float32
-	enabled     map[string]bool
-	active      bool
+	pos       [2]int32
+	text      FSText
+	bg        AnimLayout
+	top       AnimLayout
+	separator [2]string
+	pad       int32
+	places    int32
+	min       float32
+	max       float32
+	enabled   map[string]bool
+	active    bool
 }
 
 func newFightScreenScore() *FightScreenScore {

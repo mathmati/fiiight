@@ -61,7 +61,7 @@ type GameState struct {
 	// FightScreen
 	timerCount []int32
 
-	commandLists []*CommandList
+	commandLists  []*CommandList
 	matchMusicSel []*bgMusic
 
 	// Rollback
