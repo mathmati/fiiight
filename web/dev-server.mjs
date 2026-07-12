@@ -25,19 +25,59 @@ const MIME = {
 	".txt": "text/plain; charset=utf-8",
 };
 
+// Single-range requests (bytes=a-b / bytes=a- / bytes=-n) get a 206 so the
+// lazy zip mount works locally; ?norange=1 makes the server ignore Range,
+// simulating a host without support (used by web/test/run.mjs).
 const server = http.createServer(async (req, res) => {
 	try {
-		let urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
+		const u = new URL(req.url, "http://x");
+		let urlPath = decodeURIComponent(u.pathname);
 		if (urlPath.endsWith("/")) urlPath += "index.html";
 		const file = path.normalize(path.join(root, urlPath));
 		if (!file.startsWith(root + path.sep) && file !== root) {
 			res.writeHead(403).end("forbidden");
 			return;
 		}
+		const type = MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream";
+		const noRange = u.searchParams.has("norange");
+		const m = !noRange && req.headers.range ? /^bytes=(\d*)-(\d*)$/.exec(req.headers.range) : null;
+		if (m && (m[1] !== "" || m[2] !== "")) {
+			const size = (await fsp.stat(file)).size;
+			let start, end;
+			if (m[1] === "") { // suffix form: last n bytes
+				start = Math.max(0, size - Number(m[2]));
+				end = size - 1;
+			} else {
+				start = Number(m[1]);
+				end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+			}
+			if (start > end || start >= size) {
+				res.writeHead(416, { "Content-Range": `bytes */${size}` }).end();
+				return;
+			}
+			// Read only the requested slice (Range requests hammer this path).
+			const body = Buffer.alloc(end - start + 1);
+			const fh = await fsp.open(file);
+			try {
+				await fh.read(body, 0, body.length, start);
+			} finally {
+				await fh.close();
+			}
+			res.writeHead(206, {
+				"Content-Type": type,
+				"Content-Length": body.length,
+				"Content-Range": `bytes ${start}-${end}/${size}`,
+				"Accept-Ranges": "bytes",
+				"Cache-Control": "no-cache",
+			});
+			res.end(body);
+			return;
+		}
 		const data = await fsp.readFile(file);
 		res.writeHead(200, {
-			"Content-Type": MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream",
+			"Content-Type": type,
 			"Content-Length": data.length,
+			...(noRange ? {} : { "Accept-Ranges": "bytes" }),
 			"Cache-Control": "no-cache",
 		});
 		res.end(data);

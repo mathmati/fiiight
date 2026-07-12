@@ -1,5 +1,7 @@
-// main.js -- boot sequence: mount content.zip into the in-memory fs, chdir,
-// then instantiate and run ikemen.wasm.
+// main.js -- boot sequence: mount content.zip into the in-memory fs (lazily
+// via its central directory when the host supports Range requests, else in
+// full), prefetch the boot-critical prefixes, chdir, then instantiate and
+// run ikemen.wasm.
 "use strict";
 
 // Captures every stdout/stderr line emitted through fs-shim (see emitLine),
@@ -24,15 +26,49 @@ window.__ikemenBootLog = [];
 	function fmtMB(n) { return (n / (1024 * 1024)).toFixed(1) + " MB"; }
 
 	async function boot() {
-		setStatus("Downloading content…");
-		await mountZip("content.zip", "/ikemen", (loaded, total) => {
+		const dlProgress = (loaded, total) => {
 			if (total > 0) {
 				setProgress(loaded / total);
 				setStatus("Downloading content… " + fmtMB(loaded) + " / " + fmtMB(total));
 			} else {
 				setStatus("Downloading content… " + fmtMB(loaded));
 			}
-		});
+		};
+		// Lazy mode (default): mount only content.zip's central directory and
+		// stream file bodies on demand, so chars/stages/sound download when
+		// first played. ?eager=1 forces the old full download (debug/escape
+		// hatch); hosts without HTTP Range support fall back to it anyway.
+		let mode = "eager";
+		if (new URLSearchParams(location.search).get("eager") === "1") {
+			setStatus("Downloading content…");
+			await mountZip("content.zip", "/ikemen", dlProgress);
+			console.log("fs: eager mode forced (?eager=1)");
+		} else {
+			setStatus("Fetching content index…");
+			const res = await mountZipIndex("content.zip", "/ikemen", { onProgress: dlProgress });
+			if (res.lazy) {
+				mode = "lazy";
+				console.log("fs: lazy index mounted, " + res.files + " files");
+				// Boot-critical prefixes, prefetched in parallel so boot is
+				// not a waterfall of tiny Range requests: data/ and font/
+				// (motif, lifebar, fonts), external/ (the engine runs
+				// external/script/*.lua at startup), video/ (logo.def plays
+				// video/ik_logo.webm as the boot storyboard, see
+				// content/data/ikemen1/system.def). chars/, stages/ and
+				// sound/ (the 5.7 MB soundfont) stay lazy.
+				setStatus("Downloading core data…");
+				await prefetchLazy("/ikemen", ["data/", "font/", "external/", "video/"], (done, total) => {
+					if (total > 0) {
+						setProgress(done / total);
+						setStatus("Downloading core data… " + fmtMB(done) + " / " + fmtMB(total));
+					}
+				});
+				const st = globalThis.__fsLazyStats;
+				console.log("fs: boot prefetch done, " + st.hydrated + "/" + st.files + " files hydrated (" + fmtMB(st.hydratedBytes) + " of " + fmtMB(st.bytes) + ")");
+			} else {
+				console.log("fs: host lacks Range support, downloaded full bundle");
+			}
+		}
 		setProgress(1);
 
 		// User-supplied game overlay (loader.js): mounts a zip stored in
@@ -43,7 +79,7 @@ window.__ikemenBootLog = [];
 
 		globalThis.process.chdir("/ikemen");
 
-		setStatus("Loading engine…");
+		setStatus("Loading engine… (" + (mode === "lazy" ? "streaming content on demand" : "full bundle downloaded") + ")");
 		const go = new Go();
 		go.argv = ["ikemen"];
 		let result;

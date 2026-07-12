@@ -232,7 +232,7 @@ try {
 			await screenshot(cdp, sessionId, `shot-${String(Math.round(t / 1000)).padStart(3, "0")}s.png`);
 			try {
 				const perf = await evalInPage(cdp, sessionId,
-					"JSON.stringify({fps: window.__ikemenFPS || null, heap: (performance.memory && performance.memory.usedJSHeapSize) || null})");
+					"JSON.stringify({fps: window.__ikemenFPS || null, heap: (performance.memory && performance.memory.usedJSHeapSize) || null, lazy: window.__fsLazyStats || null})");
 				console.log("--- perf " + perf + " ---");
 			} catch { /* page busy */ }
 		}

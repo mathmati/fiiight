@@ -5,7 +5,9 @@
 //   3. serves web/ with dev-server.mjs
 //   4. drives headless Chromium over plain CDP (no npm deps)
 //   5. asserts all PASS lines in window.__ikemenBootLog, then reloads and
-//      asserts the /save/ file persisted via localStorage.
+//      asserts the /save/ file persisted via localStorage; then repeats the
+//      suite with the lazy mount (mountZipIndex + Range requests) and with
+//      a no-Range host simulation that must fall back to a full download.
 // Usage: node web/test/run.mjs
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -223,7 +225,37 @@ try {
 		fail("run 2: /save/ file did not persist across reload");
 	}
 
-	console.log("--- OK: all assertions passed ---");
+	// Run 3: lazy mount via mountZipIndex (Range requests against the dev
+	// server); test-main.js adds pre-open stat/readdir and content checks.
+	await cdp.send("Page.navigate", { url: url + "?mode=lazy" }, sessionId);
+	await sleep(300);
+	const log3 = await waitForDone(cdp, sessionId, "run 3 (lazy)");
+	console.log("--- run 3 (lazy) output ---");
+	for (const line of log3) console.log(line);
+
+	const fails3 = log3.filter((l) => l.startsWith("FAIL") || l.startsWith("HARNESS-ERROR") || l.startsWith("BOOT-ERROR"));
+	if (fails3.length) fail("run 3 (lazy) had failures:\n" + fails3.join("\n"));
+	if (!log3.includes("FSTEST-DONE")) fail("run 3 (lazy) did not complete");
+	if (!log3.includes("PASS: lazy-mounted")) fail("run 3: mountZipIndex did not mount lazily");
+	const passCount3 = log3.filter((l) => l.startsWith("PASS")).length;
+	if (passCount3 < 22) fail(`run 3 (lazy): expected >= 22 PASS lines, got ${passCount3}`);
+
+	// Run 4: no-Range host simulation (?norange=1 on the zip URL): must fall
+	// back to a full download and still pass the whole Go suite.
+	await cdp.send("Page.navigate", { url: url + "?mode=lazy-norange" }, sessionId);
+	await sleep(300);
+	const log4 = await waitForDone(cdp, sessionId, "run 4 (norange fallback)");
+	console.log("--- run 4 (norange fallback) output ---");
+	for (const line of log4) console.log(line);
+
+	const fails4 = log4.filter((l) => l.startsWith("FAIL") || l.startsWith("HARNESS-ERROR") || l.startsWith("BOOT-ERROR"));
+	if (fails4.length) fail("run 4 (norange fallback) had failures:\n" + fails4.join("\n"));
+	if (!log4.includes("FSTEST-DONE")) fail("run 4 (norange fallback) did not complete");
+	if (!log4.includes("PASS: fallback-eager")) fail("run 4: no-Range host did not fall back to full download");
+	const passCount4 = log4.filter((l) => l.startsWith("PASS")).length;
+	if (passCount4 < 16) fail(`run 4 (norange fallback): expected >= 16 PASS lines, got ${passCount4}`);
+
+	console.log("--- OK: all assertions passed (eager, reload, lazy, norange fallback) ---");
 	cleanup();
 	process.exit(0);
 } catch (err) {

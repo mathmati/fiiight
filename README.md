@@ -104,6 +104,13 @@ files past the cache, and restarts.
 - **`bash build/wasm.sh`** compiles the engine and packages
   `web/content.zip`; pass `--shell-only` after content-only changes to skip
   the engine compile.
+- **Prefer a host with HTTP Range support** (GitHub Pages, Netlify, S3,
+  Cloudflare Pages all have it): the shell then streams `content.zip`
+  lazily — boot downloads only the core data, and each fighter/stage/track
+  is fetched the first time it is played, so big games (hundreds of MB)
+  become feasible without long boot downloads or mobile memory limits. On a
+  host without Range support the shell automatically falls back to
+  downloading the whole zip up front, exactly as before.
 - **Upload the `web/` folder to any static host.** No server code needed:
   - **GitHub Pages** — this repo ships a workflow
     (`.github/workflows/deploy-pages.yml`) that builds and deploys on every
@@ -125,7 +132,12 @@ content you bundle — see [Credits and licenses](#credits-and-licenses).
 The port adds a `js`-build-tagged backend beside the existing SDL/GL/Vulkan
 ones: a virtual filesystem shim (`web/fs-shim.js`) implements the Node-style
 API Go's `syscall/js` filesystem expects, seeded from `content.zip` and
-mirroring `save/` writes to `localStorage`; the main loop presents by
+mirroring `save/` writes to `localStorage`. On hosts with HTTP Range support
+the mount is lazy: only the zip's central directory is downloaded at boot,
+every entry becomes a placeholder node (stat/readdir work from the index),
+and a file's bytes are Range-fetched and inflated on first open — so
+characters, stages and the soundfont download only when actually played
+(`?eager=1` forces the old full download). The main loop presents by
 blocking on `requestAnimationFrame`, which both paces to vsync and guarantees
 the browser event loop gets control every frame; rendering is a WebGL2 port
 of the engine's GLES backend (`engine/src/render_webgl2.go`); and audio is a
@@ -166,7 +178,8 @@ CDP with no npm dependencies:
 
 - `node web/test/run.mjs` — filesystem shim end-to-end: mounts a generated
   zip, exercises the fs API from a Go wasm binary, verifies `save/`
-  persistence across a reload.
+  persistence across a reload; repeats the suite with the lazy Range-request
+  mount and with a no-Range host simulation (fallback to full download).
 - `node web/test/glsmoke/run.mjs` — WebGL2 smoke test: context acquisition,
   compiling the engine's real sprite shaders, draw and readback (on
   SwiftShader).
