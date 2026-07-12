@@ -1,5 +1,10 @@
 # fiiight — Ikemen GO in the browser
 
+### ▶️ Play it now: **https://mathmati.github.io/fiiight/**
+
+Works on desktop (keyboard/gamepad) and mobile (touch controls). Drop a
+MUGEN content zip onto the page to play your own characters and stages.
+
 [Ikemen GO](https://github.com/ikemen-engine/Ikemen-GO), the open-source
 fighting-game engine compatible with MUGEN content, running **fully
 client-side in the browser**: the engine is compiled from Go to WebAssembly,
