@@ -811,25 +811,31 @@ func (c *CharCompiler) helper(is IniSection, sc *StateControllerBase) (StateCont
 			return err
 		}
 
-		// Handle the "map." parameters
-		// Must be placed after extendsmap or that operation may write over these maps
-		for k, data := range is {
-			lowK := strings.ToLower(k)
-			if strings.HasPrefix(lowK, "map.") {
-				mapKey := k[4:]
-				if mapKey == "" {
-					return Error("Empty map key in helper parameters")
-				}
-				// Compile value expression
-				mapValBes, err := c.exprs(data, VT_Float, 1)
-				if err != nil {
-					return err
-				}
-				// String hack like with most name parameters
-				mapKeyBes := sc.beToExp(BytecodeExp(mapKey))
-				sc.add(helper_map, append(mapKeyBes, mapValBes...))
-				delete(is, k)
+		// Handle the "map." parameters. Must be placed after extendsmap or that
+		// operation may write over these maps. Sort keys because parameter
+		// expressions are evaluated in the generated controller order and may
+		// consume deterministic state such as Random.
+		mapParams := make([]string, 0)
+		for k := range is {
+			if strings.HasPrefix(strings.ToLower(k), "map.") {
+				mapParams = append(mapParams, k)
 			}
+		}
+		sort.Strings(mapParams)
+		for _, k := range mapParams {
+			mapKey := k[4:]
+			if mapKey == "" {
+				return Error("Empty map key in helper parameters")
+			}
+			// Compile value expression
+			mapValBes, err := c.exprs(is[k], VT_Float, 1)
+			if err != nil {
+				return err
+			}
+			// String hack like with most name parameters
+			mapKeyBes := sc.beToExp(BytecodeExp(mapKey))
+			sc.add(helper_map, append(mapKeyBes, mapValBes...))
+			delete(is, k)
 		}
 
 		return nil
