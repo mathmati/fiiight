@@ -33,6 +33,9 @@ type Window struct {
 	rafCh chan struct{}
 	rafCb js.Func
 
+	// last time (UnixNano) the smoothed FPS was mirrored to window.__ikemenFPS
+	fpsLastReport uint64
+
 	// browser event queue, filled by JS listeners, drained in pollEvents
 	evMu    sync.Mutex
 	events  []jsEvent
@@ -228,6 +231,12 @@ func (w *Window) UpdateDebugFPS() {
 	}
 
 	sys.gameFPSprevcount = now
+
+	// Mirror the smoothed FPS to JS once a second for test harnesses/debugging.
+	if now-w.fpsLastReport >= 1e9 {
+		w.fpsLastReport = now
+		js.Global().Set("__ikemenFPS", float64(sys.gameFPS))
+	}
 }
 
 func (w *Window) pollEvents() {
