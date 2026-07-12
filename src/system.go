@@ -222,6 +222,7 @@ type System struct {
 	debugLastID         int32
 	soundMixer          *beep.Mixer
 	bgm                 Bgm
+	matchMusicSel       []*bgMusic
 	pauseVolumeApplied  bool
 	soundChannels       SoundChannels // System sounds. Lifebars etc
 	charSoundChannels   [MaxPlayerNo]SoundChannels
@@ -2259,9 +2260,7 @@ func (s *System) updateMusicMaps() {
 	newMatchMusic := s.round == 1 && !s.roundResetFlg
 
 	if newMatchMusic {
-		s.stage.music.ClearSelection()
-		s.stage.si().music.ClearSelection()
-		s.sel.music.ClearSelection()
+		s.matchMusicSel = s.matchMusicSel[:0]
 	}
 
 	for i, p := range s.chars {
@@ -2269,9 +2268,6 @@ func (s *System) updateMusicMaps() {
 			continue
 		}
 		isSelectableChar := i < MaxSimul*2
-		if newMatchMusic && isSelectableChar {
-			p[0].si().music.ClearSelection()
-		}
 		// Reset music map
 		s.cgi[i].music = make(Music)
 		// Append stage def file music parameters

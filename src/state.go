@@ -61,6 +61,7 @@ type GameState struct {
 	timerCount []int32
 
 	commandLists []*CommandList
+	matchMusicSel []*bgMusic
 
 	// Rollback
 	netTime int32
@@ -92,6 +93,8 @@ func (gs *GameState) LoadState(stateID int) {
 
 	sys.SystemStateVars = gs.SystemStateVars
 	sys.frameCounter = gs.frame
+	sys.matchMusicSel = arena.MakeSlice[*bgMusic](a, len(gs.matchMusicSel), len(gs.matchMusicSel))
+	copy(sys.matchMusicSel, gs.matchMusicSel)
 
 	gs.loadCharData(a, gsp)
 	gs.loadProjectileData(a, gsp)
@@ -205,6 +208,8 @@ func (gs *GameState) SaveState(stateID int) {
 	gs.frame = sys.frameCounter
 	gs.isSpeculativeFrame = sys.isSpeculativeFrame()
 	gs.SystemStateVars = sys.SystemStateVars
+	gs.matchMusicSel = arena.MakeSlice[*bgMusic](a, len(sys.matchMusicSel), len(sys.matchMusicSel))
+	copy(gs.matchMusicSel, sys.matchMusicSel)
 
 	gs.saveCharData(a, gsp)
 	gs.saveProjectileData(a, gsp)

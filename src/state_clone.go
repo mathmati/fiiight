@@ -758,6 +758,7 @@ type stageRollbackBgState struct {
 type stageRollbackState struct {
 	stageTime int32
 	bga       bgAction
+	bgmState  BGMState
 	bg        []stageRollbackBgState
 }
 
@@ -768,6 +769,7 @@ func (s *Stage) CloneRollbackState(a *arena.Arena) (result stageRollbackState) {
 
 	result.stageTime = s.stageTime
 	result.bga = s.bga
+	result.bgmState = s.bgmState
 	result.bg = arena.MakeSlice[stageRollbackBgState](a, len(s.bg), len(s.bg))
 	for i, bg := range s.bg {
 		if bg == nil {
@@ -789,6 +791,7 @@ func (ss *stageRollbackState) Load(s *Stage) {
 
 	s.stageTime = ss.stageTime
 	s.bga = ss.bga
+	s.bgmState = ss.bgmState
 	for i := range ss.bg {
 		if i >= len(s.bg) {
 			break
