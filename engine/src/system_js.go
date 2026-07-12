@@ -32,6 +32,7 @@ type Window struct {
 	// requestAnimationFrame present/yield machinery (see SwapBuffers)
 	rafCh chan struct{}
 	rafCb js.Func
+	wdCb  js.Func
 
 	// last time (UnixNano) the smoothed FPS was mirrored to window.__ikemenFPS
 	fpsLastReport uint64
@@ -71,6 +72,16 @@ func (s *System) newWindow(w, h int) (*Window, error) {
 	}
 
 	window.rafCb = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		select {
+		case window.rafCh <- struct{}{}:
+		default:
+		}
+		return nil
+	})
+	// Watchdog twin of rafCb: fires via setTimeout when the browser withholds
+	// animation frames (occluded window, background-tab throttling) so the
+	// engine degrades to a slow tick instead of freezing in SwapBuffers.
+	window.wdCb = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		select {
 		case window.rafCh <- struct{}{}:
 		default:
@@ -149,8 +160,16 @@ func (w *Window) registerEventListeners() {
 // presents implicitly when control returns to the browser, so the critical
 // part is the yield: without it the wasm main loop would starve the tab.
 func (w *Window) SwapBuffers() {
-	js.Global().Call("requestAnimationFrame", w.rafCb)
+	// Drain any stale tick left by a late rAF/watchdog pair last frame.
+	select {
+	case <-w.rafCh:
+	default:
+	}
+	rafID := js.Global().Call("requestAnimationFrame", w.rafCb)
+	timerID := js.Global().Call("setTimeout", w.wdCb, 250)
 	<-w.rafCh
+	js.Global().Call("cancelAnimationFrame", rafID)
+	js.Global().Call("clearTimeout", timerID)
 }
 
 func (w *Window) SetIcon(icon []image.Image) {
@@ -269,6 +288,7 @@ func (w *Window) Close() {
 	}
 	w.jsFuncs = nil
 	w.rafCb.Release()
+	w.wdCb.Release()
 }
 
 // GLCreateContext and GLMakeCurrent exist so the "OpenGL"-named renderer
