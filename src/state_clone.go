@@ -805,6 +805,28 @@ func (ss *stageRollbackState) Load(s *Stage) {
 	}
 }
 
+// cloneStageList snapshots all loaded stage definitions as one object graph.
+// Multiple roundXdef entries may alias the same Stage, so preserve pointer identity.
+func cloneStageList(a *arena.Arena, gsp *GameStatePool, src map[int32]*Stage, active *Stage) (map[int32]*Stage, *Stage) {
+	result := make(map[int32]*Stage, len(src))
+	cloned := make(map[*Stage]*Stage, len(src)+1)
+	cloneOne := func(s *Stage) *Stage {
+		if s == nil {
+			return nil
+		}
+		if c, ok := cloned[s]; ok {
+			return c
+		}
+		c := s.Clone(a, gsp)
+		cloned[s] = c
+		return c
+	}
+	for k, s := range src {
+		result[k] = cloneOne(s)
+	}
+	return result, cloneOne(active)
+}
+
 func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 	result := &Stage{}
 	*result = *s
@@ -819,12 +841,9 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 		result.constants[k] = v
 	}
 
-	// Clone animation table
-	result.animTable = *gsp.Get(s.animTable).(*AnimationTable)
-	maps.Clear(result.animTable.anims)
-	for k, v := range s.animTable.anims {
-		result.animTable.anims[k] = v.Clone(a, gsp)
-	}
+	// Stage animation definitions are immutable after loading. Runtime BG
+	// animations are separate Animation objects cloned below.
+	result.animTable = s.animTable
 
 	// Clone backgrounds and rebuild mapping
 	bgMap := make(map[*backGround]*backGround, len(s.bg))
