@@ -162,7 +162,8 @@ original hand-drawn characters self-published on GitHub by their author
   ripped from, Samurai Shodown — the author describes creating the sprites
   himself from a keyring figure as reference).
 - Status: No formal license in the source repo; author self-publishes these
-  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  publicly. A license request is pending (asked in the release announcement,
+  ikemen-engine/Ikemen-GO#1606); will be
   removed immediately on the author's request.
 - WinMUGEN-era character (`mugenversion = 14,04,2001`), 12 palettes,
   intro/ending storyboards (`takezo-i.def` / `takezo-e.def`) included.
@@ -186,7 +187,8 @@ original hand-drawn characters self-published on GitHub by their author
   ago."); same author, same original hand-drawn cast. The author's
   `README.md` is kept verbatim in the folder.
 - Status: No formal license in the source repo; author self-publishes these
-  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  publicly. A license request is pending (asked in the release announcement,
+  ikemen-engine/Ikemen-GO#1606); will be
   removed immediately on the author's request.
 - WinMUGEN-era character (`mugenversion = 14,04,2002`, V1.0 BETA), 6
   palettes, intro/ending storyboards included. Files are unmodified.
@@ -205,7 +207,8 @@ original hand-drawn characters self-published on GitHub by their author
   original M.U.G.E.N. character I made decades ago."; the stage .def credits
   ";by KGenjuro".
 - Status: No formal license in the source repo; author self-publishes these
-  publicly. A license request is pending (see port/ANNOUNCEMENT.md); will be
+  publicly. A license request is pending (asked in the release announcement,
+  ikemen-engine/Ikemen-GO#1606); will be
   removed immediately on the author's request.
 - Installed as `stages/takezo.def` + `stages/takezo.sff` (upstream folder
   already names the files `takezo.def`/`takezo.sff`, and its `spr =
@@ -283,7 +286,8 @@ original hand-drawn characters self-published on GitHub by their author
 - `chars/takezo/`, `chars/genpaku/`, `stages/takezo.*` (KGenjuro / Torsten
   Hartmann): original characters and stage, self-published by the author at
   github.com/donswelt. No formal license in the source repos; a license
-  request is pending (see port/ANNOUNCEMENT.md); will be removed immediately
+  request is pending (asked in the release announcement,
+  ikemen-engine/Ikemen-GO#1606); will be removed immediately
   on the author's request.
 - `sound/soundfont.sf2` (TimGM6mb): (c) 2004 Tim Brechbill, 2010 David
   Bolton; GNU GPL v2 (full text pointer in `sound/soundfont-license.txt`,
