@@ -2384,13 +2384,16 @@ func (s *System) resetRound() {
 		if len(p) == 0 {
 			continue
 		}
-		// Select anim 0
+		// Select anim 0. If it is missing, choose the lowest available action
+		// instead of depending on Go map iteration order.
 		firstAnim := int32(0)
-		// Default to first anim in .AIR if 0 was not found
 		if p[0].gi().animTable.anims[0] == nil {
+			found := false
 			for k := range p[0].gi().animTable.anims {
-				firstAnim = k
-				break
+				if !found || k < firstAnim {
+					firstAnim = k
+					found = true
+				}
 			}
 		}
 		p[0].selfState(5900, firstAnim, -1, 0, "")
