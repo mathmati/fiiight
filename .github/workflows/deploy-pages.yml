@@ -1,8 +1,9 @@
 # Build the browser port and deploy web/ to GitHub Pages.
 #
-# One-time setup: the repo owner must enable Pages in the repository settings
-# (Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"),
-# otherwise the deploy step fails with "Pages site not found".
+# The configure-pages step below auto-enables Pages (Source: "GitHub Actions")
+# on first run. If that step ever fails with a permissions error, enable it
+# once by hand: Settings -> Pages -> Build and deployment -> Source:
+# "GitHub Actions".
 name: Deploy to GitHub Pages
 
 on:
@@ -25,6 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Enable/confirm GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/setup-go@v5
         with:
