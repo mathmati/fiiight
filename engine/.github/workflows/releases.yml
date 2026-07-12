@@ -1,0 +1,577 @@
+on:
+  push:
+    branches: [ develop, ci-test ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag for the new release. Use semantic versioning e.g. v1.0.0. Leave empty to only update the nightly build.'
+        type: string
+        required: false
+        default: ''
+      prerelease:
+        description: 'Set as a pre-release.'
+        type: boolean
+        required: false
+        default: false
+      makeLatest:
+        description: 'Set as the latest release.'
+        type: boolean
+        required: false
+        default: true
+      draft:
+        description: 'Set as a draft release.'
+        type: boolean
+        required: false
+        default: false
+      discussionCategory:
+        description: 'When provided this will generate a discussion of the specified category, e.g. Announcements.'
+        type: string
+        required: false
+        default: ''
+      buildAndroidApk:
+        description: 'Build Android APK.'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  checks: write
+  contents: write
+
+name: releases
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || 'nightly' }}
+  cancel-in-progress: true
+
+jobs:
+  tag:
+    name: prepare tag
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      releaseTag: ${{ steps.meta.outputs.releaseTag }}
+      releaseKind: ${{ steps.meta.outputs.releaseKind }}
+      buildTime: ${{ steps.meta.outputs.buildTime }}
+      #previousTag: ${{ steps.previousTag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      #- name: Get previous tag
+      #  id: previousTag
+      #  uses: actions-ecosystem/action-get-latest-tag@v1
+      #  with:
+      #    semver_only: true
+
+      - name: Set version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ref_name="${GITHUB_REF_NAME}"
+
+          if [ "${{ github.event.inputs.tag }}" != "" ]; then
+            version="${{ github.event.inputs.tag }}"
+            release_tag="${{ github.event.inputs.tag }}"
+            release_kind="tagged"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+               [ "$ref_name" != "develop" ] && \
+               [ "$ref_name" != "ci-test" ]; then
+            version="$ref_name"
+            release_tag="$ref_name"
+            release_kind="branch"
+          else
+            version="nightly"
+            release_tag="nightly"
+            release_kind="nightly"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "releaseTag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "releaseKind=$release_kind" >> "$GITHUB_OUTPUT"
+          echo "buildTime=$(date '+%Y.%m.%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Move nightly tag to this commit
+        if: ${{ steps.meta.outputs.releaseKind == 'nightly' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          tag="${{ steps.meta.outputs.releaseTag }}"
+
+          git fetch --force --tags origin
+          git tag -fa "$tag" "$GITHUB_SHA" -m "$tag: $GITHUB_SHA"
+          git push --force origin "refs/tags/$tag:refs/tags/$tag"
+
+  build:
+    name: prepare release
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    needs: tag
+    strategy:
+      matrix:
+        cfg:
+          - runner_os: windows
+            os: windows-2022
+            goos: windows
+            goarch: amd64
+            bin: Ikemen_GO.exe
+            glibc: ''
+            target: ''
+            build_target: Win64
+          - runner_os: linux
+            os: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            bin: Ikemen_GO_Linux
+            glibc: '2.13'
+            target: ''
+            build_target: Linux
+          - runner_os: macos
+            os: macos-14 # macos-13
+            goos: darwin
+            goarch: arm64 # amd64
+            bin: Ikemen_GO_MacOSARM # Ikemen_GO_MacOS
+            glibc: ''
+            target: '10.7'
+            build_target: MacOSARM # MacOS
+          - runner_os: android
+            os: ubuntu-22.04
+            goos: android
+            goarch: arm64
+            bin: ikemen-go.apk
+            glibc: ''
+            target: ''
+            build_target: Android
+    runs-on: ${{ matrix.cfg.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.20.x'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            **/go.sum
+
+      - name: Setup MSYS2 (Windows)
+        if: ${{ matrix.cfg.runner_os == 'windows' }}
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            make
+            diffutils
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-bzip2
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-tools-git
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-yasm
+            mingw-w64-x86_64-libxmp
+      - name: Prepare Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: 1.4.304.1
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
+      - name: Install dependencies
+        if: ${{ matrix.cfg.runner_os != 'android' }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y libasound2-dev libgl1-mesa-dev xorg-dev libgtk-3-dev \
+              build-essential pkg-config git yasm nasm curl ca-certificates libxmp-dev libsdl2-dev
+          fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # Avoid update, disable analytics, prefer taps over API, and retry.
+            export HOMEBREW_NO_ANALYTICS=1
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            export HOMEBREW_NO_INSTALL_FROM_API=1
+            brew update-reset || true
+            ( brew install --quiet pkg-config git nasm libxmp sdl2 molten-vk ) || (
+              echo "First attempt failed; retrying with API mode..." >&2
+              unset HOMEBREW_NO_INSTALL_FROM_API
+              brew install --quiet pkg-config git nasm libxmp sdl2 molten-vk
+            )
+          fi
+
+      - name: Generate LICENSES.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # One LICENSES.txt for ALL platforms (including Android).
+          # Must exist BEFORE Android Docker Compose runs so it is visible in the bind-mounted workspace.
+          FFMPEG_REV="${FFMPEG_REV:-release/7.1}"
+
+          SCREENPACK_LIC="https://raw.githubusercontent.com/ikemen-engine/Ikemen-GO-Screenpack/master/LICENCE.txt"
+
+          FFMPEG_LGPL="https://raw.githubusercontent.com/FFmpeg/FFmpeg/${FFMPEG_REV}/COPYING.LGPLv2.1"
+          FFMPEG_LICENSE_MD="https://raw.githubusercontent.com/FFmpeg/FFmpeg/${FFMPEG_REV}/LICENSE.md"
+          FFMPEG_CREDITS="https://raw.githubusercontent.com/FFmpeg/FFmpeg/${FFMPEG_REV}/CREDITS"
+
+          LIBXMP_README="https://raw.githubusercontent.com/libxmp/libxmp/master/README"
+          SDL2_LICENSE="https://raw.githubusercontent.com/libsdl-org/SDL/main/LICENSE.txt"
+
+          {
+            echo "============================="
+            echo " Ikemen GO - LICENSES.txt"
+            echo "============================="
+            echo
+            echo "Section 1: Ikemen GO (MIT)"
+            echo "--------------------------"
+            cat LICENCE.txt
+            echo
+            echo "Section 2: Bundled Assets (Creative Commons)"
+            echo "-------------------------------------------"
+            echo "Screenpack license from Ikemen-GO-Screenpack/LICENCE.txt:"
+            echo
+            curl -fsSL "$SCREENPACK_LIC"
+            echo
+            echo "Section 3: FFmpeg (LGPL v2.1) and Notices"
+            echo "-----------------------------------------"
+            echo "This program dynamically links FFmpeg under the GNU Lesser General Public License v2.1."
+            echo "The exact corresponding FFmpeg source is attached to the release page as:"
+            echo "  src_ffmpeg.tar.gz"
+            echo
+            echo "3.1 Full LGPL v2.1 license text:"
+            echo "--------------------------------"
+            curl -fsSL "$FFMPEG_LGPL"
+            echo
+            echo "3.2 FFmpeg LICENSE.md:"
+            echo "----------------------"
+            curl -fsSL "$FFMPEG_LICENSE_MD"
+            echo
+            echo "3.3 FFmpeg CREDITS:"
+            echo "-------------------"
+            curl -fsSL "$FFMPEG_CREDITS"
+            echo
+            echo "Section 4: libxmp and Notices"
+            echo "-----------------------------"
+            echo "Upstream: https://github.com/libxmp/libxmp"
+            echo
+            echo "libxmp README (contains license info):"
+            echo "-------------------------------------"
+            curl -fsSL "$LIBXMP_README"
+            echo
+            echo "Section 5: SDL2 and Notices"
+            echo "---------------------------"
+            echo "Upstream: https://github.com/libsdl-org/SDL"
+            echo
+            echo "SDL2 LICENSE (zlib):"
+            echo "--------------------"
+            curl -fsSL "$SDL2_LICENSE"
+            echo
+          } > LICENSES.txt
+
+      - name: Build (POSIX)
+        if: ${{ runner.os != 'Windows' && matrix.cfg.runner_os != 'android' }}
+        shell: bash
+        env:
+          BUILD_FFMPEG: "yes"
+          GOOS: ${{ matrix.cfg.goos }}
+          GOARCH: ${{ matrix.cfg.goarch }}
+          CGO_ENABLED: "1"
+          GOEXPERIMENT: "arenas"
+          APP_VERSION: ${{ needs.tag.outputs.version }}
+          APP_BUILDTIME: ${{ needs.tag.outputs.buildTime }}
+        run: |
+          go env -w GO111MODULE=on
+          go mod download
+          ./build/build.sh ${{ matrix.cfg.build_target }}
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            make appbundle BINNAME=bin/${{ matrix.cfg.bin }}
+          fi
+
+      - name: Build Android (Docker Compose)
+        if: ${{ matrix.cfg.runner_os == 'android' && (github.event_name != 'workflow_dispatch' || github.event.inputs.buildAndroidApk != 'false') }}
+        shell: bash
+        env:
+          # Build APK is optional but enabled by default. If disabled, we skip this entire step.
+          BUILD_ANDROID_APK: ${{ (github.event_name != 'workflow_dispatch' || github.event.inputs.buildAndroidApk != 'false') && '1' || '0' }}
+          APP_VERSION: ${{ needs.tag.outputs.version }}
+          APP_BUILDTIME: ${{ needs.tag.outputs.buildTime }}
+        run: |
+          set -euo pipefail
+          echo "==> Docker sanity:"
+          docker version
+          docker compose version
+          echo
+          echo "==> Building Android (APK via Docker Compose)..."
+          chmod +x build/build_android.sh
+          ./build/build_android.sh
+          echo
+          echo "==> Outputs:"
+          ls -lah bin/ lib/ || true
+          test -f bin/libmain.so
+          test -f bin/ikemen-go.apk
+
+      - name: Build (MSYS2)
+        if: ${{ runner.os == 'Windows' }}
+        shell: 'msys2 {0}'
+        env:
+          BUILD_FFMPEG: "yes"
+          GOOS: ${{ matrix.cfg.goos }}
+          GOARCH: ${{ matrix.cfg.goarch }}
+          CGO_ENABLED: "1"
+          GOEXPERIMENT: "arenas"
+          APP_VERSION: ${{ needs.tag.outputs.version }}
+          APP_BUILDTIME: ${{ needs.tag.outputs.buildTime }}
+        run: |
+          go env -w GO111MODULE=on
+          go mod download
+          ./build/build.sh ${{ matrix.cfg.build_target }}
+
+      - name: Prepare FFmpeg artifacts
+        if: ${{ matrix.cfg.runner_os == 'linux' }}
+        id: artifacts_ffmpeg
+        shell: bash
+        run: |
+          # Android build runs in Docker and may create root-owned git dirs; allow them.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/build/ffmpeg-src" >/dev/null 2>&1 || true
+          mkdir -p FFmpeg-CS
+          # Export the *exact* tree
+          ( cd build/ffmpeg-src && git archive --format=tar HEAD ) | tar -x -C FFmpeg-CS
+          cp build/ffmpeg-src/config.h FFmpeg-CS/ 2>/dev/null || true
+          cp build/ffmpeg-src/config.log FFmpeg-CS/ 2>/dev/null || true
+          cp build/ffmpeg-src/BUILDINFO.txt FFmpeg-CS/ 2>/dev/null || true
+          tar -czf "src_ffmpeg.tar.gz" FFmpeg-CS
+          echo "artifact_ffsrc=src_ffmpeg.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release artifacts
+        if: ${{ matrix.cfg.runner_os != 'android' || (github.event_name != 'workflow_dispatch' || github.event.inputs.buildAndroidApk != 'false') }}
+        id: artifacts
+        shell: bash
+        run: |
+          echo "Preparing files for deployment"
+          mkdir -p deploy
+
+          if [ "${{ matrix.cfg.runner_os }}" = "android" ]; then
+            echo "==> Preparing Android release artifact"
+            mkdir -p deploy/lib
+            cp -av bin/ikemen-go.apk deploy/ || true
+            cp -av bin/libmain.so bin/libmain.h deploy/ 2>/dev/null || true
+            cp -av lib/*.so* deploy/lib/ 2>/dev/null || true
+            cp README.md deploy/ 2>/dev/null || true
+
+            cp -av LICENSES.txt deploy/ 2>/dev/null || true
+
+            cd deploy
+            if [ "${{ needs.tag.outputs.releaseKind }}" = "nightly" ]; then
+              ARTIFACT_NAME=Ikemen_GO-dev-android.zip
+              echo "artifact=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+            else
+              ARTIFACT_NAME=Ikemen_GO-${{ needs.tag.outputs.releaseTag }}-android.zip
+              echo "artifact=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+            fi
+            zip -r ../$ARTIFACT_NAME *
+            echo "Successfully prepared Android assets for deployment"
+            exit 0
+          fi
+
+          mkdir -p deploy/data
+
+          # 1) Put binary and shared libs generated by build.sh
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cp -r I.K.E.M.E.N-Go.app deploy/
+            mkdir -p deploy/I.K.E.M.E.N-Go.app/Contents/Frameworks
+            if ls lib/*.dylib >/dev/null 2>&1; then
+              cp -av lib/*.dylib deploy/I.K.E.M.E.N-Go.app/Contents/Frameworks/ 2>/dev/null || true
+            fi
+          else
+            cp "./${{ matrix.cfg.bin }}" deploy/
+            mkdir -p deploy/lib
+            cp -r lib/* deploy/lib/ 2>/dev/null || true
+          fi
+
+          # 2) Bring in runtime assets
+          git clone https://github.com/ikemen-engine/Ikemen-GO-Screenpack.git
+          cp -r data font external \
+                Ikemen-GO-Screenpack/chars \
+                Ikemen-GO-Screenpack/data \
+                Ikemen-GO-Screenpack/font \
+                Ikemen-GO-Screenpack/sound \
+                Ikemen-GO-Screenpack/stages \
+                Ikemen-GO-Screenpack/video \
+                deploy/
+
+          # 3) Include readme
+          cp README.md deploy/
+
+          # 4) Single LICENSES.txt
+          cp -av LICENSES.txt deploy/ 2>/dev/null || true
+
+          # 5) Extra runtime db
+          GAMEPAD_DB_URL="https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/refs/heads/master/gamecontrollerdb.txt"
+          echo "Downloading SDL GameController DB..."
+          curl -L "$GAMEPAD_DB_URL" -o deploy/external/gamecontrollerdb.txt
+
+          # 6) system.base.def
+          cp src/resources/defaultMotif.ini deploy/data/system.base.def
+
+          # 7) Archive
+          echo "Zipping deploy directory"
+          cd deploy
+
+          # Linux desktop integration: ship .desktop + 256px icon
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            #mkdir -p icons/hicolor/256x256/apps
+            #cp ../external/icons/IkemenCylia_256.png icons/hicolor/256x256/apps/ikemen-go.png
+            cp ../external/icons/IkemenCylia_256.png ikemen-go.png
+            cat > Ikemen_GO.desktop <<'EOF'
+          [Desktop Entry]
+          Name=Ikemen GO
+          Comment=An open-source fighting game engine
+          TryExec=Ikemen_GO_Linux
+          Exec=./Ikemen_GO_Linux
+          Icon=ikemen-go.png
+          Terminal=false
+          Type=Application
+          Categories=Game;ArcadeGame;
+          EOF
+          fi
+
+          if [ "${{ needs.tag.outputs.releaseKind }}" = "nightly" ]; then
+            ARTIFACT_NAME=Ikemen_GO-dev-${{ matrix.cfg.runner_os }}.zip
+            echo "artifact=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          else
+            ARTIFACT_NAME=Ikemen_GO-${{ needs.tag.outputs.releaseTag }}-${{ matrix.cfg.runner_os }}.zip
+            echo "artifact=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            "/c/Program Files/7-Zip/7z.exe" a ../$ARTIFACT_NAME *
+          else
+            cp ../build/Ikemen_GO.command .
+            zip -r ../$ARTIFACT_NAME *
+          fi
+          echo "Successfully prepared assets for deployment"
+
+      - name: Stage release artifacts
+        if: ${{ steps.artifacts.outputs.artifact != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+
+          cp -v "${{ steps.artifacts.outputs.artifact }}" release-files/
+
+          if [ "${{ matrix.cfg.runner_os }}" = "linux" ] && \
+             [ -n "${{ steps.artifacts_ffmpeg.outputs.artifact_ffsrc }}" ]; then
+            cp -v "${{ steps.artifacts_ffmpeg.outputs.artifact_ffsrc }}" release-files/
+          fi
+
+      - name: Upload release artifacts
+        if: ${{ steps.artifacts.outputs.artifact != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.cfg.runner_os }}
+          path: release-files/*
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    needs: [tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 1 -type f -print -exec ls -lh {} \;
+
+      - name: Recreate nightly release metadata
+        if: ${{ needs.tag.outputs.releaseKind == 'nightly' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.IKEMEN_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # The nightly tag has already been force-moved in the prepare tag job.
+          # Delete only the GitHub Release object so GitHub republishes it with fresh metadata.
+          # Do NOT pass --cleanup-tag here, because that would delete the moved nightly tag too.
+          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes
+          fi
+
+      - name: Update dev release
+        if: ${{ needs.tag.outputs.releaseKind == 'nightly' }}
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.IKEMEN_TOKEN }}
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: "release-assets/*"
+          commit: ${{ github.sha }}
+          body: |
+            The nightly release, or more precisely, the latest development version, is generated after each commit and always represents the most up-to-date iteration of the source code. It features the newest development version of the engine and screenpack files, making it ready for testing straightaway. Using it can eliminate the need to compile the source code for the latest, cutting-edge updates. However, as a consequence, it may sometimes contain regressions that were not yet discovered and/or outpace the documentation that corresponds to stable releases with version numbers like v x.x.x.
+          discussionCategory: ""
+          draft: false
+          generateReleaseNotes: false
+          makeLatest: true
+          name: nightly
+          omitBody: false
+          omitBodyDuringUpdate: false
+          omitDraftDuringUpdate: true
+          omitName: false
+          omitNameDuringUpdate: true
+          omitPrereleaseDuringUpdate: true
+          prerelease: false
+          removeArtifacts: false
+          replacesArtifacts: true
+          skipIfReleaseExists: false
+          tag: nightly
+          updateOnlyUnreleased: false
+
+      - name: Create Release
+        if: ${{ needs.tag.outputs.releaseKind != 'nightly' }}
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.IKEMEN_TOKEN }}
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: "release-assets/*"
+          commit: ${{ github.sha }}
+          # body: |
+          #   ${{ needs.tag.outputs.changelog }}
+          discussionCategory: ${{ github.event.inputs.discussionCategory }}
+          draft: ${{ github.event.inputs.draft }}
+          generateReleaseNotes: ${{ needs.tag.outputs.releaseKind == 'tagged' }}
+          makeLatest: ${{ needs.tag.outputs.releaseKind == 'tagged' && github.event.inputs.makeLatest }}
+          name: ${{ needs.tag.outputs.releaseTag }}
+          omitBody: false
+          omitBodyDuringUpdate: true
+          omitDraftDuringUpdate: true
+          omitName: false
+          omitNameDuringUpdate: true
+          omitPrereleaseDuringUpdate: true
+          prerelease: ${{ needs.tag.outputs.releaseKind == 'branch' || github.event.inputs.prerelease }}
+          removeArtifacts: false
+          replacesArtifacts: true
+          skipIfReleaseExists: false
+          tag: ${{ needs.tag.outputs.releaseTag }}
+          updateOnlyUnreleased: false
