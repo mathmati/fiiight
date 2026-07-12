@@ -8102,14 +8102,20 @@ func varRangeSetSub[T int32 | float32](c *Char, m *map[int32]T, first, last int3
 	loopCount := 0
 
 	if val == 0 {
-		// Delete specific keys. Optimized for sparse maps
+		// Map iteration order is randomized. Collect and sort matching keys so
+		// the MaxLoop cap clears the same variables on every peer.
+		keys := make([]int, 0, Min(len(*m), MaxLoop))
 		for k := range *m {
 			if k >= first && k <= last {
-				delete(*m, k)
-				loopCount++
-				if loopCount >= MaxLoop {
-					break
-				}
+				keys = append(keys, int(k))
+			}
+		}
+		sort.Ints(keys)
+		for _, k := range keys {
+			delete(*m, int32(k))
+			loopCount++
+			if loopCount >= MaxLoop {
+				break
 			}
 		}
 	} else {
