@@ -3786,6 +3786,9 @@ func (s *System) runMatch() (reload bool) {
 
 	if s.cfg.Config.TurnsLoading {
 		s.startNextTurnsPreload()
+		if (s.rollback.session != nil || s.cfg.Netplay.Rollback.DesyncTestFrames > 0) && !s.finishTurnsPreloadForRollback() {
+			return false
+		}
 	}
 
 	// Reset the clock right before entering the loop to ensure we start with a clean timeline
@@ -5514,6 +5517,33 @@ func (s *System) startNextTurnsPreload() {
 	if s.loader.state == LS_NotYet {
 		s.loader.runTread()
 	}
+}
+
+// Rollback snapshots must not race the asynchronous Turns loader. The loader mutates
+// character slots and compilation globals that are not safe to update between save/load.
+func (s *System) finishTurnsPreloadForRollback() bool {
+	if !s.turnsPreloadActive() {
+		return true
+	}
+	for s.loader.state != LS_Complete {
+		switch s.loader.state {
+		case LS_Error:
+			if s.loader.err != nil {
+				panic(s.loader.err)
+			}
+			return false
+		case LS_Cancel:
+			return false
+		case LS_NotYet:
+			if !s.loader.runTread() {
+				return false
+			}
+		}
+		if !s.await(s.gameRenderSpeed()) {
+			return false
+		}
+	}
+	return true
 }
 
 // Rewrite slot-indexed fields inside chars when a preloaded Turns member is promoted into P1/P2.
