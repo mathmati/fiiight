@@ -138,15 +138,18 @@ seam inventory, decision log, file-by-file plan — is in
 
 Working: boot, title, options, character select, versus, training, arcade
 flow, sprites/fonts/lifebars, sound effects and streamed music (mp3/ogg/wav),
-keyboard and Gamepad-API input, persistent saves.
+MIDI music through the bundled soundfont (`content/sound/soundfont.sf2`,
+TimGM6mb), keyboard and Gamepad-API input, persistent saves, background
+videos (`type = video` storyboard/stage backgrounds, decoded by the
+browser's own `<video>` pipeline — the stock screenpack's video logo
+storyboard plays at boot; only the default `scalemode = None` is
+implemented, and if the browser blocks unmuted autoplay the video plays
+muted until the first click/keypress).
 
 Not working (yet):
 
 - **No netplay in the browser.** Raw TCP/UDP sockets are impossible in web
   pages; a WebRTC data-channel transport is future work.
-- **No background videos.** `type = video` stage/storyboard backgrounds
-  (`.webm`) are stubbed out; the demo screenpack's video logo storyboard is
-  disabled for this reason.
 - **No module music.** `.xm`/`.mod`/`.it`/`.s3m` playback needs libxmp (cgo);
   attempting to play one reports an error. Streamed formats work.
 - **Shadows are disabled for 3D-model stages.** The WebGL2 renderer reports

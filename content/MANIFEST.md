@@ -23,9 +23,12 @@ identical to what the release zips ship.
 
 ## What is included (and why)
 
-- `data/ikemen1/` — default motif (`system.def`, `system.sff`) + its bitmap
-  fonts under `data/ikemen1/fonts/` (referenced by `system.def` and
-  `data/fight.def`).
+- `data/ikemen1/` — default motif (`system.def`, `system.sff`, boot logo
+  storyboard `logo.def`) + its bitmap fonts under `data/ikemen1/fonts/`
+  (referenced by `system.def` and `data/fight.def`).
+- `video/ik_logo.webm` — the Ikemen GO logo video played by
+  `data/ikemen1/logo.def` (`logo.storyboard` in `system.def`). Fetched from
+  the screenpack repo @ `cb92767` (`video/ik_logo.webm`), unmodified.
 - `data/` — motif/lifebar companions resolved from `data/`: `fight.def`,
   `fight.sff`, `fight.snd`, `fightfx.air`, `fightfx.sff`, `common.snd`,
   `glyphs.sff` (movelist glyphs, default motif param `glyphs = glyphs.sff`),
@@ -47,6 +50,12 @@ identical to what the release zips ship.
 - `chars/` — seven-slot roster; per-character provenance, license evidence
   and sizes in the "Characters" section below. `Config.TrainingChar` is left
   empty (engine default): P2 is picked manually in Training.
+- `sound/soundfont.sf2` + `sound/soundfont-license.txt` — TimGM6mb General
+  MIDI soundfont (Tim Brechbill, 5.7 MB), at the engine's default
+  `Sound.SoundFont` config path: enables `.mid` BGM (used by Takezo's and
+  Genpaku's intro storyboards). Fetched from the Debian package
+  `timgm6mb-soundfont 1.3-5` (deb.debian.org); the package's copyright file
+  ships alongside as the license text.
 - `font/` — motif fonts not present in `engine/font`: `f-4x6.{def,sff,fnt}`,
   `infofont.def`, `Open_Sans.def` (both point at
   `engine/font/Open_Sans/OpenSans-Regular.ttf`), and the default-motif
@@ -162,8 +171,9 @@ original hand-drawn characters self-published on GitHub by their author
   byte-for-byte (the browser port's zip filesystem lookup is happiest with
   exact case); the `Takezo_Stage/` subfolder was installed separately as
   `stages/takezo.*` (see Stages below). File contents are unmodified.
-- Storyboard `bgm = takezo-i.mid` ships in the folder, but MIDI playback is
-  not supported by Ikemen GO — storyboards play silently (non-fatal).
+- Storyboard `bgm = takezo-i.mid` plays through the bundled
+  `sound/soundfont.sf2` (the engine's MIDI decoder is pure Go and works in
+  the browser build; it only needs a soundfont at `Sound.SoundFont`).
 
 ### chars/genpaku/ — Ogata Genpaku (KGenjuro, 2002) — 4.4 MB
 
@@ -180,8 +190,8 @@ original hand-drawn characters self-published on GitHub by their author
   removed immediately on the author's request.
 - WinMUGEN-era character (`mugenversion = 14,04,2002`, V1.0 BETA), 6
   palettes, intro/ending storyboards included. Files are unmodified.
-- Storyboard `bgm = genpaku-i.mid`: MIDI unsupported, plays silently
-  (non-fatal).
+- Storyboard `bgm = genpaku-i.mid`: plays through the bundled
+  `sound/soundfont.sf2` (same as Takezo).
 
 ## Stages
 
@@ -207,18 +217,18 @@ original hand-drawn characters self-published on GitHub by their author
 
 ## Local modifications (all marked with "Browser port" comments)
 
-- `data/ikemen1/system.def`: `logo.storyboard = logo.def` commented out (the
-  logo storyboard is a `type = video` background playing
-  `video/ik_logo.webm`; video playback is stubbed on js/wasm, and a failed
-  video open is a hard error). The disabled `[Attract Mode]` storyboard
-  references were commented out as well. `logo.def` / `ik_logo.webm` are
-  therefore not bundled.
+- `data/ikemen1/system.def`: `logo.storyboard = logo.def` is enabled again
+  (background-video playback now works on js/wasm via a hidden `<video>`
+  element; `logo.def` and `video/ik_logo.webm` are bundled). The disabled
+  `[Attract Mode]` storyboard references remain commented out (attract mode
+  is off and `intro.def` is not bundled).
 - `data/select.def`: roster/stage trim described above.
 
 ## Intentionally omitted upstream files
 
-- `data/work/`, `data/ikemen1/logo.def`, `video/` — source art / video intro
-  (video unsupported in the wasm port v1).
+- `data/work/` — source art. From `video/`, only `ik_logo.webm` (used by the
+  logo storyboard) is bundled; any other upstream `video/` content is
+  referenced only by storyboards that are not enabled in the browser build.
 - Unreferenced legacy fonts (`num*`, `name14`, `font2`, `enter48`, `arcade`,
   `options`, `ending-bg`, `msgothic-tt36`, `mssansserif-tt36`, `f-6x8f.fnt`,
   `name1.fnt`) and the other stages (`stage0`, `stage1`, `stage3d*`,
@@ -275,6 +285,9 @@ original hand-drawn characters self-published on GitHub by their author
   github.com/donswelt. No formal license in the source repos; a license
   request is pending (see port/ANNOUNCEMENT.md); will be removed immediately
   on the author's request.
+- `sound/soundfont.sf2` (TimGM6mb): (c) 2004 Tim Brechbill, 2010 David
+  Bolton; GNU GPL v2 (full text pointer in `sound/soundfont-license.txt`,
+  taken verbatim from Debian's `timgm6mb-soundfont` copyright file).
 - Engine-side content (`engine/data`, `engine/external`, `engine/font`) is
   distributed under the Ikemen GO project's licenses (MIT source; bundled
   asset licenses per `engine/LICENCE.txt`).
