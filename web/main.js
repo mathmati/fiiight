@@ -73,6 +73,15 @@ window.__ikemenBootLog = [];
 	window.addEventListener("pointerdown", resumeAudio);
 	window.addEventListener("keydown", resumeAudio);
 
+	// Build stamp (written by build/wasm.sh at package time): shown in the
+	// footer; loader.js "Check for updates" compares it against a fresh fetch.
+	fetch("version.txt").then((r) => (r.ok ? r.text() : null)).then((t) => {
+		if (!t) return;
+		window.__ikemenBuild = t.trim();
+		const credit = document.getElementById("credit");
+		if (credit) credit.append(" · build " + window.__ikemenBuild);
+	}).catch(() => { /* stamp is optional (absent on bare static hosts) */ });
+
 	boot().catch((err) => {
 		const detail = (err && err.stack) ? err.stack : String(err);
 		window.__ikemenBootLog.push("BOOT-ERROR: " + detail);

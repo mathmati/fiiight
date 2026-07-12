@@ -69,3 +69,9 @@ if [[ -d "$ROOT/content" ]]; then
 	fi
 fi
 echo "==> done: $(du -h "$ROOT/web/content.zip" | cut -f1) content.zip"
+
+# 4. build stamp: lets the running page tell which deploy it is and offer
+#    "check for updates" (web/loader.js compares this against a fresh fetch)
+STAMP="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)-$(date -u +%Y%m%d%H%M)"
+printf '%s\n' "$STAMP" > "$ROOT/web/version.txt"
+echo "==> stamped web/version.txt: $STAMP"

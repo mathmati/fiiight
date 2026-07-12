@@ -1,5 +1,6 @@
 web/ikemen.wasm
 web/content.zip
+web/version.txt
 web/test/fstest.wasm
 web/test/content.zip
 web/test/boot/shots/

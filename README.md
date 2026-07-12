@@ -88,6 +88,13 @@ mounted over the bundled content in your browser only (nothing is uploaded
 anywhere). Rebuilding is only needed when you want to *publish* your roster
 to everyone.
 
+**Seeing a stale version?** Browsers can serve the previous deploy for a
+short while (HTTP cache), and a mobile tab resumed from memory keeps running
+whatever build it loaded. The footer shows the running build stamp, and
+**Check for updates** in the corner menu (visible while the game loads, or
+via F8 afterwards) fetches the latest build stamp, re-downloads the game
+files past the cache, and restarts.
+
 ### Full custom builds
 
 - **Everything under `content/` overlays the engine's stock data**
