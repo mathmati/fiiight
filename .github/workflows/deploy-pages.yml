@@ -1,9 +1,9 @@
-# Build the browser port and deploy web/ to GitHub Pages.
+# Build the browser port and publish web/ to the gh-pages branch.
 #
-# The configure-pages step below auto-enables Pages (Source: "GitHub Actions")
-# on first run. If that step ever fails with a permissions error, enable it
-# once by hand: Settings -> Pages -> Build and deployment -> Source:
-# "GitHub Actions".
+# Creating/updating a gh-pages branch is the classic Pages flow and usually
+# activates Pages automatically. If the site 404s after the first green run,
+# flip it once by hand: Settings -> Pages -> Build and deployment ->
+# Source: "Deploy from a branch" -> Branch: gh-pages / (root).
 name: Deploy to GitHub Pages
 
 on:
@@ -12,9 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # One deployment at a time; don't cancel a deploy already in flight.
 concurrency:
@@ -22,15 +20,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Enable/confirm GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/setup-go@v5
         with:
@@ -45,18 +38,15 @@ jobs:
       - name: Prune test harnesses from site
         run: rm -rf web/test
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: web
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Push site to gh-pages
+        run: |
+          cd web
+          touch .nojekyll
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy site from ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
