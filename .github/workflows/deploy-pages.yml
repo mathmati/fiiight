@@ -1,0 +1,62 @@
+# Build the browser port and deploy web/ to GitHub Pages.
+#
+# The configure-pages step below auto-enables Pages (Source: "GitHub Actions")
+# on first run. If that step ever fails with a permissions error, enable it
+# once by hand: Settings -> Pages -> Build and deployment -> Source:
+# "GitHub Actions".
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; don't cancel a deploy already in flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable/confirm GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: engine/go.sum
+
+      - name: Build wasm + content bundle
+        run: bash build/wasm.sh
+
+      # Test harnesses (screenshots, test wasm binaries) don't belong on the
+      # deployed site.
+      - name: Prune test harnesses from site
+        run: rm -rf web/test
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

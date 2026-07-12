@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>audio smoke test</title>
+</head>
+<body>
+<pre id="out">running…</pre>
+<script src="/wasm_exec.js"></script>
+<script>
+"use strict";
+window.__ikemenBootLog = [];
+(async () => {
+	try {
+		const go = new Go();
+		const resp = await fetch("audiosmoke.wasm");
+		if (!resp.ok) throw new Error("audiosmoke.wasm: HTTP " + resp.status);
+		const result = await WebAssembly.instantiate(await resp.arrayBuffer(), go.importObject);
+		await go.run(result.instance);
+	} catch (err) {
+		window.__ikemenBootLog.push("BOOT-ERROR: " + ((err && err.stack) ? err.stack : String(err)));
+		window.__testDone = true;
+	}
+	document.getElementById("out").textContent = window.__ikemenBootLog.join("\n");
+})();
+</script>
+</body>
+</html>

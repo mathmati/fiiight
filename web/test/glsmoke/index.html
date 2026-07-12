@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WebGL2 smoke test</title>
+</head>
+<body>
+<canvas id="ikemen-canvas" width="320" height="240"></canvas>
+<pre id="out">running…</pre>
+<script src="/wasm_exec.js"></script>
+<script>
+"use strict";
+window.__ikemenBootLog = [];
+window.__testDone = false;
+(async () => {
+	try {
+		const go = new Go();
+		const { instance } = await WebAssembly.instantiateStreaming(
+			fetch("/test/glsmoke/glsmoke.wasm"), go.importObject);
+		await go.run(instance);
+	} catch (err) {
+		window.__ikemenBootLog.push("HARNESS-ERROR: " + ((err && err.stack) || err));
+	} finally {
+		window.__testDone = true;
+		document.getElementById("out").textContent = window.__ikemenBootLog.join("\n");
+	}
+})();
+</script>
+</body>
+</html>
