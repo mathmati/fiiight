@@ -1,0 +1,6 @@
+shots/
+fixture/
+lastlog.txt
+*.wasm
+content.zip
+glsmoke/*.glsl
