@@ -198,6 +198,34 @@ files** (`system_js.go`, `render_webgl2.go`, `font_webgl2.go`, `gl_js.go`,
 `util_js.go`), plus a minimal set of build-tag/guard patches to shared files.
 `port/SPEC.md` records every seam and every shared-file change.
 
+### Upstream review feedback — status
+
+Maintainer feedback on the port has been addressed on the
+[`upstream-wasm-port`](../../tree/upstream-wasm-port) branch (the port
+restructured on top of current upstream `develop`):
+
+- **Rebase onto develop, changes directly in `src/`** — done; no vendored
+  tree, six-commit series on top of develop HEAD.
+- **No fiiight demo content/roster in the PR** — done; nothing from the
+  demo bundle is on that branch.
+- **`./build/build.sh Web` as a build target** — done; helper under
+  `build/wasm/`, output is a self-contained static dir in
+  `bin/Ikemen_GO-Web/`.
+- **Generic content packager** — done; takes any game directory
+  (`CONTENT_DIR`), defaults to the repo's own files with the official
+  Ikemen-GO-Screenpack overlaid, same as other release targets.
+- **No global Go toolchain bump** — done; `go.mod` stays on `go 1.20`. The
+  one dependency that cannot build on `GOOS=js` (`mewkiz/pkg`, via the flac
+  decoder) is vendored under `third_party/` with its go directive lowered —
+  desktop builds unchanged, verified against both Go 1.20.14 and 1.24.
+- **Runtime under `build/wasm/`, output under `bin/Ikemen_GO-Web/`** — done.
+- **`androidInit` → `platformInit`/`platformInitSubSystems`** — done, as its
+  own commit.
+- Browser test harnesses (headless Chromium over CDP, no npm deps) are
+  included under `build/wasm/test/`.
+
+Pending: further gameplay checks on other devices.
+
 ## Credits and licenses
 
 - **Engine:** Ikemen GO, MIT license (see `engine/LICENCE.txt` and the
