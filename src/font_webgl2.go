@@ -1,23 +1,29 @@
-//go:build !android && !js
+//go:build js
 
+// TrueType font rendering for the WebGL2 (js/wasm) backend. Port of
+// font_gles32.go: glyph rasterization (golang/freetype) is pure Go and kept
+// as-is; only the texture upload and draw calls go through the syscall/js
+// WebGL2 binding. FontRenderer_WebGL2 and Renderer_WebGL2 form a coupled
+// pair like the other backends (the renderer's ChangeProgram releases the
+// font pipeline through a type assertion on gfxFont).
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"image"
-	//"image/draw"
+	colour "image/color"
 	"io"
-	"io/ioutil"
 	"os"
 
-	gl "github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
+	"golang.org/x/mobile/exp/f32"
 )
 
-type Font_GL33 struct {
+type Font_WebGL2 struct {
 	fontChar     map[rune]*character
 	ttf          *truetype.Font
 	scale        int32
@@ -28,82 +34,79 @@ type Font_GL33 struct {
 	shaderPalFX  ShaderPalFX
 }
 
-type FontRenderer_GL33 struct {
-	shaderProgram *ShaderProgram_GL33
+type FontRenderer_WebGL2 struct {
+	shaderProgram *ShaderProgram_WebGL2
 	vao           uint32
 	vbo           uint32
 }
 
-func (r *FontRenderer_GL33) Init(renderer interface{}) {
-	// Configure the default font vertex and fragment shaders
-	r.newProgram(150, vertexFontShader, fragmentFontShader)
+// Init sets up shaders, VAO, and VBO
+func (r *FontRenderer_WebGL2) Init(renderer interface{}) {
+	// Configure the font shader (compiled with the "#version 300 es" header)
+	r.newProgram(300, vertexFontShader, fragmentFontShader)
 
 	// Register attributes
 	r.shaderProgram.RegisterAttributes("vert", "vertTexCoord")
 
 	// Configure VAO/VBO for texture quads
-	gl.GenVertexArrays(1, &r.vao)
-	gl.GenBuffers(1, &r.vbo)
-	gl.BindVertexArray(r.vao)
-	gl.BindBuffer(gl.ARRAY_BUFFER, r.vbo)
+	r.vao = glGenVertexArray()
+	r.vbo = glGenBuffer()
+	glBindVertexArray(r.vao)
+	glBindBuffer(gl_ARRAY_BUFFER, r.vbo)
 
 	// Pre-allocate for maximum batch size
-	gl.BufferData(gl.ARRAY_BUFFER, MaxFontBatchSize*6*4*4, nil, gl.DYNAMIC_DRAW)
+	glBufferDataSize(gl_ARRAY_BUFFER, MaxFontBatchSize*6*4*4, gl_DYNAMIC_DRAW)
 
 	// Configure attributes
 	vLoc := uint32(r.shaderProgram.attributes["vert"])
-	gl.EnableVertexAttribArray(vLoc)
-	gl.VertexAttribPointer(vLoc, 2, gl.FLOAT, false, 4*4, gl.PtrOffset(0))
+	glEnableVertexAttribArray(vLoc)
+	glVertexAttribPointer(vLoc, 2, gl_FLOAT, false, 4*4, 0)
 
 	tLoc := uint32(r.shaderProgram.attributes["vertTexCoord"])
-	gl.EnableVertexAttribArray(tLoc)
-	gl.VertexAttribPointer(tLoc, 2, gl.FLOAT, false, 4*4, gl.PtrOffset(2*4))
+	glEnableVertexAttribArray(tLoc)
+	glVertexAttribPointer(tLoc, 2, gl_FLOAT, false, 4*4, 2*4)
 
 	// Unbind for safety
-	gl.BindVertexArray(0)
-	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
+	glBindVertexArray(0)
+	glBindBuffer(gl_ARRAY_BUFFER, 0)
 }
 
-// LoadFont loads the specified font at the given scale.
-func (r *FontRenderer_GL33) LoadFont(file string, scale int32, windowWidth int, windowHeight int) (interface{}, error) {
+// LoadFont builds the font structure
+func (r *FontRenderer_WebGL2) LoadFont(file string, scale int32, windowWidth int, windowHeight int) (interface{}, error) {
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer fd.Close()
 
-	// Activate corresponding render state
-	// gl.UseProgram(r.shaderProgram.program)
-
 	f, err := r.LoadTrueTypeFont(fd, scale, 32, 127, LeftToRight)
 	if err != nil {
 		return nil, err
 	}
-	//set screen resolution
 	f.windowWidth = windowWidth
 	f.windowHeight = windowHeight
 	return f, nil
 }
 
 // SetColor allows you to set the text color to be used when you draw the text
-func (f *Font_GL33) SetColor(red float32, green float32, blue float32, alpha float32) {
+func (f *Font_WebGL2) SetColor(red float32, green float32, blue float32, alpha float32) {
 	f.color.r = red
 	f.color.g = green
 	f.color.b = blue
 	f.color.a = alpha
 }
 
-func (f *Font_GL33) SetPalFX(state ShaderPalFX) {
+func (f *Font_WebGL2) SetPalFX(state ShaderPalFX) {
 	f.shaderPalFX = state
 }
 
-func (f *Font_GL33) UpdateResolution(windowWidth int, windowHeight int) {
+func (f *Font_WebGL2) UpdateResolution(windowWidth int, windowHeight int) {
 	f.windowWidth = windowWidth
 	f.windowHeight = windowHeight
 }
 
-func (r *FontRenderer_GL33) SetFontPipeline() {
-	mr := gfx.(*Renderer_GL33)
+func (r *FontRenderer_WebGL2) SetFontPipeline() {
+	mr := gfx.(*Renderer_WebGL2)
 
 	// Do nothing if we were already using the font shader
 	if mr.program == r.shaderProgram.program {
@@ -113,34 +116,34 @@ func (r *FontRenderer_GL33) SetFontPipeline() {
 	mr.ChangeProgram(r.shaderProgram.program)
 
 	// Bind VAO
-	gl.BindVertexArray(r.vao)
+	glBindVertexArray(r.vao)
 
 	// We need to bind VBO here as well
-	gl.BindBuffer(gl.ARRAY_BUFFER, r.vbo)
+	glBindBuffer(gl_ARRAY_BUFFER, r.vbo)
 }
 
 // Printf draws a string to the screen, takes a list of arguments like printf
-func (f *Font_GL33) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32,
+func (f *Font_WebGL2) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32,
 	align int32, blend bool, window [4]int32,
 	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
 	fs string, argv ...interface{}) error {
 
 	text := fmt.Sprintf(fs, argv...)
 	indices := []rune(text)
-	r := gfx.(*Renderer_GL33)
-	fr := gfxFont.(*FontRenderer_GL33)
+	r := gfx.(*Renderer_WebGL2)
+	fr := gfxFont.(*FontRenderer_WebGL2)
 
 	if len(indices) == 0 {
 		return nil
 	}
 
-	// Activate corresponding render state
-	fr.SetFontPipeline()
-	program := fr.shaderProgram
-
 	// Buffer to store vertex data for multiple glyphs
 	batchSize := Min(MaxFontBatchSize, int32(len(indices)))
 	batchVertices := make([]float32, 0, batchSize*6*4)
+
+	// Activate corresponding render state
+	fr.SetFontPipeline()
+	program := fr.shaderProgram
 
 	//setup blending mode
 	if blend {
@@ -168,8 +171,7 @@ func (f *Font_GL33) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32
 	//set screen resolution
 	r.SetUniformFSub(program.uniforms["resolution"], float32(f.windowWidth), float32(f.windowHeight))
 
-	gl.ActiveTexture(gl.TEXTURE0)
-	//gl.BindVertexArray(gfxFont.(*FontRenderer_GL33).vao)
+	glActiveTexture(gl_TEXTURE0)
 
 	//calculate alignment position
 	alignScale := xscl
@@ -202,7 +204,6 @@ func (f *Font_GL33) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32
 
 		//skip runes that are not in font character range
 		if !ok {
-			//fmt.Printf("%c %d\n", runeIndex, runeIndex)
 			continue
 		}
 
@@ -260,7 +261,7 @@ func (f *Font_GL33) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32
 	return nil
 }
 
-func (f *Font_GL33) widthRunes(indices []rune, scale float32, spacingXAdd float32) float32 {
+func (f *Font_WebGL2) widthRunes(indices []rune, scale float32, spacingXAdd float32) float32 {
 	if len(indices) == 0 {
 		return 0
 	}
@@ -287,7 +288,6 @@ func (f *Font_GL33) widthRunes(indices []rune, scale float32, spacingXAdd float3
 
 		//skip runes that are not in font character range
 		if !ok {
-			//fmt.Printf("%c %d\n", runeIndex, runeIndex)
 			continue
 		}
 
@@ -304,28 +304,28 @@ func (f *Font_GL33) widthRunes(indices []rune, scale float32, spacingXAdd float3
 }
 
 // Helper function to render a batch of glyphs
-func (f *Font_GL33) renderGlyphBatch(vertices []float32, textureID uint32) {
-	fr := gfxFont.(*FontRenderer_GL33)
+func (f *Font_WebGL2) renderGlyphBatch(vertices []float32, textureID uint32) {
+	fr := gfxFont.(*FontRenderer_WebGL2)
 
-	gl.BindBuffer(gl.ARRAY_BUFFER, fr.vbo)
-	gl.BufferSubData(gl.ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(vertices))
+	glBindBuffer(gl_ARRAY_BUFFER, fr.vbo)
+	glBufferSubData(gl_ARRAY_BUFFER, 0, f32.Bytes(binary.LittleEndian, vertices...))
 
-	gl.BindTexture(gl.TEXTURE_2D, textureID)
-	gl.DrawArrays(gl.TRIANGLES, 0, int32(len(vertices))/4)
+	glBindTexture(gl_TEXTURE_2D, textureID)
+	glDrawArrays(gl_TRIANGLES, 0, int32(len(vertices))/4)
 }
 
-func (r *FontRenderer_GL33) ReleaseFontPipeline() {
-	gl.BindVertexArray(0)
-	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
+func (r *FontRenderer_WebGL2) ReleaseFontPipeline() {
+	glBindVertexArray(0)
+	glBindBuffer(gl_ARRAY_BUFFER, 0)
 }
 
 // Width returns the width of a piece of text in pixels
-func (f *Font_GL33) Width(scale float32, spacingXAdd float32, fs string, argv ...interface{}) float32 {
+func (f *Font_WebGL2) Width(scale float32, spacingXAdd float32, fs string, argv ...interface{}) float32 {
 	return f.widthRunes([]rune(fmt.Sprintf(fs, argv...)), scale, spacingXAdd)
 }
 
 // GenerateGlyphs builds a set of textures based on a ttf files glyphs
-func (f *Font_GL33) GenerateGlyphs(low, high rune) error {
+func (f *Font_WebGL2) GenerateGlyphs(low, high rune) error {
 	//create a freetype context for drawing
 	c := freetype.NewContext()
 	c.SetDPI(72)
@@ -383,26 +383,18 @@ func (f *Font_GL33) GenerateGlyphs(low, high rune) error {
 		gdescent := int(gBnd.Max.Y) >> 6
 
 		//set w,h and adv, bearing V and bearing H in char
-		//char.width = int(gw)
-		//char.height = int(gh)
 		char.width = int(gw) + (padding * 2)
 		char.height = int(gh) + (padding * 2)
 		char.advance = int(gAdv)
 		char.bearingV = gdescent
-		//char.bearingH = (int(gBnd.Min.X) >> 6)
 		char.bearingH = (int(gBnd.Min.X) >> 6) - padding
 
 		//create image to draw glyph
-		//fg, bg := image.White, image.Black // No need to fill in the background
-		fg := image.White
-		//rect := image.Rect(0, 0, int(gw), int(gh))
+		fg := image.NewUniform(colour.RGBA{255, 255, 255, 255})
 		rect := image.Rect(0, 0, char.width, char.height)
 		rgba := image.NewRGBA(rect)
-		//draw.Draw(rgba, rgba.Bounds(), bg, image.ZP, draw.Src) // No need to fill in the background
 
 		//set the glyph dot
-		//px := 0 - (int(gBnd.Min.X) >> 6)
-		//py := (gAscent)
 		px := padding - (int(gBnd.Min.X) >> 6)
 		py := padding + gAscent
 		pt := freetype.Pt(px, py)
@@ -424,6 +416,7 @@ func (f *Font_GL33) GenerateGlyphs(low, high rune) error {
 				c2.SetDst(rgba)
 				c2.SetSrc(fg)
 				if _, err := c2.DrawString(string(ch), pt); err != nil {
+					Logcat(fmt.Sprintf("WebGL2: ERROR DRAWING STRING: %v", err.Error()))
 					return err
 				}
 			}
@@ -452,30 +445,20 @@ func (f *Font_GL33) GenerateGlyphs(low, high rune) error {
 
 		texAtlas := f.textures[textureIndex]
 
-		// This block is no longer necessary after the padding fix and actually introduces blur
-		// aw := float32(texAtlas.width)
-		// ah := float32(texAtlas.height)
-		// off_u := 0.5 / aw
-		// off_v := 0.5 / ah
-		// uv[0] += off_u
-		// uv[1] += off_v
-		// uv[2] -= off_u
-		// uv[3] -= off_v
-
 		char.uv = uv
-		char.textureID = texAtlas.texture.(*Texture_GL33).handle
+		char.textureID = texAtlas.texture.(*Texture_WebGL2).handle
 
 		//add char to fontChar list
 		f.fontChar[ch] = char
 	}
 
-	gl.BindTexture(gl.TEXTURE_2D, 0)
+	glBindTexture(gl_TEXTURE_2D, 0)
 	return nil
 }
 
-// LoadTrueTypeFont builds OpenGL buffers and glyph textures based on a ttf file
-func (r *FontRenderer_GL33) LoadTrueTypeFont(reader io.Reader, scale int32, low, high rune, dir Direction) (*Font_GL33, error) {
-	data, err := ioutil.ReadAll(reader)
+// LoadTrueTypeFont builds GL buffers and glyph textures based on a ttf file
+func (r *FontRenderer_WebGL2) LoadTrueTypeFont(reader io.Reader, scale int32, low, high rune, dir Direction) (*Font_WebGL2, error) {
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +473,7 @@ func (r *FontRenderer_GL33) LoadTrueTypeFont(reader io.Reader, scale int32, low,
 	}
 
 	//make Font stuct type
-	f := new(Font_GL33)
+	f := new(Font_WebGL2)
 	f.fontChar = make(map[rune]*character)
 	f.ttf = ttf
 	f.scale = scale
@@ -500,6 +483,7 @@ func (r *FontRenderer_GL33) LoadTrueTypeFont(reader io.Reader, scale int32, low,
 
 	err = f.GenerateGlyphs(low, high)
 	if err != nil {
+		Logcat(fmt.Sprintf("Error generating glyphs: %v", err.Error()))
 		return nil, err
 	}
 
@@ -507,8 +491,10 @@ func (r *FontRenderer_GL33) LoadTrueTypeFont(reader io.Reader, scale int32, low,
 }
 
 // newProgram links the frag and vertex shader programs
-func (r *FontRenderer_GL33) newProgram(GLSLVersion uint, vertexShaderSource, fragmentShaderSource string) {
-	shaderProgram, _ := gfx.(*Renderer_GL33).newShaderProgram(vertexShaderSource, fragmentShaderSource, "", "font shader", true)
-	r.shaderProgram = shaderProgram
+func (r *FontRenderer_WebGL2) newProgram(version uint, vertexSrc, fragmentSrc string) {
+	var err error
+	if r.shaderProgram, err = gfx.(*Renderer_WebGL2).newShaderProgram(vertexSrc, fragmentSrc, "", "font shader", true); err != nil {
+		Logcat(fmt.Sprintf("Error loading font shader: %v", err.Error()))
+	}
 	r.shaderProgram.RegisterUniforms("textColor", "resolution", "tex", "palAdd", "palMul", "palGray", "palHue", "palNeg")
 }

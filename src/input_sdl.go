@@ -1,3 +1,5 @@
+//go:build !js
+
 package main
 
 import (
@@ -34,6 +36,14 @@ const (
 	KeyF12        = sdl.K_F12
 	KeyPause      = sdl.K_PAUSE
 	KeyScrollLock = sdl.K_SCROLLLOCK
+)
+
+// Backend-provided modifier key masks (see ShortcutKey.Test in input.go)
+const (
+	KModGui   = ModifierKey(sdl.KMOD_GUI)
+	KModCtrl  = ModifierKey(sdl.KMOD_CTRL)
+	KModAlt   = ModifierKey(sdl.KMOD_ALT)
+	KModShift = ModifierKey(sdl.KMOD_SHIFT)
 )
 
 var KeyToStringLUT map[sdl.Keycode]string
@@ -244,16 +254,16 @@ func NewModifierKey(ctrl, alt, shift bool) (mod sdl.Keymod) {
 	if ctrl {
 		// Convert Ctrl to Command (⌘) key for macOS if user prefers it
 		if runtime.GOOS == "darwin" && sys.cfg.Debug.MacOSUseCommandKey {
-			mod |= sdl.KMOD_GUI
+			mod |= KModGui
 		} else {
-			mod |= sdl.KMOD_CTRL
+			mod |= KModCtrl
 		}
 	}
 	if alt {
-		mod |= sdl.KMOD_ALT
+		mod |= KModAlt
 	}
 	if shift {
-		mod |= sdl.KMOD_SHIFT
+		mod |= KModShift
 	}
 	return
 }
