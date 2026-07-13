@@ -325,8 +325,11 @@ function main() {
 	# Make sure Go toolchain is usable
 	ensure_go_env
 
-	# Make sure required build tools exist
-	check_deps
+	# Make sure required build tools exist (the Web/wasm target is pure Go
+	# and performs its own lightweight checks in build/wasm/build_web.sh)
+	if [[ "$(tolower "${targetOS}")" != "web" ]]; then
+		check_deps
+	fi
 
 	# Enforce safe path
 	require_safe_path
@@ -372,9 +375,12 @@ function main() {
 			varAndroid
 			build
 		;;
+		[wW][eE][bB])
+			buildWeb "${2:-}"
+		;;
 		*)
 			echo "Unknown target: ${targetOS}"
-			echo "Valid targets: Win64 Win32 MacOS MacOSARM Linux LinuxARM"
+			echo "Valid targets: Win64 Win32 MacOS MacOSARM Linux LinuxARM Android Web"
 			exit 1
 		;;
 	esac
@@ -1034,6 +1040,14 @@ function build() {
 	echo "==> Build successful"
 	echo "    Binary: $OUTDIR/$binName"
 	[[ -d "$LIBDIR" ]] && echo "    Runtime libs (if any): $LIBDIR/"
+}
+
+# Web (WebAssembly): pure Go, no cgo. Everything is delegated to the helper
+# so it can also be run standalone; it overrides CGO_ENABLED/GOOS/GOARCH for
+# its go build. Optional argument/CONTENT_DIR env: a complete game directory
+# to package as content.zip instead of the repo-default content.
+function buildWeb() {
+	"$REPO_ROOT/$BUILDDIR/wasm/build_web.sh" ${1:+"$1"}
 }
 
 function buildWin() {

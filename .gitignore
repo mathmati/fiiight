@@ -64,6 +64,12 @@ external/script/wip/*
 bin/*.apk
 bin/libmain.so
 bin/libmain.h
+
+# Web (WebAssembly) build output (generated)
+bin/Ikemen_GO-Web/
+
+# Screenpack clone used for packaging (generated)
+build/screenpack/
 lib/*.so
 lib/*.so.*
 build/android-apk/
