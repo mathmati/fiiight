@@ -10,10 +10,10 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-// androidInit performs the Android-specific startup work that used to live in
-// realMain (SDL GL attributes, baseDir checks and SDL init).
+// platformInit performs the Android-specific startup work that used to live
+// in realMain (SDL GL attributes, baseDir checks and SDL init).
 // It returns false when startup must be aborted.
-func androidInit() bool {
+func platformInit() bool {
 	Logcat("Inside realMain...")
 	runtime.LockOSThread()
 	sdl.GLSetAttribute(sdl.GL_CONTEXT_PROFILE_MASK, sdl.GL_CONTEXT_PROFILE_ES)
@@ -64,8 +64,8 @@ func androidInit() bool {
 	return true
 }
 
-// androidInitSubSystems initializes SDL joystick and game controller subsystems.
-func androidInitSubSystems() {
+// platformInitSubSystems initializes SDL joystick and game controller subsystems.
+func platformInitSubSystems() {
 	sdl.InitSubSystem(sdl.INIT_JOYSTICK)
 	sdl.InitSubSystem(sdl.INIT_GAMECONTROLLER)
 	Logcat("LOG: Subsystems initialized!")

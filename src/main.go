@@ -66,12 +66,9 @@ func realMain() {
 		}
 	}()
 
-	if runtime.GOOS == "android" {
-		if !androidInit() {
-			return
-		}
-	} else {
-		sys.baseDir = "./"
+	// Platform-specific startup (see main_android.go / main_default.go).
+	if !platformInit() {
+		return
 	}
 
 	// Handle Permissions and Directory Creation
@@ -106,9 +103,7 @@ func realMain() {
 		chk(f.Close())
 	}
 
-	if runtime.GOOS == "android" {
-		androidInitSubSystems()
-	}
+	platformInitSubSystems()
 
 	// Init the SDL LUT's
 	initLUTs()
