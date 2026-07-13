@@ -26,7 +26,7 @@ These instructions are for those interested in developing the Ikemen GO engine i
 
 ### Building
 For setup and platform-specific steps, see [BUILDING.md](./BUILDING.md).
-It covers Windows, Linux (including ARM64), macOS (Apple Silicon and Intel), and Android (APK via Docker).
+It covers Windows, Linux (including ARM64), macOS (Apple Silicon and Intel), Android (APK via Docker), and the browser (WebAssembly).
 
 ### Debugging
 In order to run the compiled Ikemen GO executable, you will need to download the [engine dependencies](https://github.com/ikemen-engine/Ikemen-GO-Screenpack) and unpack them into the Ikemen-GO source directory. After that, you can use [Goland](https://www.jetbrains.com/go/) or [Visual Studio Code](https://code.visualstudio.com/) to debug.

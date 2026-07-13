@@ -231,6 +231,42 @@ If you need changes in that wrapper, fork it and point the build to your fork vi
 
 ---
 
+## Web (WebAssembly)
+
+Runs the engine in the browser (WebGL2 + WebAudio); no SDL, FFmpeg or libxmp needed. Requires Go and `zip`.
+
+### Build (from repo root)
+
+```bash
+./build/build.sh Web
+```
+
+### Outputs
+
+`bin/Ikemen_GO-Web/` is a self-contained static site: `ikemen.wasm`, `wasm_exec.js`, the browser shell (`index.html`, `main.js`, `fs-shim.js`, `loader.js`, `touch.js`), `content.zip` and a version stamp.
+
+### Run / hosting
+
+Serve `bin/Ikemen_GO-Web/` with any static file host. Hosts that support HTTP Range requests enable lazy content streaming (files download when first used); without it the page falls back to downloading `content.zip` in full before boot. No special headers are required. Two Range-capable local servers are included:
+
+```bash
+node bin/Ikemen_GO-Web/dev-server.mjs 8080
+# or
+python3 bin/Ikemen_GO-Web/serve.py 8080
+```
+
+### Packaging your own content
+
+By default `content.zip` contains the repo's own runtime dirs (`data`, `external`, `font`) plus the Elecbyte screenpack — the same asset set desktop releases bundle next to the binary (the screenpack is cloned into `build/screenpack/` on first use, like the desktop/Android packaging does). To ship your own game instead, point the packager at a complete game directory (laid out like a desktop install: `data/`, `font/`, `chars/`, `stages/`, ...):
+
+```bash
+./build/build.sh Web /path/to/your/game
+# or
+CONTENT_DIR=/path/to/your/game ./build/build.sh Web
+```
+
+---
+
 ## Assets required to run (desktop builds)
 
 Place these folders **next to the executable or app bundle**:
