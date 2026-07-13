@@ -4,6 +4,13 @@ go 1.20
 
 replace github.com/gopxl/beep/v2 => github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99
 
+// js-compatible mewkiz/pkg (the 2023 pin fails on GOOS=js: unix-only syscalls
+// in its removed term subpackage). Vendored under third_party/ with lowered
+// go directives so the module remains buildable with Go 1.20 toolchains.
+replace github.com/mewkiz/pkg => ./third_party/mewkiz-pkg
+
+replace github.com/mewpkg/term => ./third_party/mewpkg-term
+
 require (
 	github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b
 	github.com/flopp/go-findfont v0.1.0
@@ -28,7 +35,8 @@ require (
 require (
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/mewkiz/flac v1.0.12 // indirect
-	github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 // indirect
+	github.com/mewkiz/pkg v0.0.0-20250417130911-3f050ff8c56d // indirect
+	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 )

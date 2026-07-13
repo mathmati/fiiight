@@ -1,0 +1,27 @@
+language: go
+go:
+  - 1.6
+
+notifications:
+  email: false
+
+env:
+  global:
+    - secure: "GBa/lPUd95TqmwtBzZDyNd4JJ5kZ2+Nwx/wlukRo3gH939xy3Sn+I8S/0AqiJ4IWe1iSNeBl3a1XbfKZ4dbhP/IkuinIY7emaOnvJbfODxyTFpG5yzY0Jg/3CpUs3oTqY07n9sg7QqOffKrswiuxmukevpsJuMVXN5T8zjzQAQg="
+    - PATH=$HOME/gopath/bin:$PATH
+
+before_install:
+  - go get golang.org/x/tools/cmd/cover
+  - go get golang.org/x/tools/cmd/goimports
+  - go get golang.org/x/lint/golint
+  - go get github.com/mattn/goveralls
+
+install:
+  - go get ./...
+
+before_script:
+  - wget https://gist.github.com/mewmew/379014c9a2e6885e238d/raw/goclean.sh
+  - chmod +x goclean.sh
+
+script:
+  - ./goclean.sh
