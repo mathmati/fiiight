@@ -2,9 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Ikemen GO</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Crect%20width='16'%20height='16'%20rx='3'%20fill='%23000'/%3E%3Cpath%20d='M4%203h3v10H4zM9%203h3v10H9z'%20fill='%23e33'/%3E%3C/svg%3E">
+<!-- Installable / fullscreen on mobile: manifest for Android home-screen +
+     fullscreen; apple-* tags for iPhone (which lacks element fullscreen) so
+     Add to Home Screen launches chrome-less. Icon is the Ikemen GO app icon. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Ikemen GO">
+<link rel="apple-touch-icon" href="icons/ikemen-180.png">
 <style>
 	html, body {
 		margin: 0;
@@ -107,5 +117,6 @@
 <script src="main.js"></script>
 <script src="touch.js"></script>
 <script src="loader.js"></script>
+<script src="fullscreen.js"></script>
 </body>
 </html>
