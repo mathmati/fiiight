@@ -1,0 +1,17 @@
+{
+	"name": "Ikemen GO",
+	"short_name": "Ikemen GO",
+	"description": "Ikemen GO fighting-game engine, running in the browser.",
+	"start_url": "./",
+	"scope": "./",
+	"display": "fullscreen",
+	"display_override": ["fullscreen", "standalone"],
+	"orientation": "landscape",
+	"background_color": "#000000",
+	"theme_color": "#000000",
+	"icons": [
+		{ "src": "icons/ikemen-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "icons/ikemen-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{ "src": "icons/ikemen-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+	]
+}
